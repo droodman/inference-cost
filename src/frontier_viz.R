@@ -88,6 +88,32 @@ frontier_curves <- function(fitset, data, dates_by_bench, tbar, n_cost = 200) {
   }))
 }
 
+## ---- caption block ----------------------------------------------------------------
+
+# The caption sits below the panels, so its height comes out of them: a figure
+# with two notes gets a taller plotting area than one with five, and flipping
+# between figures in the viewer makes the panels jump. Every caption is padded to
+# the same number of lines instead, so the drawing area is identical everywhere
+# and only the notes themselves change.
+#
+# Five is the current maximum (envelope and Pareto figures); adding a sixth note
+# anywhere means raising this, and the warning below says so rather than letting
+# one figure quietly grow its caption and shrink its panels.
+CAPTION_LINES <- 5
+
+pad_caption <- function(notes) {
+  lines <- unlist(strsplit(as.character(notes), "\n", fixed = TRUE))
+  if (length(lines) > CAPTION_LINES) {
+    warning(sprintf(paste("caption has %d lines but CAPTION_LINES is %d;",
+                          "this figure's panels will be shorter than the rest"),
+                    length(lines), CAPTION_LINES))
+  }
+  # Padding with a space, not "", because a trailing empty line contributes no
+  # height -- the block would collapse back to the number of real notes.
+  paste(c(lines, rep(" ", max(0, CAPTION_LINES - length(lines)))),
+        collapse = "\n")
+}
+
 ## ---- the figure -------------------------------------------------------------------
 
 # `curves` needs cost, value, qdate, benchmark, year; `pts` needs cost, acc, year,
@@ -137,7 +163,7 @@ frontier_plot <- function(curves, pts, title, subtitle, ylab,
                               direction = "horizontal", ticks.colour = SURFACE)) +
     labs(title = title, subtitle = subtitle,
          x = "Cost per task (log scale)", y = ylab,
-         caption = paste(c(base_notes, notes), collapse = "\n")) +
+         caption = pad_caption(c(base_notes, notes))) +
     frontier_theme()
 }
 
@@ -245,7 +271,7 @@ iso_cost_plot <- function(curves, pts, title, subtitle, notes = character(0),
                               direction = "horizontal", ticks.colour = SURFACE)) +
     labs(title = title, subtitle = subtitle,
          x = "Model release date", y = "Cost per task (log scale)",
-         caption = paste(notes, collapse = "\n")) +
+         caption = pad_caption(notes)) +
     frontier_theme()
 }
 
