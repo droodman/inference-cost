@@ -22,9 +22,14 @@ specs <- fit_all_specs(d)
 NOTES_BASE <- paste("All models retained. Data prepared once in prepare_data.R,",
                     "which also drops the duplicate rows, so every specification",
                     "sees the same sample.")
-NOTES_QUAD <- paste("The quadratic time term is not significant on any benchmark",
-                    "-- see the LR table printed by this script -- so curvature",
-                    "here should not be read as established.")
+# Describes the test rather than asserting its outcome. The previous wording
+# ("the quadratic time term is not significant on any benchmark") both went stale
+# -- the LR table it cited reports p < 1e-7 on aime and gpqa -- and named a
+# single term the test never isolated: quad adds all three second-order terms at
+# once, so the LR is a joint test of the block.
+NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2, time^2,",
+                    "cost x time) jointly; see this script's LR table and",
+                    "monotonicity check for whether the block earns its keep.")
 
 for (k in names(specs)) {
   sp <- specs[[k]]
@@ -59,6 +64,6 @@ for (b in benches) {
   cat(sprintf("%-6s %s\n", b, paste(sprintf("%9.1f%%", 100 * sh), collapse = "")))
 }
 
-report_slope_monotonicity(specs, d)
+report_quadratic_pathologies(specs, d)
 report_scale_lr(specs, d)
 report_quad_lr(specs)

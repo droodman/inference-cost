@@ -101,27 +101,14 @@ param_curves <- function(fitset) function(upto) {
 
 # Pareto: recomputed at each visible quarter, which is the honest thing -- the
 # empirical frontier at date q genuinely only knows runs released by q.
-pareto_steps <- function(sub, q) {
-  s <- sub[sub$releasedate <= q, ]
-  if (!nrow(s)) return(NULL)
-  s <- s[order(s$cost), ]
-  m <- cummax(s$acc)
-  keep <- c(TRUE, diff(m) > 0)
-  data.frame(cost = c(s$cost[keep], max(sub$cost)),
-             value = c(m[keep], m[length(m)]))
-}
+# pareto_curves() itself is shared (frontier_viz.R); all this adds is trimming the
+# date grid to the frame being drawn, so an animation frame and the corresponding
+# static figure cannot disagree about where the staircase sits.
 pareto_curves_upto <- function(upto) {
-  do.call(rbind, lapply(benches, function(b) {
-    sub <- d[d$benchmark == b, ]
-    qs <- dates[[b]][dates[[b]] <= upto]
-    if (!length(qs)) return(NULL)
-    do.call(rbind, lapply(qs, function(q) {
-      st <- pareto_steps(sub, q)
-      if (is.null(st)) return(NULL)
-      st$qdate <- q; st$year <- 2023 + as_t(q); st$benchmark <- b
-      st
-    }))
-  }))
+  dd <- lapply(dates, function(qs) qs[qs <= upto])
+  dd <- dd[lengths(dd) > 0]
+  if (!length(dd)) return(NULL)
+  pareto_curves(d, dd)
 }
 
 NOTES <- c("Frontiers and runs accumulate quarterly; models are fitted once on the full sample.",

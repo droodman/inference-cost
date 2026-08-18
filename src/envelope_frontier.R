@@ -100,20 +100,27 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   ci <- Lb
   add <- function(row) { ui <<- rbind(ui, row); ci <<- c(ci, 0) }
 
-  # free disposal: dz/d ln c = b_x + 2*b_xx*ln c >= 0
-  if ("I(lncost^2)" %in% nmv) {
-    for (lc0 in range(log(gcost))) {
-      add(e("lncost") + 2 * lc0 * e("I(lncost^2)"))
-    }
-  } else {
-    add(e("lncost"))
-  }
-  # frontier non-decreasing in time: dz/dtc = b_t + 2*b_tt*tc >= 0
-  if ("I(tc^2)" %in% nmv) {
-    for (tc0 in range(gtc)) add(e("tc") + 2 * tc0 * e("I(tc^2)"))
-  } else {
-    add(e("tc"))
-  }
+  # free disposal:  dz/d ln c = b_x + 2*b_xx*ln c + b_xt*tc   >= 0
+  # stays available: dz/dtc   = b_t + 2*b_tt*tc  + b_xt*ln c  >= 0
+  #
+  # Each is linear in (ln c, tc) JOINTLY, so requiring it at the four corners of
+  # the grid rectangle enforces it throughout. The corners, not the ends of one
+  # range: with an lncost:tc term the cost slope depends on the date too, so
+  # sweeping cost at a single date leaves the surface free to slope backwards at
+  # another. e() returns a zero vector for an absent term, so this one block
+  # covers every specification -- linear, cost-quadratic, time-quadratic, full.
+  corners <- expand.grid(lc0 = range(log(gcost)), tc0 = range(gtc))
+  mono <- rbind(
+    t(mapply(function(lc0, tc0)
+      e("lncost") + 2 * lc0 * e("I(lncost^2)") + tc0 * e("lncost:tc"),
+      corners$lc0, corners$tc0)),
+    t(mapply(function(lc0, tc0)
+      e("tc") + 2 * tc0 * e("I(tc^2)") + lc0 * e("lncost:tc"),
+      corners$lc0, corners$tc0)))
+  # Without the cross terms all four corners collapse to the same row; drop the
+  # duplicates rather than hand the solver the same constraint four times.
+  mono <- unique(mono)
+  for (i in seq_len(nrow(mono))) add(mono[i, ])
 
   # mean fitted accuracy over the grid -- the surface's average height
   fn <- function(b) mean(plogis(drop(Xg %*% b)))
@@ -126,7 +133,12 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   # forced positive (so monotonicity holds whatever glm returned), then lifted
   # until it clears every envelope constraint.
   b0 <- coef(glm(formula, data = data, family = quasibinomial(link = "logit")))
-  for (nm in c("I(lncost^2)", "I(tc^2)")) if (nm %in% names(b0)) b0[[nm]] <- 0
+  # Zero the interaction too, not just the squares: it also enters both
+  # derivatives, so leaving glm's value in place can hand SLSQP a start that
+  # violates monotonicity, and an infeasible start is how "no feasible envelope
+  # found" happens on a problem that is perfectly feasible.
+  for (nm in c("I(lncost^2)", "I(tc^2)", "lncost:tc"))
+    if (nm %in% names(b0)) b0[[nm]] <- 0
   b0[["lncost"]] <- max(b0[["lncost"]], 0.05)
   b0[["tc"]]     <- max(b0[["tc"]], 0.05)
   b0[1] <- b0[1] + max(0, max(Lb - drop(Xb %*% b0))) + margin
@@ -174,8 +186,24 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   if (!any(ok)) stop("no feasible envelope found")
   best <- cand[ok][[which.min(vapply(cand[ok], `[[`, numeric(1), "obj"))]]
 
+  # worst_slack pools two quite different constraints, and which of them is tight
+  # is the whole story about whether the surface touches the data. Report them
+  # apart:
+  #   slack_envelope  how far above the NEAREST RUN the surface sits, in logit
+  #                   units. Zero means it touches; large means it floats.
+  #   slack_mono      how much room is left in the monotonicity constraints.
+  # If slack_mono is 0 while slack_envelope is not, monotonicity is what is
+  # holding the surface up and the data is not binding anywhere -- the fit is
+  # then the lowest MONOTONE logistic surface above the runs, which is a strictly
+  # stronger requirement than the lowest logistic surface above them, and it can
+  # sit well clear of the Pareto staircase.
+  env_slack <- drop(Xb %*% best$b) - Lb
   structure(list(coefficients = best$b, value = best$obj,
                  worst_slack = best$slack, n_binding = length(bind),
+                 slack_envelope = min(env_slack),
+                 slack_mono = if (nrow(mono)) min(drop(mono %*% best$b)) else NA_real_,
+                 tightest_row = bind[which.min(env_slack)],
+                 env_slack = env_slack, bind = bind,
                  formula = formula),
             class = "envelope_frontier")
 }

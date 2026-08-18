@@ -1,5 +1,5 @@
 # The parametric specification grid, shared by plot_frontiers.R and
-# plot_isocost.R so both figure families are built from identical fits.
+# plot_isoaccuracy.R so both figure families are built from identical fits.
 #
 # Two dimensions:
 #   inefficiency  A = SFA with mu = 0        (half-normal)
@@ -17,16 +17,29 @@ source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("panel_frontier.R")
 src_source("frontier_viz.R")
 
-# `quad` is the flexible frontier: curvature in time AND a cost-slope that may
-# drift with time. The interaction is what lets the cost-accuracy relationship
-# steepen as inference scaling improves -- but it also lets the fitted slope go
-# NEGATIVE at some dates, which violates free disposal. report_slope_monotonicity()
-# checks whether that happens inside the observed span or only outside it.
+# `quad` is the FULL second-order surface in (log cost, time): both squares and
+# the interaction, six coefficients including the intercept. Nothing else.
+#
+# It used to mean something different here (time squared plus the interaction)
+# than it did for the envelope (cost squared alone), which made "the quadratic
+# fits" a comparison between models that were quadratic in different arguments.
+# One complete second-order surface everywhere is the neutral starting point:
+# whatever curvature the data wants is available to every model, and the
+# specification stops being a place where the models differ.
+#
+# The flexibility is not free, and the pathologies are the point of the exercise:
+#   * the cost slope b_x + 2*b_xx*ln c + b_xt*tc now moves with BOTH coordinates,
+#     so free disposal can fail in a corner of the (cost, date) rectangle rather
+#     than after a single crossing date;
+#   * (ln c)^2 is near-collinear with ln c, which has already stalled the
+#     envelope's solver once (see envelope_frontier.R);
+#   * three extra parameters on benchmarks as small as fm13 (266 runs).
+# report_quadratic_pathologies() checks the first, and the LR table the last.
 TIME_FORMS <- list(lin  = acc ~ lncost + tc,
-                   quad = acc ~ lncost * tc + I(tc^2))
+                   quad = acc ~ lncost * tc + I(lncost^2) + I(tc^2))
 
-TIME_LABEL <- c(lin  = "linear in time",
-                quad = "quadratic in time, cost slope varying with time")
+TIME_LABEL <- c(lin  = "linear in log cost and time",
+                quad = "full quadratic in log cost and time")
 
 # Both SFA families now fix mu = 0 (half-normal); they differ in whether the
 # SCALE of inefficiency may move with time:
@@ -131,34 +144,57 @@ report_scale_lr <- function(specs, d) {
 # extrapolation, one inside it contaminates the fitted region. Reported as the
 # crossing date, whether it falls in range, and the share of actual runs sitting
 # at a date where the slope is negative.
-report_slope_monotonicity <- function(specs, d) {
-  cat("\nfree disposal: where does the fitted cost slope cross zero?\n")
-  cat(sprintf("%-8s %-6s %9s %9s %11s %-12s %10s %9s\n", "spec", "bench",
-              "b_lncost", "b_x:tc", "slope@first", "crossing", "in range?",
-              "runs < 0"))
+# With the full quadratic BOTH derivatives vary over BOTH coordinates, so the
+# old "where does the cost slope cross zero" framing no longer describes the
+# failure: there is no single crossing date, there is a region of the (cost,
+# date) rectangle where the surface slopes the wrong way. Each derivative is
+# linear in (ln c, tc) jointly, so its minimum over the rectangle is attained at
+# a corner -- that minimum is what is reported, alongside the share of ACTUAL
+# runs sitting where the sign is wrong, which is what decides whether the
+# pathology contaminates the fitted region or lives in an empty corner.
+# These fits describe the WHOLE distribution of runs, not just its upper edge,
+# and the two derivatives do not deserve the same prior away from that edge:
+#
+#   d z / d ln c  free disposal. A strong prior anywhere: spending more should
+#                 not buy less. Flagged when it fails.
+#   d z / d tc    NOT expected to be positive in the interior. As effort moves to
+#                 expensive reasoning models, cheap runs can genuinely get worse
+#                 over time, so a negative time slope at low spend is a pattern
+#                 in the data rather than a defect in the fit. Reported, not
+#                 judged.
+#
+# So the status column speaks only to free disposal, and the time column is left
+# as a number to read. Only the ENVELOPE imposes both, because only it claims to
+# be a frontier; see plot_envelope.R, which checks that its constraints held.
+report_quadratic_pathologies <- function(specs, d) {
+  cat("\nslopes of the fitted surface over the observed (cost, date) rectangle\n")
+  cat("  dz/dlnc < 0 breaks free disposal; dz/dtc < 0 at low spend is expected\n")
+  cat(sprintf("%-8s %-6s %11s %10s %11s %10s  %s\n", "spec", "bench",
+              "min dz/dlnc", "runs dc<0", "min dz/dtc", "runs dt<0",
+              "free disposal"))
   for (k in names(specs)) {
-    if (specs[[k]]$time != "quad") next          # lin has no interaction
     for (b in names(specs[[k]]$fits)) {
       co <- frontier_coefs(specs[[k]]$fits[[b]])
       s  <- d[d$benchmark == b, ]
-      rng <- range(s$tc)
-      sl  <- cost_slope(co, rng)
-      cross <- if (co[["bxt"]] == 0) NA_real_ else -co[["bx"]] / co[["bxt"]]
-      inrng <- !is.na(cross) && cross >= rng[1] && cross <= rng[2]
-      share <- mean(cost_slope(co, s$tc) <= 0)
-      cdate <- if (is.na(cross)) "--" else
-        format(EPOCH + (cross + mean(s$t - s$tc)) * 365.25, "%Y-%m")
-      cat(sprintf("%-8s %-6s %9.4f %9.4f %11.4f %-12s %10s %8.1f%%\n",
-                  k, b, co[["bx"]], co[["bxt"]], sl[1], cdate,
-                  if (inrng) "INSIDE" else "outside", 100 * share))
+      bounds <- frontier_slope_bounds(co, s$lncost, s$tc)
+      # at the runs themselves, not just the corners: a violation in a corner
+      # where nothing was ever run is extrapolation, not a finding
+      shr_c <- mean(frontier_dcost(co, s$lncost, s$tc) < 0)
+      shr_t <- mean(frontier_dtime(co, s$lncost, s$tc) < 0)
+      cat(sprintf("%-8s %-6s %11.4f %9.1f%% %11.4f %9.1f%%  %s\n",
+                  k, b, bounds[["dcost"]], 100 * shr_c,
+                  bounds[["dtime"]], 100 * shr_t,
+                  if (bounds[["dcost"]] >= 0) "ok"
+                  else if (shr_c < 0.01) "violated, but <1% of runs"
+                  else "VIOLATED at observed runs"))
     }
   }
 }
 
 report_quad_lr <- function(specs) {
   cat("\nLR test, quadratic vs linear time (SFA families only)\n")
-  cat(sprintf("%-6s %-8s %10s %10s %8s %8s\n",
-              "family", "bench", "logLik lin", "logLik quad", "LR", "p"))
+  cat(sprintf("%-6s %-8s %10s %10s %8s %5s %8s\n",
+              "family", "bench", "logLik lin", "logLik quad", "LR", "df", "p"))
   for (fam in c("A", "B")) {
     lin <- specs[[paste0(fam, "_lin")]]$fits
     qd  <- specs[[paste0(fam, "_quad")]]$fits
@@ -166,8 +202,12 @@ report_quad_lr <- function(specs) {
       l0 <- as.numeric(logLik(lin[[b]]))
       l1 <- as.numeric(logLik(qd[[b]]))
       lr <- 2 * (l1 - l0)
-      cat(sprintf("%-6s %-8s %10.3f %10.3f %8.2f %8.4f\n", fam, b, l0, l1, lr,
-                  pchisq(max(lr, 0), 1, lower.tail = FALSE)))
+      # df counted from the fits, not hardcoded: `quad` adds three beta terms
+      # now (both squares and the interaction) where it added two before, and
+      # this test was left testing on 1 df through that change.
+      df <- sum(activePar(qd[[b]])) - sum(activePar(lin[[b]]))
+      cat(sprintf("%-6s %-8s %10.3f %10.3f %8.2f %5d %8.4f\n", fam, b, l0, l1,
+                  lr, df, pchisq(max(lr, 0), df, lower.tail = FALSE)))
     }
   }
 }

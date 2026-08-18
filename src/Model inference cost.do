@@ -1,8 +1,8 @@
-cd "D:\OneDrive\Documents\Work\Clients & prospects\EpochAI\Inference cost"
+cd "D:\OneDrive\Documents\Work\Clients & prospects\EpochAI\inference-cost"
 
 set scheme plottig
 cwf default
-import delimited "caisi_curves_all.csv", clear  // all benchmark results; sent by Luke in Slack
+import delimited "data/caisi_curves_all.csv", clear  // all benchmark results; sent by Luke in Slack
 
 gen task = cond(benchmark=="aime", "OTIS Mock AIME 2024-2025", ///
            cond(benchmark=="chess", "Chess Puzzles",           ///
@@ -16,12 +16,12 @@ collapse acc mean_tokens_used cost_per_task_usd full_run_acc (sum) n_samples, by
 
 cap frame create models
 frame models: {
-  import delimited "Model versions-Grid view.csv", clear bindquote(strict)  // https://airtable.com/appDFXXgaG1xLtXGL/tblNoPbI37OaCgVKo/viw42jmOv5ayC2n3M
+  import delimited "data/Model versions-Grid view.csv", clear bindquote(strict)  // https://airtable.com/appDFXXgaG1xLtXGL/tblNoPbI37OaCgVKo/viw42jmOv5ayC2n3M
   gen releasedate = date(versionreleasedate,"YMD")
 }
 
 // cap frame create benchmark_runs
-// frame benchmark_runs: import delimited "benchmarks_runs-PUBLIC VIEW.csv", clear 
+// frame benchmark_runs: import delimited "data/benchmarks_runs-PUBLIC VIEW.csv", clear 
 
 gen releasedate = .
 format %td releasedate

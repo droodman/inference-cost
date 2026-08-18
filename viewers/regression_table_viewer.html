@@ -3,8 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Inference Cost Plot Viewer</title>
+    <title>Inference Cost Regression Tables</title>
     <style>
+      /* Same palette and chrome as frontier_plot_viewer.html, so the two read as
+         one pair of tools rather than two separate pages. */
       :root {
         --bg: #f5f5f3;
         --panel: #ffffff;
@@ -76,27 +78,32 @@
         margin: 0;
       }
 
-      .plot-container {
+      .table-container {
         flex: 1;
         min-width: 0;
       }
 
-      .plot-frame {
+      /* Like .plot-frame, but the frame holds a document rather than an image,
+         so no padding and no centring -- the table page supplies its own. */
+      .table-frame {
         background: #fff;
         border: 1px solid var(--border);
         border-radius: 10px;
-        padding: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        overflow: hidden;
         min-height: 600px;
       }
 
-      #plot {
+      /* The tables are 9 columns wide and up to 20 rows tall, so the frame is
+         given a tall fixed height and the table page scrolls inside it. Height
+         cannot be measured from here: a file:// iframe is a foreign origin in
+         Chrome, so contentDocument is unreadable and auto-sizing would fail
+         silently on exactly the setup this viewer is opened from. */
+      #table {
         display: block;
-        max-width: 80%;
-        width: 80%;
-        height: auto;
+        width: 100%;
+        height: 78vh;
+        min-height: 600px;
+        border: 0;
         background: #fff;
       }
 
@@ -126,10 +133,13 @@
     </style>
   </head>
   <body>
-    <h1>Inference Cost Plot Viewer</h1>
+    <h1>Inference Cost Regression Tables</h1>
 
     <div class="layout">
       <div class="controls">
+        <!-- Same options, same order, same default as the Model group in
+             frontier_plot_viewer.html. Kept in sync by hand; if one changes the
+             other should follow. -->
         <div class="control-group">
           <div class="group-label">Model</div>
           <label><input type="radio" name="model" value="S" /> Logistic, all tests</label>
@@ -138,23 +148,11 @@
           <label><input type="radio" name="model" value="paretologit" /> Logistic, Pareto points</label>
           <label><input type="radio" name="model" value="envelope" /> Strict logistic envelope</label>
         </div>
-
-        <div class="control-group">
-          <div class="group-label">Order</div>
-          <label><input type="radio" name="order" value="lin" checked /> Linear</label>
-          <label><input type="radio" name="order" value="quad" /> Quadratic</label>
-        </div>
-
-        <div class="control-group">
-          <div class="group-label">Display</div>
-          <label><input type="radio" name="plotType" value="frontier" checked /> Quarterly frontiers</label>
-          <label><input type="radio" name="plotType" value="isoaccuracy" /> Iso-accuracy</label>
-        </div>
       </div>
 
-      <div class="plot-container">
-        <div class="plot-frame">
-          <img id="plot" src="" alt="Selected plot" />
+      <div class="table-container">
+        <div class="table-frame">
+          <iframe id="table" title="Selected regression table"></iframe>
         </div>
         <div class="filename" id="filename"></div>
       </div>
@@ -167,46 +165,19 @@
       }
 
       function buildFilename() {
-        const model = getRadioValue("model");
-        const order = getRadioValue("order");
-        const plotType = getRadioValue("plotType");
-
-        // Models with their own fitting script (envelope, Pareto-point logit)
-        // are named <model>_<order>.png rather than following the SFA grid's
-        // frontier_progression_<family>_<order>.png pattern.
-        if (model === "envelope" || model === "paretologit") {
-          if (plotType === "frontier") {
-            return `${model}_${order}.png`;
-          }
-          return `isoaccuracy_${model}_${order}.png`;
-        }
-
-        if (plotType === "frontier") {
-          return `frontier_progression_${model}_${order}.png`;
-        }
-
-        return `isoaccuracy_${model}_${order}.png`;
+        return `regression_${getRadioValue("model")}.html`;
       }
 
       function update() {
         const filename = buildFilename();
-        const img = document.getElementById("plot");
+        const frame = document.getElementById("table");
         const label = document.getElementById("filename");
-        const src = `../output/${filename}`;
-        img.style.width = "80%";
-        img.style.maxWidth = "80%";
-
-        img.onerror = function () {
-          img.style.display = "none";
-          label.innerHTML = `<span class="missing">File not found: ${filename}</span>`;
-        };
-
-        img.onload = function () {
-          img.style.display = "block";
-          label.textContent = filename;
-        };
-
-        img.src = src;
+        // No onerror equivalent for a missing iframe target: the browser renders
+        // its own error page inside the frame and, being a foreign origin, that
+        // page cannot be inspected from here. So the filename is shown plainly
+        // rather than pretending to a check that would not fire.
+        label.textContent = filename;
+        frame.src = `../output/tables/${filename}`;
       }
 
       document.querySelectorAll('input[type="radio"]').forEach((radio) => {

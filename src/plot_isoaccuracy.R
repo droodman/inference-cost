@@ -5,6 +5,10 @@
 # specifications (three inefficiency families x linear/quadratic time), same
 # palette and chrome.
 #
+# Each contour holds ACCURACY fixed and lets cost vary, so these are isoquants,
+# not isocosts. They were called isocost figures until Aug 2026; that name says
+# the opposite of what is drawn, hence the rename.
+#
 # Colour carries accuracy here rather than date. It is still a magnitude, so the
 # same sequential blue ramp is right, and the observed runs are plotted at their
 # (date, cost) coloured by the accuracy they actually reached -- so a run's shade
@@ -35,21 +39,22 @@ NOTES_BASE <- c(
   paste("Contours are cut where they leave the benchmark's observed cost range,",
         "so a missing contour means that target lies outside the data rather",
         "than that it costs nothing."))
-NOTES_QUAD <- paste("The quadratic time term is not significant on any benchmark,",
-                    "so curvature in these contours should not be read as",
-                    "established.")
+NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2, time^2,",
+                    "cost x time) jointly, so curvature here is the whole block's",
+                    "doing, not any one term's.")
 
 for (k in names(specs)) {
   sp <- specs[[k]]
-  curves <- iso_cost_curves(sp$fits, d, tbar, levels = LEVELS)
-  p <- iso_cost_plot(
+  curves <- iso_acc_curves(sp$fits, d, tbar, levels = LEVELS)
+  p <- iso_acc_plot(
     curves, d,
     title = sprintf("Cost of a fixed accuracy level over time -- model %s (%s)",
                     sp$family, sp$time),
     subtitle = sp$subtitle,
-    notes = c(NOTES_BASE, if (sp$time == "quad") NOTES_QUAD),
+    notes = c(NOTES_BASE,
+              if (sp$time == "quad") c(NOTES_QUAD, ISO_BRANCH_NOTE)),
     ranges = axis_ranges)
-  f <- sprintf("isocost_%s.png", k)
+  f <- sprintf("isoaccuracy_%s.png", k)
   ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
          device = ragg::agg_png)
   cat("wrote", f, "\n")
@@ -58,9 +63,13 @@ for (k in names(specs)) {
 ## ---- how much of each contour is inside the data? ------------------------------------
 # A contour that is mostly blank is the model extrapolating, not a cost decline.
 
+# Rising branch only. iso_acc_curves() now returns both branches, so averaging
+# over all its rows would halve every figure here for reasons that have nothing
+# to do with coverage.
 cat("\nshare of each contour inside the observed cost range (%), model A linear\n")
-cv <- iso_cost_curves(specs$A_lin$fits, d, tbar, levels = LEVELS)
-print(round(100 * tapply(!is.na(cv$cost), list(cv$benchmark, cv$acc), mean)))
+cv <- iso_acc_curves(specs$A_lin$fits, d, tbar, levels = LEVELS)
+cvr <- cv[cv$branch == "rising", ]
+print(round(100 * tapply(!is.na(cvr$cost), list(cvr$benchmark, cvr$acc), mean)))
 
 ## ---- implied cost decline at 50% accuracy --------------------------------------------
 # Cost at the first vs last observed date. Under the linear specification the

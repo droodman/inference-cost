@@ -24,33 +24,9 @@ dates <- bench_dates(d)
 
 ## ---- the frontier ---------------------------------------------------------------------
 
-# Jump points of the running maximum, extended flat to the benchmark's largest
-# cost -- correct, not cosmetic: for c above every observed cost the max is
-# unchanged, so the frontier really is flat out there.
-pareto_steps <- function(sub, q) {
-  s <- sub[sub$releasedate <= q, ]
-  if (!nrow(s)) return(NULL)
-  s <- s[order(s$cost), ]
-  m <- cummax(s$acc)
-  keep <- c(TRUE, diff(m) > 0)
-  data.frame(cost = c(s$cost[keep], max(sub$cost)),
-             value = c(m[keep], m[length(m)]))
-}
-
-pareto_curves <- function(data, dates_by_bench) {
-  do.call(rbind, lapply(names(dates_by_bench), function(b) {
-    sub <- data[data$benchmark == b, ]
-    do.call(rbind, lapply(dates_by_bench[[b]], function(q) {
-      st <- pareto_steps(sub, q)
-      if (is.null(st)) return(NULL)
-      st$qdate <- q
-      st$year <- 2023 + as_t(q)
-      st$benchmark <- b
-      st
-    }))
-  }))
-}
-
+# pareto_steps() and pareto_curves() are in frontier_viz.R: this figure draws the
+# staircase on its own, while plot_envelope.R and plot_paretologit.R draw the
+# same object underneath their fitted curves, and all three must agree exactly.
 curves <- pareto_curves(d, dates)
 
 ## ---- figure ----------------------------------------------------------------------------
