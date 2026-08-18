@@ -279,12 +279,13 @@ PARETO_STEP_NOTE <- paste(
   "Dashed: the empirical Pareto staircase P_t(c) = max{a_i : c_i <= c, t_i <= t}",
   "at the same date; a running maximum, so it carries older records forward.")
 
-# Belongs with any iso-accuracy figure whose fit can bend in cost, where a target
-# is met at TWO costs and both are drawn (see iso_acc_curves).
+# Belongs with any iso-accuracy figure whose fit can bend in cost. The contour is
+# the whole level set, not a function of date: where the surface bends in cost a
+# target is met at two costs, and the curve simply turns back on itself.
 ISO_BRANCH_NOTE <- paste(
-  "Where the surface bends in cost a target is met at two costs and both are",
-  "drawn: solid where more spend raises accuracy, dotted where it lowers it. They",
-  "meet at the turning point.")
+  "Contours are complete iso-accuracy sets. Where the surface bends in cost a",
+  "target is met at two costs, so a contour can turn back on itself rather than",
+  "run left to right.")
 
 ## ---- iso-accuracy cost contours ------------------------------------------------
 #
@@ -361,6 +362,7 @@ iso_acc_curves <- function(fitset, data, tbar,
       u <- -cc / bb
       u[bb < min_slope] <- NA_real_
       roots <- list(rising = u)
+      disc <- rep(NA_real_, nrow(g))
     } else {
       disc  <- bb^2 - 4 * aa * cc
       slope <- sqrt(pmax(disc, 0))                 # |dz/du| at either root
@@ -374,7 +376,7 @@ iso_acc_curves <- function(fitset, data, tbar,
       # ~ 0 would punch a hole exactly at the turning point where the two
       # branches meet -- the one place the contour is genuinely continuous.
     }
-    do.call(rbind, lapply(names(roots), function(br) {
+    both <- do.call(rbind, lapply(names(roots), function(br) {
       u <- roots[[br]]
       # "to the extent they are in the range of actual data": the observed cost
       # range is the only clip either branch gets.
@@ -382,9 +384,12 @@ iso_acc_curves <- function(fitset, data, tbar,
       h <- g
       h$cost <- exp(u)
       h$branch <- br
-      h$benchmark <- b
-      iso_segments(h)
+      h$disc <- disc
+      h
     }))
+    both$benchmark <- b
+    # ordered as ONE curve per accuracy level, not two branches
+    iso_segments(both)
   }))
 }
 
@@ -395,11 +400,49 @@ iso_acc_curves <- function(fitset, data, tbar,
 # it spans. Numbering the contiguous stretches and grouping on that number makes
 # the line break at the gap instead, which is what a gap should look like.
 iso_segments <- function(g) {
+  # nominal spacing of the date grid: the step between neighbouring samples of
+  # the same branch. Anything larger between consecutive drawn points means
+  # something was skipped, and the line must break rather than bridge it.
+  dd <- sort(unique(as.numeric(g$date)))
+  spacing <- if (length(dd) > 1) min(diff(dd)) else 1
+
   do.call(rbind, lapply(split(g, g$acc, drop = TRUE), function(s) {
-    s  <- s[order(s$date), ]
-    ok <- !is.na(s$cost)
-    # a new segment starts at each transition from missing to present
-    s$seg <- cumsum(ok & !c(FALSE, utils::head(ok, -1)))
+    dnum <- as.numeric(s$date)
+
+    # Do the two roots actually MEET inside the drawn window? They coincide where
+    # disc = 0, so the fold is in the window only if disc dips below zero
+    # somewhere in it AND is non-negative somewhere else -- a level with disc < 0
+    # at every date is unreachable throughout, every cost is already NA, and
+    # there is nothing to orient. If disc stays positive throughout, the target
+    # is met at two costs at every date and the turning point lies outside the
+    # panel: the branches are then separate pieces of one curve, and joining them
+    # would draw a chord up the edge of the panel rather than a fold.
+    ok <- if (is.null(s$disc)) integer(0) else which(s$disc >= 0)
+    fold_inside <- length(ok) > 0 && any(s$disc < 0, na.rm = TRUE)
+
+    if (fold_inside) {
+      # Orient so the path JOINS at the fold: in along one branch, round the
+      # turning point, back out along the other. The fold sits at whichever end
+      # of the feasible range disc is smaller.
+      fold_at_start <- s$disc[ok[which.min(dnum[ok])]] <=
+        s$disc[ok[which.max(dnum[ok])]]
+      sgn_fall <- if (fold_at_start) -1 else 1
+      key <- ifelse(s$branch == "falling", 1L, 2L)
+      sgn <- ifelse(s$branch == "falling", sgn_fall, -sgn_fall)
+      s <- s[order(key, sgn * dnum), ]
+    } else {
+      s <- s[order(s$branch, dnum), ]
+    }
+
+    s <- s[!is.na(s$cost), ]
+    if (!nrow(s)) return(s)
+    # One break rule covers everything: consecutive drawn points that are not
+    # neighbours on the date grid start a new segment. At the fold the two
+    # branches share a date, so the step is zero and the curve stays whole; a
+    # cost-range gap, or the far ends of two branches that never meet, step much
+    # further and break.
+    s$seg <- cumsum(c(FALSE,
+                      abs(diff(as.numeric(s$date))) > 1.5 * spacing)) + 1L
     s
   }))
 }
@@ -421,17 +464,13 @@ iso_acc_plot <- function(curves, pts, title, subtitle, notes = character(0),
     blank_layer +
     geom_point(data = pts, aes(releasedate, cost, colour = acc),
                size = 0.35, alpha = 0.3, inherit.aes = FALSE) +
-    # Grouped on branch AND contiguous stretch, not just the accuracy level: a
-    # blanked interior stretch breaks the contour instead of being bridged, and
-    # the two branches never join into one line.
-    geom_line(aes(group = interaction(benchmark, acc, branch, seg),
-                  colour = acc, linetype = branch),
+    # geom_path, NOT geom_line: geom_line reorders by x, which would undo the
+    # path ordering and reduce the fold back to two overlapping branches. Grouped
+    # on the contiguous stretch so a blanked interior still breaks the curve;
+    # branch is deliberately NOT in the grouping, because the two roots are one
+    # isoquant and are drawn as one line.
+    geom_path(aes(group = interaction(benchmark, acc, seg), colour = acc),
               linewidth = 0.6, na.rm = TRUE) +
-    # Solid where more spend buys more accuracy, dotted where it buys less. No
-    # legend: the caption says it, and a linetype key would compete with the
-    # colourbar for the same corner.
-    scale_linetype_manual(values = c(rising = "solid", falling = "22"),
-                          guide = "none") +
     facet_wrap(~benchmark, scales = "free_y", nrow = 2, drop = FALSE) +
     scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
     scale_y_log10(breaks = 10^(-5:1), labels = dollar_log) +

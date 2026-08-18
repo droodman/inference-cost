@@ -17,7 +17,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
   text-align:left;white-space:normal;padding-top:8px;max-width:900px}
 </style></head><body>
 <h1>Logistic, Pareto points</h1>
-<p class="sub">Standard errors in parentheses.</p>
+<p class="sub">Point estimates only; see the notes for why no standard errors.</p>
 <table><thead><tr><th></th>
 <th colspan="2">AIME (OTIS Mock)</th>
 <th colspan="2" class="grp">Chess Puzzles</th>
@@ -25,173 +25,84 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <th colspan="2" class="grp">GPQA Diamond</th>
 </tr></thead><tbody>
 <tr><td>Intercept</td>
-<td>3.563</td>
-<td>3.578</td>
-<td class="grp">0.644</td>
-<td>-0.684</td>
-<td class="grp">1.607</td>
-<td>0.966</td>
-<td class="grp">2.782</td>
-<td>1.567</td>
-</tr>
-<tr class="se"><td></td>
-<td>(0.160)</td>
-<td>(0.291)</td>
-<td class="grp">(0.156)</td>
-<td>(0.405)</td>
-<td class="grp">(0.227)</td>
-<td>(0.266)</td>
-<td class="grp">(0.100)</td>
-<td>(0.207)</td>
+<td>3.088</td>
+<td>2.806</td>
+<td class="grp">0.127</td>
+<td>-0.154</td>
+<td class="grp">1.381</td>
+<td>0.902</td>
+<td class="grp">2.481</td>
+<td>1.716</td>
 </tr>
 <tr><td>ln cost</td>
-<td>0.464</td>
-<td>0.414</td>
-<td class="grp">0.345</td>
-<td>-0.330</td>
-<td class="grp">0.668</td>
-<td>-0.197</td>
-<td class="grp">0.288</td>
-<td>-0.205</td>
-</tr>
-<tr class="se"><td></td>
-<td>(0.030)</td>
-<td>(0.121)</td>
-<td class="grp">(0.035)</td>
-<td>(0.167)</td>
-<td class="grp">(0.091)</td>
-<td>(0.228)</td>
-<td class="grp">(0.018)</td>
-<td>(0.081)</td>
+<td>0.566</td>
+<td>-0.027</td>
+<td class="grp">0.323</td>
+<td>-0.106</td>
+<td class="grp">0.848</td>
+<td>0.152</td>
+<td class="grp">0.312</td>
+<td>-0.163</td>
 </tr>
 <tr><td>time</td>
-<td>2.410</td>
-<td>2.292</td>
-<td class="grp">1.136</td>
-<td>0.796</td>
-<td class="grp">3.306</td>
-<td>9.322</td>
-<td class="grp">1.119</td>
-<td>0.734</td>
-</tr>
-<tr class="se"><td></td>
-<td>(0.146)</td>
-<td>(0.287)</td>
-<td class="grp">(0.124)</td>
-<td>(0.338)</td>
-<td class="grp">(0.680)</td>
-<td>(2.327)</td>
-<td class="grp">(0.043)</td>
-<td>(0.101)</td>
+<td>2.576</td>
+<td>2.842</td>
+<td class="grp">1.240</td>
+<td>1.125</td>
+<td class="grp">2.538</td>
+<td>7.486</td>
+<td class="grp">1.014</td>
+<td>1.127</td>
 </tr>
 <tr><td>ln cost<sup>2</sup></td>
 <td></td>
-<td>-0.009</td>
+<td>-0.071</td>
 <td class="grp"></td>
-<td>-0.068</td>
+<td>-0.061</td>
 <td class="grp"></td>
-<td>-0.241</td>
+<td>-0.160</td>
 <td class="grp"></td>
-<td>-0.041</td>
-</tr>
-<tr class="se"><td></td>
-<td></td>
-<td>(0.012)</td>
-<td class="grp"></td>
-<td>(0.015)</td>
-<td class="grp"></td>
-<td>(0.055)</td>
-<td class="grp"></td>
-<td>(0.007)</td>
+<td>-0.045</td>
 </tr>
 <tr><td>time<sup>2</sup></td>
 <td></td>
-<td>-0.541</td>
+<td>-0.562</td>
 <td class="grp"></td>
-<td>0.011</td>
+<td>-0.043</td>
 <td class="grp"></td>
-<td>19.179</td>
+<td>14.184</td>
 <td class="grp"></td>
-<td>-0.229</td>
-</tr>
-<tr class="se"><td></td>
-<td></td>
-<td>(0.141)</td>
-<td class="grp"></td>
-<td>(0.079)</td>
-<td class="grp"></td>
-<td>(8.057)</td>
-<td class="grp"></td>
-<td>(0.046)</td>
+<td>-0.106</td>
 </tr>
 <tr><td>ln cost &times; time</td>
 <td></td>
-<td>0.084</td>
+<td>0.186</td>
 <td class="grp"></td>
-<td>-0.086</td>
+<td>-0.030</td>
 <td class="grp"></td>
-<td>1.192</td>
+<td>1.181</td>
 <td class="grp"></td>
-<td>-0.002</td>
-</tr>
-<tr class="se"><td></td>
-<td></td>
-<td>(0.044)</td>
-<td class="grp"></td>
-<td>(0.070)</td>
-<td class="grp"></td>
-<td>(0.517)</td>
-<td class="grp"></td>
-<td>(0.020)</td>
+<td>0.047</td>
 </tr>
 <tr class="gap"><td>cost drop, %/yr</td>
-<td>99.4</td>
-<td></td>
-<td class="grp">96.3</td>
-<td></td>
-<td class="grp">99.3</td>
+<td>98.9</td>
 <td></td>
 <td class="grp">97.9</td>
 <td></td>
-</tr>
-<tr class="se"><td></td>
-<td>(0.3)</td>
+<td class="grp">95.0</td>
 <td></td>
-<td class="grp">(1.9)</td>
-<td></td>
-<td class="grp">(0.8)</td>
-<td></td>
-<td class="grp">(0.6)</td>
+<td class="grp">96.1</td>
 <td></td>
 </tr>
 <tr><td>N</td>
-<td>102</td>
-<td>102</td>
-<td class="grp">54</td>
-<td>54</td>
-<td class="grp">27</td>
-<td>27</td>
-<td class="grp">176</td>
-<td>176</td>
+<td>3425</td>
+<td>3425</td>
+<td class="grp">3423</td>
+<td>3423</td>
+<td class="grp">3980</td>
+<td>3980</td>
+<td class="grp">3416</td>
+<td>3416</td>
 </tr>
-<tr><td>Wald vs linear (df 3), &chi;&sup2;</td>
-<td></td>
-<td>19.58</td>
-<td class="grp"></td>
-<td>22.56</td>
-<td class="grp"></td>
-<td>23.84</td>
-<td class="grp"></td>
-<td>53.47</td>
-</tr><tr class="se"><td>p</td>
-<td></td>
-<td>0.0002</td>
-<td class="grp"></td>
-<td>&lt;0.0001</td>
-<td class="grp"></td>
-<td>&lt;0.0001</td>
-<td class="grp"></td>
-<td>&lt;0.0001</td>
-</tr>
-</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/yr is 100*(1 - exp(-b_time / b_ln cost)): the percentage fall in the cost of a fixed accuracy level per year, positive when cost is falling. Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column. Standard error by the delta method on the same robust covariance, taken on the transformed quantity. Being symmetric it can reach past 100% where the estimated drop is near total. Robust (HC1) standard errors. Fitted to frontier-defining runs only, so N is the size of that subset; the errors condition on a sample selected for being maxima and are descriptive, not inferential. Quadratic adds ln cost<sup>2</sup>, time<sup>2</sup> and ln cost x time. Quasibinomial glms report no logLik, so the joint test of the three is a Wald test on the robust covariance, not a likelihood ratio test.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/yr is 100*(1 - exp(-b_time / b_ln cost)): the percentage fall in the cost of a fixed accuracy level per year, positive when cost is falling. Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: the response is the empirical Pareto frontier P_t(c) sampled at the nodes of the envelope's fixed cost-date grid, and grid nodes are not observations. N is the nodes at which the frontier is defined; they resample a few dozen staircase corners, so N measures resolution, not information. No quadratic-versus-linear test: there is no likelihood to test and no sampling distribution to appeal to.</td></tr></tfoot></table>
 </body></html>

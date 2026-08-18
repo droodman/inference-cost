@@ -15,21 +15,24 @@
 #
 #   * Standard errors. A and B are maxLik fits with robust (sandwich) errors --
 #     the Papke-Wooldridge point that the objective is a QUASI-likelihood, so
-#     inverse-Hessian errors are wrong. S and the Pareto-point logit are
-#     quasibinomial glms, given HC1 errors for the same reason. The envelope has
-#     NO standard errors at all: it is the solution of a constrained optimisation
-#     with no likelihood behind it, and inventing errors for it would be worse
-#     than leaving the cells empty.
+#     inverse-Hessian errors are wrong. S is a quasibinomial glm, given HC1
+#     errors for the same reason. The envelope and the Pareto-frontier logit
+#     have NO standard errors at all: the envelope is a constrained optimisation
+#     with no likelihood behind it, and the frontier logit is fitted to P_t(c)
+#     sampled on a fixed grid, whose nodes are not observations. Inventing
+#     errors for either would be worse than leaving the cells empty.
 #
 #   * The quadratic-vs-linear test. A and B have real likelihoods, so this is a
 #     likelihood ratio test on 3 df (quad adds lncost^2, tc^2 and lncost:tc).
-#     Quasibinomial glms report no logLik, so S and the Pareto-point logit get
-#     the Wald analogue on the same three terms, LABELLED as Wald rather than
-#     passed off as LR. The envelope gets neither.
+#     S's quasibinomial glm reports no logLik, so it gets the Wald analogue on
+#     the same three terms, LABELLED as Wald rather than passed off as LR. The
+#     envelope and the frontier logit get neither, for the same reason they get
+#     no standard errors.
 #
-#   * Sample. The Pareto-point logit is fitted to the frontier-defining runs
-#     only, so its N is much smaller, and its errors condition on a sample
-#     selected for being maxima -- descriptive, not inferential.
+#   * Sample. The Pareto-frontier logit's N is the number of grid nodes at
+#     which P_t(c) is defined -- nodes cheaper and earlier than every run have
+#     no frontier value. Those nodes resample a few dozen staircase corners, so
+#     N there measures the sampling resolution, not independent information.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")
@@ -37,12 +40,6 @@ src_source("envelope_frontier.R")
 
 d <- load_runs(drop_gpt4o_chess = FALSE)
 benches <- sort(unique(d$benchmark))
-
-# frontier-defining runs, as in plot_paretologit.R
-front <- do.call(rbind, lapply(benches, function(b) {
-  s <- d[d$benchmark == b, ]
-  s[pareto_binding(s$lncost, s$tc, s$acc), , drop = FALSE]
-}))
 
 ## ---- row layout ---------------------------------------------------------------
 
@@ -70,16 +67,19 @@ MODELS <- list(
 ## ---- fitting and extraction ---------------------------------------------------
 
 fit_one <- function(key, form, b) {
-  if (key == "envelope") return(fit_envelope(d[d$benchmark == b, ], formula = form))
-  dat <- if (key == "paretologit") front else d
-  fam <- if (key == "paretologit") "S" else key
-  fit_family(fam, form, dat)[[b]]
+  if (key == "envelope")
+    return(fit_envelope(d[d$benchmark == b, ], formula = form))
+  if (key == "paretologit")
+    return(fit_pareto_logit(d[d$benchmark == b, ], formula = form))
+  fit_family(key, form, d)[[b]]
 }
 
 # estimate/SE table with one row per term. maxLik keeps a beta_/logsig_ prefix;
 # strip beta_ only, so the sigma terms stay distinguishable from the frontier's.
 est_se <- function(fit) {
-  if (inherits(fit, "envelope_frontier")) {
+  # This branch must precede the glm one: the frontier logit IS a glm, but its
+  # rows are grid nodes, so any SE the glm machinery reports is a fiction.
+  if (inherits(fit, c("envelope_frontier", "pareto_grid_logit"))) {
     cf <- coef(fit)
     return(data.frame(term = names(cf), est = unname(cf),
                       se = NA_real_, stringsAsFactors = FALSE))
@@ -94,8 +94,10 @@ est_se <- function(fit) {
              stringsAsFactors = FALSE)
 }
 
-n_obs <- function(key, b) {
-  if (key == "paretologit") sum(front$benchmark == b) else sum(d$benchmark == b)
+# For the frontier logit the "sample" is the grid nodes carrying a defined
+# frontier value, read off the fit itself; for everything else it is the runs.
+n_obs <- function(key, b, fit = NULL) {
+  if (key == "paretologit") attr(fit, "n_grid") else sum(d$benchmark == b)
 }
 
 ## ---- rate of cost decline ------------------------------------------------------
@@ -138,8 +140,10 @@ cost_decline <- function(fit) {
   if (!all(need %in% names(b))) return(NULL)
   est <- DECLINE(b)
 
-  # the envelope has no covariance matrix, so the point estimate stands alone
-  if (inherits(fit, "envelope_frontier")) return(list(est = est, se = NA_real_))
+  # the envelope has no covariance matrix, and the frontier logit's would be a
+  # fiction built on grid nodes, so both point estimates stand alone
+  if (inherits(fit, c("envelope_frontier", "pareto_grid_logit")))
+    return(list(est = est, se = NA_real_))
 
   V <- if (inherits(fit, "glm")) sandwich::vcovHC(fit, type = "HC1") else
     vcov_robust(fit)
@@ -163,7 +167,9 @@ decl_cell <- function(cl, which = "est") {
 # nothing for the envelope. Returns label + statistic + df + p.
 quad_test <- function(key, b, fit_lin, fit_quad) {
   extra <- c("I(lncost^2)", "I(tc^2)", "lncost:tc")
-  if (key == "envelope") return(NULL)
+  # no test for the envelope or the frontier logit: no likelihood, and no
+  # sampling distribution for a Wald statistic built on grid nodes
+  if (key %in% c("envelope", "paretologit")) return(NULL)
   if (key %in% c("A", "B")) {
     df <- sum(activePar(fit_quad)) - sum(activePar(fit_lin))
     stat <- 2 * (as.numeric(logLik(fit_quad)) - as.numeric(logLik(fit_lin)))
@@ -201,7 +207,7 @@ build_model <- function(key) {
         # but read off the pattern -- the quadratic column is the one carrying the
         # second-order rows, and it is always the right-hand member of the pair
         head = LABELS[[b]],
-        es = est_se(fits[[tt]]), n = n_obs(key, b),
+        es = est_se(fits[[tt]]), n = n_obs(key, b, fits[[tt]]),
         decline = if (tt == "lin") cost_decline(fits[[tt]]) else NULL,
         test = if (tt == "quad") tst else NULL)
     }
@@ -289,7 +295,9 @@ html_table <- function(key, label, cols) {
          '  text-align:left;white-space:normal;padding-top:8px;max-width:900px}',
          '</style></head><body>',
          sprintf('<h1>%s</h1>', html_escape(label)),
-         '<p class="sub">Standard errors in parentheses.</p>',
+         sprintf('<p class="sub">%s</p>',
+                 if (has_se) "Standard errors in parentheses."
+                 else "Point estimates only; see the notes for why no standard errors."),
          '<table><thead><tr><th></th>')
   # One spanning header per benchmark. The two columns beneath are linear and
   # quadratic in that order, unlabelled: the quadratic is identifiable as the one
@@ -434,7 +442,9 @@ rtf_table <- function(key, label, cols) {
          "\\paperw12240\\paperh15840\\margl720\\margr720\\margt720\\margb720",
          "\\f0\\fs18",
          sprintf("\\pard\\ql{\\b\\fs24 %s}\\par", rtf_escape(label)),
-         "\\pard\\ql{\\i Standard errors in parentheses.}\\par\\par")
+         sprintf("\\pard\\ql{\\i %s}\\par\\par",
+                 if (has_se) "Standard errors in parentheses."
+                 else "Point estimates only; see the notes for why no standard errors."))
 
   # Spanning benchmark header: one label per pair, centred over it. The absorbed
   # columns carry empty text; \clmrg does the joining.
@@ -490,8 +500,10 @@ rtf_table <- function(key, label, cols) {
 notes_plain <- function(key, kind) {
   se <- switch(key,
     S = "Robust (HC1) standard errors: the quasibinomial objective is a quasi-likelihood, so inverse-Hessian errors would be wrong.",
-    paretologit = paste("Robust (HC1) standard errors. Fitted to frontier-defining runs only, so N is the size of that subset;",
-                        "the errors condition on a sample selected for being maxima and are descriptive, not inferential."),
+    paretologit = paste("No standard errors: the response is the empirical Pareto frontier P_t(c) sampled at the nodes of the",
+                        "envelope's fixed cost-date grid, and grid nodes are not observations. N is the nodes at which the",
+                        "frontier is defined; they resample a few dozen staircase corners, so N measures resolution, not",
+                        "information."),
     A = , B = "Robust (sandwich) standard errors, as the SFA objective is a quasi-likelihood in the Papke-Wooldridge sense.",
     envelope = paste("No standard errors: the envelope is the solution of a constrained optimisation with no likelihood behind it,",
                      "so none are reported rather than invented. N is the runs it must clear."))
@@ -506,7 +518,7 @@ notes_plain <- function(key, kind) {
   decl <- paste("cost drop, %/yr is 100*(1 - exp(-b_time / b_ln cost)): the percentage fall in the cost of a fixed accuracy",
                 "level per year, positive when cost is falling. Linear specification only -- with the quadratic's",
                 "ln cost x time term the cost slope moves with date, so no single rate describes the column.",
-                if (key == "envelope") "" else
+                if (key %in% c("envelope", "paretologit")) "" else
                   paste("Standard error by the delta method on the same robust covariance, taken on the transformed",
                         "quantity. Being symmetric it can reach past 100% where the estimated drop is near total."))
   paste("Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own",

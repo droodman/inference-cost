@@ -1,38 +1,35 @@
-# Logistic regression fitted ONLY to the frontier-defining runs.
+# Logistic surface fitted to the empirical Pareto frontier, sampled on a grid.
 #
 # The Pareto frontier at date t is
 #
 #     P_t(c) = max { a_i : c_i <= c, t_i <= t }
 #
-# and the runs that DEFINE it are its jump points: the runs no other run
-# dominates, where j dominates i when j is no dearer, no later, and scored no
-# worse. That is the same set envelope_frontier.R isolates, for the same reason
-# -- with the surface non-decreasing in cost and date, a dominated run's
-# constraint is implied by its dominator's -- so pareto_binding() is reused here
-# rather than reimplemented, and the two models are guaranteed to be looking at
-# the same points.
+# fit_pareto_logit() (envelope_frontier.R) evaluates it at every node of the
+# SAME fixed (log cost, tc) grid the envelope scores its objective on, and fits
+# model S's fractional logit to those sampled values. An earlier version fitted
+# the logit to the frontier-defining runs themselves; that summed the objective
+# over wherever the Pareto points cluster -- half of them inside 21-30% of the
+# cost range, almost none in the dearest deciles -- while the envelope weighted
+# the whole rectangle uniformly, so the two models disagreed about weighting
+# before they ever disagreed about anything interesting. On a common grid the
+# remaining difference is the one worth having:
 #
-# What differs is what is asked of those points. The envelope wants the lowest
-# S-curve passing ABOVE all of them. This wants the S-curve that runs THROUGH
-# them: a conventional quasibinomial logit, nothing imposed. Consequences worth
-# keeping in view --
+#   envelope  the lowest monotone logistic surface ABOVE the frontier
+#   this      the logistic surface THROUGH the frontier, nothing imposed
 #
-#   * the fit need not lie above the points, so it is not a frontier in the
-#     envelope's sense; it is a summary of how the frontier-defining runs trade
-#     accuracy against cost and date;
-#   * free disposal is NOT imposed, so the cost slope can come out negative and
+# Consequences worth keeping in view --
+#
+#   * grid nodes are not observations, so there are NO standard errors here,
+#     exactly as for the envelope; point estimates only;
+#   * free disposal is not imposed, so the cost slope can come out negative and
 #     the iso-accuracy contours blank out where it does;
-#   * the estimator is exactly model S's (fit_family("S", ...) is called
-#     literally), so S vs this model isolates ONE thing: which runs are fitted.
-#     S uses all of them, this uses the frontier.
-#
-# Standard errors are quasi-likelihood and, more importantly, condition on a
-# SELECTED sample -- the points were chosen for being maxima -- so they are
-# descriptive here, not inferential.
+#   * P is a running maximum: a node's value is the best run at-or-before it in
+#     both coordinates, so the fitted surface summarises the frontier, not the
+#     cloud of runs beneath it.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("fit_specs.R")          # TIME_FORMS, TIME_LABEL, fit_family, viz
-src_source("envelope_frontier.R")  # pareto_binding()
+src_source("fit_specs.R")          # TIME_FORMS, TIME_LABEL, viz
+src_source("envelope_frontier.R")  # fit_pareto_logit(), pareto_binding()
 
 LEVELS <- seq(0.05, 0.95, by = 0.10)
 
@@ -41,67 +38,62 @@ tbar    <- bench_tbar(d)
 dates   <- bench_dates(d)
 benches <- sort(unique(d$benchmark))
 
-## ---- the frontier-defining runs -------------------------------------------------
+## ---- the staircase being sampled ------------------------------------------------
 
-# Selected on RAW accuracy over ALL runs, which is P_t(c) as defined above.
-# fit_envelope() feeds pareto_binding() something slightly different -- clipped
-# logit, with zero-scoring runs dropped first, because logit(0) = -Inf cannot be
-# a constraint. Those two differences change the set only at the margins (a
-# cheapest-and-earliest zero run, and ties among perfect scores that clipping
-# breaks by sample size); the count of each is reported below rather than
-# assumed away.
+# The frontier's jump points -- what the grid values resample. Selected on RAW
+# accuracy over ALL runs, which is P_t(c) as defined above. fit_envelope() feeds
+# pareto_binding() something slightly different (clipped logit, zero scores
+# dropped, because logit(0) = -Inf cannot be a constraint); the counts of both
+# sets are reported below rather than assumed away.
 frontier_rows <- function(s) s[pareto_binding(s$lncost, s$tc, s$acc), , drop = FALSE]
 
-front <- do.call(rbind, lapply(benches, function(b) frontier_rows(d[d$benchmark == b, ])))
+cat("staircase corners, and the grid that resamples them\n")
+cat(sprintf("%-6s %8s %9s %9s %10s\n", "bench", "all runs", "corners",
+            "envelope", "grid nodes"))
+fits_by_spec <- list()
+for (tt in names(TIME_FORMS))
+  fits_by_spec[[tt]] <- setNames(lapply(benches, function(b) {
+    fit_pareto_logit(d[d$benchmark == b, ], TIME_FORMS[[tt]])
+  }), benches)
 
-cat("frontier-defining runs, by benchmark\n")
-cat(sprintf("%-6s %8s %8s %8s\n", "bench", "all", "frontier", "share"))
-for (b in benches) {
-  n_all <- sum(d$benchmark == b)
-  n_fr  <- sum(front$benchmark == b)
-  cat(sprintf("%-6s %8d %8d %7.1f%%\n", b, n_all, n_fr, 100 * n_fr / n_all))
-}
-
-# How far does this set sit from the one the envelope actually constrains on?
-cat("\noverlap with the envelope's binding-candidate set\n")
-cat(sprintf("%-6s %9s %9s %9s\n", "bench", "P_t set", "envelope", "common"))
 for (b in benches) {
   s <- d[d$benchmark == b, ]
-  a <- rownames(frontier_rows(s))
   L <- qlogis(clip_acc(s$acc, s$n_samples))
   pos <- which(is.finite(L))
-  e <- rownames(s)[pos[pareto_binding(s$lncost[pos], s$tc[pos], L[pos])]]
-  cat(sprintf("%-6s %9d %9d %9d\n", b, length(a), length(e),
-              length(intersect(a, e))))
+  n_env <- length(pareto_binding(s$lncost[pos], s$tc[pos], L[pos]))
+  f <- fits_by_spec$lin[[b]]
+  cat(sprintf("%-6s %8d %9d %9d %10d\n", b, nrow(s),
+              attr(f, "n_corners"), n_env, attr(f, "n_grid")))
 }
 
-# A fit needs more points than parameters; say so loudly rather than reading a
-# rank-deficient glm's coefficients as a frontier.
+# The grid manufactures rows, not information: 4000 nodes resampling 27 corners
+# are still 27 data points. Warn where the corner count is thin relative to the
+# quadratic's six coefficients, since the glm itself will no longer complain.
 for (b in benches) {
-  n_fr <- sum(front$benchmark == b)
-  if (n_fr < 8)
-    warning(sprintf("%s has only %d frontier-defining runs; the quadratic fit there is not credible",
-                    b, n_fr))
+  nc <- attr(fits_by_spec$lin[[b]], "n_corners")
+  if (nc < 8)
+    warning(sprintf("%s staircase has only %d corners; the quadratic fit there rests on them however many grid nodes resample them",
+                    b, nc))
 }
 
 ## ---- figures ----------------------------------------------------------------------
 
-FAMILY_SUB <- "logit fitted to frontier-defining runs only"
+FAMILY_SUB <- "logit fitted to the Pareto frontier sampled on the envelope's grid"
 
 NOTES_FRONTIER <- c(
-  paste("Solid: a conventional logistic regression fitted ONLY to the runs that",
-        "define the staircase -- its jump points, not the full sample."),
+  paste("Solid: model S's logit fitted to P_t(c) = max{a_i : c_i <= c, t_i <= t}",
+        "sampled on the same fixed (cost, date) grid the envelope uses, so the",
+        "two models weight the rectangle identically."),
   PARETO_STEP_NOTE,
-  paste("The same runs that can bind the envelope: with the surface non-decreasing",
-        "in cost and date, a dominated run's constraint is implied by its dominator's."),
-  paste("The fit runs THROUGH those points rather than above them, and",
-        "monotonicity in cost or time is not imposed."))
+  paste("Grid nodes are not observations, so this model reports no standard",
+        "errors; the surface runs THROUGH the frontier rather than above it, and",
+        "monotonicity is not imposed."))
 
 NOTES_ISO <- c(
   paste("Contours are accuracy targets from 5% to 95%; a falling contour means the",
         "same performance costs less over time. Dots are observed runs."),
-  paste("Read off a logit fitted only to the frontier-defining runs -- the jump",
-        "points of P_t(c) -- not to the full sample."),
+  paste("Read off a logit fitted to the empirical Pareto frontier sampled on a",
+        "uniform (cost, date) grid -- the frontier, not the full sample."),
   paste("Cut where they leave the benchmark's observed cost range, so a missing",
         "contour means that target lies outside the data, not that it is free."),
   paste("Free disposal is not imposed, so a contour also blanks out at dates where",
@@ -120,19 +112,17 @@ axis_ranges <- do.call(rbind, lapply(benches, function(b) {
   data.frame(benchmark = b, cost = range(s$cost), value = c(0, 1))
 }))
 
-# The empirical staircase, drawn underneath the fit exactly as plot_envelope.R
-# draws it. Showing the frontier itself rather than highlighting the fitted runs
-# keeps the two figures readable side by side, and loses nothing: the staircase's
-# jump points ARE the fitted runs.
+# The staircase the fit is tracking, drawn underneath it exactly as
+# plot_envelope.R draws it.
 steps <- pareto_curves(d, dates)
 
 for (tt in names(TIME_FORMS)) {
-  fits <- fit_family("S", TIME_FORMS[[tt]], front)   # same estimator as model S
+  fits <- fits_by_spec[[tt]]
 
   curves <- frontier_curves(fits, d, dates, tbar)
   p <- frontier_plot(
     curves, d, ranges = axis_ranges,
-    title = sprintf("Accuracy frontier fitted to frontier-defining runs (%s)", tt),
+    title = sprintf("Logit fitted to the Pareto frontier (%s)", tt),
     subtitle = sprintf("%s; %s", FAMILY_SUB, TIME_LABEL[[tt]]),
     ylab = "Fitted frontier accuracy",
     notes = NOTES_FRONTIER) +
@@ -146,7 +136,7 @@ for (tt in names(TIME_FORMS)) {
   iso <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
   pi <- iso_acc_plot(
     iso, d, ranges = iso_ranges,
-    title = sprintf("Cost of a fixed accuracy level -- frontier-run logit (%s)", tt),
+    title = sprintf("Cost of a fixed accuracy level -- Pareto-frontier logit (%s)", tt),
     subtitle = sprintf("%s; %s", FAMILY_SUB, TIME_LABEL[[tt]]),
     notes = NOTES_ISO)
 
@@ -156,19 +146,18 @@ for (tt in names(TIME_FORMS)) {
   cat("wrote", fi, "\n")
 }
 
-## ---- what does restricting the sample actually change? ------------------------------
-# The same estimator on the same functional form, all runs vs frontier runs only.
+## ---- what does moving from the cloud to the frontier change? ------------------------
+# Model S on all runs vs the same functional form fitted to the sampled frontier.
 # beta_x is the cost slope in logits, beta_t the improvement rate per year at the
 # benchmark's reference date.
 
-cat("\ncoefficients: all runs (S) vs frontier-defining runs only, linear in time\n")
+cat("\ncoefficients: all runs (S) vs Pareto frontier on the grid, linear in time\n")
 cat(sprintf("%-6s %9s %9s %9s %9s\n", "bench", "b_x all", "b_x front",
             "b_t all", "b_t front"))
 all_fits <- fit_family("S", TIME_FORMS$lin, d)
-frt_fits <- fit_family("S", TIME_FORMS$lin, front)
 for (b in benches) {
   ca <- frontier_coefs(all_fits[[b]])
-  cf <- frontier_coefs(frt_fits[[b]])
+  cf <- frontier_coefs(fits_by_spec$lin[[b]])
   cat(sprintf("%-6s %9.3f %9.3f %9.3f %9.3f\n", b,
               ca[["bx"]], cf[["bx"]], ca[["bt"]], cf[["bt"]]))
 }
@@ -182,9 +171,8 @@ cat("\nmonotonicity over the observed (cost, date) rectangle\n")
 cat(sprintf("%-6s %-5s %12s %12s  %s\n", "bench", "spec", "min dz/dlnc",
             "min dz/dtc", "status"))
 for (tt in names(TIME_FORMS)) {
-  ff <- fit_family("S", TIME_FORMS[[tt]], front)
   for (b in benches) {
-    co <- frontier_coefs(ff[[b]])
+    co <- frontier_coefs(fits_by_spec[[tt]][[b]])
     s  <- d[d$benchmark == b, ]
     bd <- frontier_slope_bounds(co, s$lncost, s$tc)
     cat(sprintf("%-6s %-5s %12.4f %12.4f  %s\n", b, tt,
