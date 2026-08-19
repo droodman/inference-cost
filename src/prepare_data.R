@@ -73,6 +73,11 @@ build_runs <- function(curves_csv = data_path("caisi_curves_all.csv"),
   agg$lncost[!is.finite(agg$lncost)] <- NA_real_   # Stata's ln(0) is missing
   agg$benchmarkid  <- as.integer(factor(agg$benchmark))
 
+  # censor GPQA scores, for which 25% is the expected minimum, to [25%,100%]
+  # the full_run_acc values are almost all in this range, but the method of synthesizing
+  # rows by budget level put them in [0%,100%]
+  agg$acc[agg$benchmark=="gpqa"] <- (pmax(.25, agg$acc[agg$benchmark=="gpqa"]) - .25) / .75
+
   # Stata's collapse leaves data sorted by its by() variables, and duplicates
   # drop keeps the FIRST row in that order -- so sort the same way, with radix
   # (byte) collation to match Stata rather than the R locale.

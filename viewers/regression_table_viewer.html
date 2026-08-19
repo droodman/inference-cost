@@ -6,49 +6,49 @@
     <title>Inference Cost Regression Tables</title>
     <style>
       /* Same palette and chrome as frontier_plot_viewer.html, so the two read as
-         one pair of tools rather than two separate pages. */
+         one pair of tools rather than two separate pages: one background
+         (#fcfcfb, the figures' own surface colour, also painted by the table
+         pages), no borders, a narrow fixed-width selector. */
       :root {
-        --bg: #f5f5f3;
-        --panel: #ffffff;
+        --bg: #fcfcfb;
         --text: #1d1d1d;
         --muted: #5e5e5e;
-        --border: #d9d9d5;
-        --accent: #2c5d9a;
         --missing: #a22020;
       }
 
       * { box-sizing: border-box; }
 
       body {
-        margin: 20px;
+        margin: 10px 12px;
         background: var(--bg);
         color: var(--text);
         font-family: "Segoe UI", Arial, sans-serif;
       }
 
       h1 {
-        margin: 0 0 16px 0;
-        font-size: 1.5em;
+        margin: 0 0 10px 0;
+        font-size: 1.25em;
         font-weight: 700;
       }
 
       .layout {
         display: flex;
-        gap: 20px;
+        gap: 14px;
         align-items: flex-start;
       }
 
+      /* Fixed width, not min-width: a flex item's automatic minimum is its
+         CONTENT width, so with min-width the longest Model label set the
+         column's width and refused to wrap. Pinning the width is what makes
+         long labels wrap instead of widening the selector. */
       .controls {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        min-width: 220px;
-        padding: 12px 16px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: var(--panel);
+        gap: 14px;
+        width: 180px;
+        flex-shrink: 0;
         position: sticky;
-        top: 20px;
+        top: 10px;
       }
 
       .control-group {
@@ -65,32 +65,26 @@
         text-transform: uppercase;
       }
 
+      /* flex-start, not center: with wrapped two-line labels the radio should
+         sit beside the first line, not float between them */
       .control-group label {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 6px;
         cursor: pointer;
-        font-size: 0.96em;
+        font-size: 0.9em;
+        line-height: 1.25;
         color: var(--text);
       }
 
       .control-group input[type="radio"] {
-        margin: 0;
+        margin: 2px 0 0 0;
+        flex-shrink: 0;
       }
 
       .table-container {
         flex: 1;
         min-width: 0;
-      }
-
-      /* Like .plot-frame, but the frame holds a document rather than an image,
-         so no padding and no centring -- the table page supplies its own. */
-      .table-frame {
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        overflow: hidden;
-        min-height: 600px;
       }
 
       /* The tables are 9 columns wide and up to 20 rows tall, so the frame is
@@ -101,14 +95,14 @@
       #table {
         display: block;
         width: 100%;
-        height: 78vh;
+        height: 86vh;
         min-height: 600px;
         border: 0;
-        background: #fff;
+        background: var(--bg);
       }
 
       .filename {
-        margin-top: 8px;
+        margin-top: 4px;
         font-size: 0.86em;
         color: var(--muted);
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -151,9 +145,7 @@
       </div>
 
       <div class="table-container">
-        <div class="table-frame">
-          <iframe id="table" title="Selected regression table"></iframe>
-        </div>
+        <iframe id="table" title="Selected regression table"></iframe>
         <div class="filename" id="filename"></div>
       </div>
     </div>

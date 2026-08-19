@@ -78,8 +78,6 @@ for (b in benches) {
 
 ## ---- figures ----------------------------------------------------------------------
 
-FAMILY_SUB <- "logit fitted to the Pareto frontier sampled on the envelope's grid"
-
 NOTES_FRONTIER <- c(
   paste("Solid: model S's logit fitted to P_t(c) = max{a_i : c_i <= c, t_i <= t}",
         "sampled on the same fixed (cost, date) grid the envelope uses, so the",
@@ -92,10 +90,11 @@ NOTES_FRONTIER <- c(
 NOTES_ISO <- c(
   paste("Contours are accuracy targets from 5% to 95%; a falling contour means the",
         "same performance costs less over time. Dots are observed runs."),
+  ISO_PARETO_NOTE,
   paste("Read off a logit fitted to the empirical Pareto frontier sampled on a",
         "uniform (cost, date) grid -- the frontier, not the full sample."),
-  paste("Cut where they leave the benchmark's observed cost range, so a missing",
-        "contour means that target lies outside the data, not that it is free."),
+  paste("Cut at the observed cost range and above each level's dashed record,",
+        "so a level never achieved by any run shows no contour at all."),
   paste("Free disposal is not imposed, so a contour also blanks out at dates where",
         "the fitted cost slope is too flat to invert."),
   ISO_BRANCH_NOTE)
@@ -113,8 +112,10 @@ axis_ranges <- do.call(rbind, lapply(benches, function(b) {
 }))
 
 # The staircase the fit is tracking, drawn underneath it exactly as
-# plot_envelope.R draws it.
+# plot_envelope.R draws it -- and its iso-accuracy counterpart at the contour
+# levels, for the swapped-axes figure.
 steps <- pareto_curves(d, dates)
+iso_steps <- iso_pareto_curves(d, LEVELS)
 
 for (tt in names(TIME_FORMS)) {
   fits <- fits_by_spec[[tt]]
@@ -122,8 +123,6 @@ for (tt in names(TIME_FORMS)) {
   curves <- frontier_curves(fits, d, dates, tbar)
   p <- frontier_plot(
     curves, d, ranges = axis_ranges,
-    title = sprintf("Logit fitted to the Pareto frontier (%s)", tt),
-    subtitle = sprintf("%s; %s", FAMILY_SUB, TIME_LABEL[[tt]]),
     ylab = "Fitted frontier accuracy",
     notes = NOTES_FRONTIER) +
     pareto_step_layer(steps)
@@ -133,12 +132,11 @@ for (tt in names(TIME_FORMS)) {
          device = ragg::agg_png)
   cat("wrote", f, "\n")
 
-  iso <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
+  iso <- iso_acc_curves(fits, d, tbar, levels = LEVELS, cost_cap = iso_steps)
   pi <- iso_acc_plot(
     iso, d, ranges = iso_ranges,
-    title = sprintf("Cost of a fixed accuracy level -- Pareto-frontier logit (%s)", tt),
-    subtitle = sprintf("%s; %s", FAMILY_SUB, TIME_LABEL[[tt]]),
-    notes = NOTES_ISO)
+    notes = NOTES_ISO) +
+    iso_pareto_layer(iso_steps)
 
   fi <- sprintf("isoaccuracy_paretologit_%s.png", tt)
   ggsave(out_path(fi), pi, width = 10, height = 7.5, dpi = 200,

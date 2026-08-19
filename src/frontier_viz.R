@@ -9,16 +9,44 @@ source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 library(ggplot2)
 src_source("prepare_data.R")   # build_runs(): the single source of analysis data
 
-## ---- palette (sequential blue, ordinal steps 250-700; light surface) -----------
+## ---- theme + palette ------------------------------------------------------------
+#
+# EXPERIMENT (round 2): dark surface with plasma. One flag switches the whole
+# look, because palette and chrome cannot be chosen separately: which END of a
+# palette is legible depends on the background. On the light surface viridis had
+# to be REVERSED (its yellow end vanished into white, so dark took the high
+# values); on black the failure mode is mirrored -- the dark end vanishes -- so
+# the palette runs UNREVERSED and the high values glow instead. Plasma over
+# inferno/magma because its low end (deep blue-purple) is still separable from
+# the background, so early curves recede without disappearing outright.
+#
+# DARK <- FALSE restores the light viridis experiment exactly; PALETTE <- BLUE
+# under DARK <- FALSE restores the original blues.
+DARK <- TRUE
 
 BLUE <- c("#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6",
           "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b")
-INK_PRIMARY <- "#0b0b0b"
-INK_SECOND  <- "#52514e"
-INK_MUTED   <- "#898781"
-GRIDLINE    <- "#e1e0d9"
-AXIS        <- "#c3c2b7"
-SURFACE     <- "#fcfcfb"
+
+if (DARK) {
+  # unreversed (bright = late/high), with the first 20% clipped off: plasma's
+  # deepest blue-purples sat too close to the black surface, so the low end now
+  # starts at a violet that reads as data rather than background
+  PALETTE     <- viridisLite::plasma(10, begin = 0.2)
+  INK_PRIMARY <- "#f2f1ec"
+  INK_SECOND  <- "#c6c5bf"
+  INK_MUTED   <- "#8f8e88"
+  GRIDLINE    <- "#26262c"
+  AXIS        <- "#44444c"
+  SURFACE     <- "#101014"
+} else {
+  PALETTE     <- rev(viridisLite::viridis(10))  # reversed: dark = late/high
+  INK_PRIMARY <- "#0b0b0b"
+  INK_SECOND  <- "#52514e"
+  INK_MUTED   <- "#898781"
+  GRIDLINE    <- "#e1e0d9"
+  AXIS        <- "#c3c2b7"
+  SURFACE     <- "#fcfcfb"
+}
 
 LABELS <- c(aime = "AIME (OTIS Mock)", chess = "Chess Puzzles",
             fm13 = "FrontierMath, tiers 1-3", gpqa = "GPQA Diamond")
@@ -152,7 +180,11 @@ pad_caption <- function(notes) {
 # frame has none at all, and with scales = "free_x" a panel's range would
 # otherwise be read off whatever happens to be present, so the axes would drift
 # from frame to frame.
-frontier_plot <- function(curves, pts, title, subtitle, ylab,
+# `title`/`subtitle` default to NULL and the static quartets pass neither: the
+# viewer's controls and the filename already say which figure this is, and the
+# vertical space goes to the panels instead. The animations still pass a
+# subtitle -- it is their date ticker, the only clock a movie frame has.
+frontier_plot <- function(curves, pts, title = NULL, subtitle = NULL, ylab,
                           notes = character(0), step = FALSE,
                           colour_limits = NULL, ranges = NULL) {
   curves$benchmark <- factor(LABELS[curves$benchmark], levels = LABELS)
@@ -186,7 +218,7 @@ frontier_plot <- function(curves, pts, title, subtitle, ylab,
     scale_y_continuous(limits = c(0, 1),
                        labels = scales::percent_format(accuracy = 1)) +
     scale_colour_gradientn(
-      colours = BLUE, name = NULL, breaks = 2023:2026, limits = colour_limits,
+      colours = PALETTE, name = NULL, breaks = 2023:2026, limits = colour_limits,
       guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
                               barwidth = grid::unit(7, "cm"),
                               direction = "horizontal", ticks.colour = SURFACE)) +
@@ -287,6 +319,75 @@ ISO_BRANCH_NOTE <- paste(
   "target is met at two costs, so a contour can turn back on itself rather than",
   "run left to right.")
 
+## ---- the empirical staircase in iso-accuracy space ------------------------------
+
+# The same Pareto staircase the quarterly-frontier figures overlay, read the
+# other way round: the minimum cost at which accuracy AT LEAST `level` had been
+# achieved by each date,
+#
+#     C_a(t) = min { c_i : t_i <= t, acc_i >= a }
+#
+# which is exactly the level set of P_t(c): P_t(c) >= a iff c >= C_a(t). It is
+# non-increasing in t by construction -- a released model stays available -- and
+# it is a running MINIMUM, so like the staircase it carries old records forward.
+#
+#   sub    DATA FRAME of one benchmark's runs; needs cost, acc, releasedate
+#   level  SCALAR in (0, 1), the accuracy target
+#
+# Returns a DATA FRAME with columns date and cost -- the jump points of the
+# running minimum, extended flat to the benchmark's last run date (correct, not
+# cosmetic: past the last release nothing changes, so the record really does
+# hold out there) -- or NULL when no run ever reaches the level, which is a
+# missing curve rather than a curve at infinite cost.
+iso_pareto_steps <- function(sub, level) {
+  s <- sub[sub$acc >= level, ]
+  if (!nrow(s)) return(NULL)
+  s <- s[order(s$releasedate), ]
+  m <- cummin(s$cost)
+  keep <- c(TRUE, diff(m) < 0)
+  data.frame(date = c(s$releasedate[keep], max(sub$releasedate)),
+             cost = c(m[keep], m[length(m)]))
+}
+
+# One staircase per benchmark per accuracy level, in the column layout
+# iso_acc_plot()'s overlay expects; `levels` should be the same vector the
+# fitted contours use, so each dashed curve pairs with a solid one shade for
+# shade.
+#
+#   data     DATA FRAME of runs across benchmarks (needs benchmark, cost, acc,
+#            releasedate)
+#   levels   numeric VECTOR of accuracy targets in (0, 1)
+#
+# Returns a DATA FRAME with columns date, cost, acc, benchmark.
+iso_pareto_curves <- function(data, levels) {
+  do.call(rbind, lapply(sort(unique(data$benchmark)), function(b) {
+    sub <- data[data$benchmark == b, ]
+    do.call(rbind, lapply(levels, function(a) {
+      st <- iso_pareto_steps(sub, a)
+      if (is.null(st)) return(NULL)
+      st$acc <- a
+      st$benchmark <- b
+      st
+    }))
+  }))
+}
+
+# Drawn over iso_acc_plot() exactly as pareto_step_layer() is drawn over
+# frontier_plot(): same dash, same weight, and coloured by the same accuracy
+# scale as the fitted contours, so each staircase reads against the contour at
+# its own level.
+iso_pareto_layer <- function(steps) {
+  steps$benchmark <- factor(LABELS[steps$benchmark], levels = LABELS)
+  geom_step(data = steps, aes(date, cost, group = interaction(benchmark, acc),
+                              colour = acc),
+            direction = "hv", linewidth = 0.4, linetype = "22",
+            inherit.aes = FALSE)
+}
+
+ISO_PARETO_NOTE <- paste(
+  "Dashed: the minimum cost at which accuracy at least each contour's level had",
+  "been achieved by each date -- the Pareto staircase read as cost against date.")
+
 ## ---- iso-accuracy cost contours ------------------------------------------------
 #
 # The frontier inverted for cost at a fixed accuracy target:
@@ -339,9 +440,19 @@ ISO_BRANCH_NOTE <- paste(
 # Grouping each branch's contiguous stretches separately (iso_segments) is what
 # keeps the two from ever being joined into one line, which is how the old
 # single-branch code produced its near-vertical jumps.
+#
+# `cost_cap` (optional) tightens the second blank per LEVEL rather than per
+# benchmark: a DATA FRAME with columns benchmark, acc and cost -- in practice
+# the iso_pareto_curves() staircases -- whose per-(benchmark, acc) maximum cost
+# becomes that contour's ceiling. A contour is then never drawn dearer than the
+# empirical record for its own level, and a level with no rows at all (never
+# achieved by any run) gets no contour rather than a purely extrapolated one.
+# Matching is on the acc values themselves, so pass the SAME `levels` vector to
+# both this function and iso_pareto_curves(). NULL (the default) keeps the
+# benchmark-wide clip, which is what the S/A/B figures use.
 iso_acc_curves <- function(fitset, data, tbar,
                             levels = seq(0.05, 0.95, by = 0.10), n_date = 300,
-                            min_slope = 0.05) {
+                            min_slope = 0.05, cost_cap = NULL) {
   do.call(rbind, lapply(names(fitset), function(b) {
     co  <- frontier_coefs(fitset[[b]])
     sub <- data[data$benchmark == b, ]
@@ -376,11 +487,28 @@ iso_acc_curves <- function(fitset, data, tbar,
       # ~ 0 would punch a hole exactly at the turning point where the two
       # branches meet -- the one place the contour is genuinely continuous.
     }
+    # Per-row upper clip in log cost: the benchmark maximum by default, the
+    # level's own empirical record where cost_cap supplies one. -Inf for a level
+    # cost_cap covers the benchmark for but omits -- never achieved, so every
+    # point of its contour would be extrapolation past the record.
+    umax <- rep(urng[2], nrow(g))
+    if (!is.null(cost_cap)) {
+      cb <- cost_cap[cost_cap$benchmark == b, ]
+      lv <- unique(cb$acc)
+      caps <- vapply(lv, function(a) max(cb$cost[cb$acc == a]), numeric(1))
+      # match on the shared `levels` values, exact because both data frames
+      # descend from the same numeric vector -- no character round trip, which
+      # would corrupt values like seq()'s 0.45000000000000007
+      cap_u <- log(caps)[match(g$acc, lv)]
+      umax <- ifelse(is.na(cap_u), -Inf, pmin(umax, cap_u))
+    }
+
     both <- do.call(rbind, lapply(names(roots), function(br) {
       u <- roots[[br]]
       # "to the extent they are in the range of actual data": the observed cost
-      # range is the only clip either branch gets.
-      u[is.finite(u) & (u < urng[1] | u > urng[2])] <- NA_real_
+      # range -- tightened per level by cost_cap -- is the only clip either
+      # branch gets.
+      u[is.finite(u) & (u < urng[1] | u > umax)] <- NA_real_
       h <- g
       h$cost <- exp(u)
       h$branch <- br
@@ -450,8 +578,8 @@ iso_segments <- function(g) {
 # `pts` are the observed runs, placed at (release date, cost) and coloured by the
 # accuracy they achieved -- the same scale as the contours, so a run's colour can
 # be read against the contour it sits on.
-iso_acc_plot <- function(curves, pts, title, subtitle, notes = character(0),
-                          ranges = NULL) {
+iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
+                          notes = character(0), ranges = NULL) {
   curves$benchmark <- factor(LABELS[curves$benchmark], levels = LABELS)
   pts$benchmark    <- factor(LABELS[pts$benchmark],    levels = LABELS)
   blank_layer <- NULL
@@ -459,6 +587,12 @@ iso_acc_plot <- function(curves, pts, title, subtitle, notes = character(0),
     ranges$benchmark <- factor(LABELS[ranges$benchmark], levels = LABELS)
     blank_layer <- geom_blank(data = ranges, aes(date, cost), inherit.aes = FALSE)
   }
+
+  # The cost floor: the decade at or below the cheapest run anywhere in `pts`
+  # ($0.00001 with the current data). `pts` is the full sample in every caller,
+  # so every iso figure computes the SAME floor -- which, with the shared facet
+  # scales, is what puts all iso panels on one identical cost axis.
+  ymin <- 10^floor(log10(min(pts$cost, na.rm = TRUE)))
 
   ggplot(curves, aes(date, cost)) +
     blank_layer +
@@ -471,11 +605,25 @@ iso_acc_plot <- function(curves, pts, title, subtitle, notes = character(0),
     # isoquant and are drawn as one line.
     geom_path(aes(group = interaction(benchmark, acc, seg), colour = acc),
               linewidth = 0.6, na.rm = TRUE) +
-    facet_wrap(~benchmark, scales = "free_y", nrow = 2, drop = FALSE) +
+    # Shared scales, not free_y: cost is in DOLLARS on every panel, so one axis
+    # serves all four, the right-hand column drops its y labels exactly as the
+    # top row already drops its x labels, and the horizontal space goes to the
+    # panels. The price is that each panel spans the union of the cost ranges
+    # rather than its own -- on a log scale spanning five decades anyway, cheap.
+    facet_wrap(~benchmark, nrow = 2, drop = FALSE) +
     scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
-    scale_y_log10(breaks = 10^(-5:1), labels = dollar_log) +
+    # The panel stops exactly at the floor: zero expansion below, so the axis
+    # corner sits on a labelled round break rather than leaving dead margin
+    # under lines that hug the cheapest costs. A whisker of expansion stays on
+    # top so the dearest dots are not clipped in half.
+    # mult expansion applies to the WHOLE 5.5-decade range, so even 3% on top
+    # put the ceiling 46% above the dearest run; additive 0.04 decades (~10%)
+    # is enough that the top dots are not clipped in half.
+    scale_y_log10(breaks = 10^(-5:1), labels = dollar_log,
+                  limits = c(ymin, NA),
+                  expand = expansion(add = c(0, 0.04))) +
     scale_colour_gradientn(
-      colours = BLUE, name = NULL, limits = c(0, 1),
+      colours = PALETTE, name = NULL, limits = c(0, 1),
       breaks = seq(0, 1, 0.25), labels = scales::percent_format(accuracy = 1),
       guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
                               barwidth = grid::unit(7, "cm"),

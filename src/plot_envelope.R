@@ -22,10 +22,8 @@ benches <- sort(unique(d$benchmark))
 # here. The envelope now bends in time and lets its cost slope drift with date,
 # which is what makes it comparable with the SFA and logit fits at last.
 SPECS <- list(
-  lin  = list(form = acc ~ lncost + tc,
-              sub  = "envelope, linear in log cost and time"),
-  quad = list(form = acc ~ lncost * tc + I(lncost^2) + I(tc^2),
-              sub  = "envelope, full quadratic in log cost and time")
+  lin  = list(form = acc ~ lncost + tc),
+  quad = list(form = acc ~ lncost * tc + I(lncost^2) + I(tc^2))
 )
 
 # The same quarterly grid as every other figure, via bench_dates(), so the
@@ -36,6 +34,11 @@ dates <- bench_dates(d)
 # the fitted curves, and the same pareto_curves() the standalone Pareto figure
 # and the frontier-run logit use -- see frontier_viz.R.
 steps <- pareto_curves(d, dates)
+
+# Its iso-accuracy counterpart, at the same levels as the fitted contours:
+# the minimum cost of achieving each accuracy level by each date.
+LEVELS <- seq(0.05, 0.95, by = 0.10)
+iso_steps <- iso_pareto_curves(d, LEVELS)
 
 axis_ranges <- do.call(rbind, lapply(benches, function(b) {
   s <- d[d$benchmark == b, ]
@@ -68,8 +71,6 @@ for (k in names(SPECS)) {
 
   p <- frontier_plot(
     curves, d, ranges = axis_ranges,
-    title = sprintf("Deterministic envelope frontier -- %s", k),
-    subtitle = sp$sub,
     ylab = "Frontier accuracy",
     notes = c(
       # Pre-empts the obvious misreading: the curves float above the staircases
@@ -93,25 +94,26 @@ for (k in names(SPECS)) {
   # Axes swapped: what a fixed accuracy target costs over time. Because the
   # envelope is monotone by construction, these contours cannot double back
   # the way the SFA ones did.
-  iso <- iso_acc_curves(fits, d, bench_tbar(d), levels = seq(0.05, 0.95, 0.10))
+  iso <- iso_acc_curves(fits, d, bench_tbar(d), levels = LEVELS,
+                        cost_cap = iso_steps)
   iso_ranges <- do.call(rbind, lapply(benches, function(b) {
     s <- d[d$benchmark == b, ]
     data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
   }))
   pi <- iso_acc_plot(
     iso, d, ranges = iso_ranges,
-    title = sprintf("Cost of a fixed accuracy level -- envelope frontier (%s)", k),
-    subtitle = sp$sub,
     notes = c(
       paste("Contours are accuracy targets from 5% to 95% read off the",
             "deterministic envelope; a falling contour means the same",
             "performance costs less over time."),
-      paste("Cut where they leave the observed cost range, so a missing contour",
-            "means that target lies outside the data rather than that it is",
-            "free."),
+      ISO_PARETO_NOTE,
+      paste("Cut at the observed cost range and above each level's dashed",
+            "record, so a level never achieved by any run shows no contour at",
+            "all."),
       paste("The envelope must clear every run, so these are upper bounds on",
             "what frontier performance costs, not central estimates."),
-      ISO_BRANCH_NOTE))
+      ISO_BRANCH_NOTE)) +
+    iso_pareto_layer(iso_steps)
   fi <- sprintf("isoaccuracy_envelope_%s.png", k)
   ggsave(out_path(fi), pi, width = 10, height = 7.5, dpi = 200,
          device = ragg::agg_png)

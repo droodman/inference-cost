@@ -5,48 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inference Cost Plot Viewer</title>
     <style>
+      /* One background for the whole page: #101014 is SURFACE in
+         frontier_viz.R (dark experiment), the colour the PNGs themselves are
+         painted on, so the plots sit on the page with no visible seam and no
+         framing chrome. If DARK is turned off there, restore --bg #fcfcfb,
+         --text #1d1d1d, --muted #5e5e5e, --missing #a22020 here. */
       :root {
-        --bg: #f5f5f3;
-        --panel: #ffffff;
-        --text: #1d1d1d;
-        --muted: #5e5e5e;
-        --border: #d9d9d5;
-        --accent: #2c5d9a;
-        --missing: #a22020;
+        --bg: #101014;
+        --text: #f2f1ec;
+        --muted: #8f8e88;
+        --missing: #ff8f85;
       }
 
       * { box-sizing: border-box; }
 
       body {
-        margin: 20px;
+        margin: 10px 12px;
         background: var(--bg);
         color: var(--text);
         font-family: "Segoe UI", Arial, sans-serif;
       }
 
       h1 {
-        margin: 0 0 16px 0;
-        font-size: 1.5em;
+        margin: 0 0 10px 0;
+        font-size: 1.25em;
         font-weight: 700;
       }
 
       .layout {
         display: flex;
-        gap: 20px;
+        gap: 14px;
         align-items: flex-start;
       }
 
+      /* Fixed width, not min-width: a flex item's automatic minimum is its
+         CONTENT width, so with min-width the longest Model label set the
+         column's width and refused to wrap. Pinning the width is what makes
+         long labels wrap instead of widening the selector. */
       .controls {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        min-width: 220px;
-        padding: 12px 16px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: var(--panel);
+        gap: 14px;
+        width: 180px;
+        flex-shrink: 0;
         position: sticky;
-        top: 20px;
+        top: 10px;
       }
 
       .control-group {
@@ -63,17 +66,21 @@
         text-transform: uppercase;
       }
 
+      /* flex-start, not center: with wrapped two-line labels the radio should
+         sit beside the first line, not float between them */
       .control-group label {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 6px;
         cursor: pointer;
-        font-size: 0.96em;
+        font-size: 0.9em;
+        line-height: 1.25;
         color: var(--text);
       }
 
       .control-group input[type="radio"] {
-        margin: 0;
+        margin: 2px 0 0 0;
+        flex-shrink: 0;
       }
 
       .plot-container {
@@ -81,27 +88,18 @@
         min-width: 0;
       }
 
-      .plot-frame {
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 600px;
-      }
-
+      /* Full width of the remaining space, but never past the PNG's native
+         2000px (10in at 200dpi) -- upscaling would blur exactly the legibility
+         this layout is buying. */
       #plot {
         display: block;
-        max-width: 80%;
-        width: 80%;
+        width: 100%;
+        max-width: 2000px;
         height: auto;
-        background: #fff;
       }
 
       .filename {
-        margin-top: 8px;
+        margin-top: 4px;
         font-size: 0.86em;
         color: var(--muted);
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
@@ -153,9 +151,7 @@
       </div>
 
       <div class="plot-container">
-        <div class="plot-frame">
-          <img id="plot" src="" alt="Selected plot" />
-        </div>
+        <img id="plot" src="" alt="Selected plot" />
         <div class="filename" id="filename"></div>
       </div>
     </div>
@@ -193,8 +189,6 @@
         const img = document.getElementById("plot");
         const label = document.getElementById("filename");
         const src = `../output/${filename}`;
-        img.style.width = "80%";
-        img.style.maxWidth = "80%";
 
         img.onerror = function () {
           img.style.display = "none";

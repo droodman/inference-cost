@@ -278,10 +278,13 @@ html_table <- function(key, label, cols) {
   o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
          sprintf('<title>%s</title>', html_escape(label)),
          '<style>',
-         'body{font-family:"Segoe UI",Arial,sans-serif;margin:24px;color:#1d1d1d;background:#f5f5f3}',
+         # #fcfcfb throughout: the same surface colour the figures are painted
+         # on, and the single background the viewers now use -- a table page
+         # inside the viewer's iframe should show no seam against it
+         'body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}',
          'h1{font-size:1.25em;margin:0 0 4px 0}',
          'p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}',
-         'table{border-collapse:collapse;background:#fff;font-size:.86em}',
+         'table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}',
          'th,td{padding:4px 10px;text-align:right;white-space:nowrap}',
          'th:first-child,td:first-child{text-align:left}',
          'thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}',

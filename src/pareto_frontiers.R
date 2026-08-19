@@ -33,8 +33,6 @@ curves <- pareto_curves(d, dates)
 
 p <- frontier_plot(
   curves, d, step = TRUE,
-  title = "Empirical Pareto frontier of accuracy by cost per task",
-  subtitle = "f_t(c) = best accuracy among all runs released by t costing no more than c",
   ylab = "Best accuracy achieved",
   notes = c(
     paste("Non-decreasing in cost and in time by construction, so curves cannot",

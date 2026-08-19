@@ -48,9 +48,6 @@ for (k in names(specs)) {
   curves <- iso_acc_curves(sp$fits, d, tbar, levels = LEVELS)
   p <- iso_acc_plot(
     curves, d,
-    title = sprintf("Cost of a fixed accuracy level over time -- model %s (%s)",
-                    sp$family, sp$time),
-    subtitle = sp$subtitle,
     notes = c(NOTES_BASE,
               if (sp$time == "quad") c(NOTES_QUAD, ISO_BRANCH_NOTE)),
     ranges = axis_ranges)

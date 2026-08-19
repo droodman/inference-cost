@@ -36,9 +36,6 @@ for (k in names(specs)) {
   curves <- frontier_curves(sp$fits, d, dates, tbar)
   p <- frontier_plot(
     curves, d,
-    title = sprintf("Fitted accuracy frontier by cost per task -- model %s (%s)",
-                    sp$family, sp$time),
-    subtitle = sp$subtitle,
     ylab = if (sp$family == "S") "Fitted accuracy" else "Frontier accuracy",
     notes = c(NOTES_BASE, if (sp$time == "quad") NOTES_QUAD))
   f <- sprintf("frontier_progression_%s.png", k)
