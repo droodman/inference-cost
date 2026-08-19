@@ -164,24 +164,24 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">(0.683)</td>
 <td>(17.123)</td>
 </tr>
-<tr class="gap"><td>cost drop, %/yr</td>
-<td>61.2</td>
+<tr class="gap"><td>cost drop, %/qtr</td>
+<td>21.1</td>
 <td></td>
-<td class="grp">53.2</td>
+<td class="grp">17.3</td>
 <td></td>
-<td class="grp">71.1</td>
+<td class="grp">26.7</td>
 <td></td>
-<td class="grp">69.9</td>
+<td class="grp">25.9</td>
 <td></td>
 </tr>
 <tr class="se"><td></td>
-<td>(8.9)</td>
+<td>(4.5)</td>
 <td></td>
-<td class="grp">(15.9)</td>
+<td class="grp">(7.0)</td>
 <td></td>
-<td class="grp">(29.6)</td>
+<td class="grp">(18.8)</td>
 <td></td>
-<td class="grp">(6.5)</td>
+<td class="grp">(4.0)</td>
 <td></td>
 </tr>
 <tr><td>N</td>
@@ -213,5 +213,5 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp"></td>
 <td>&lt;0.0001</td>
 </tr>
-</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/yr is 100*(1 - exp(-b_time / b_ln cost)): the percentage fall in the cost of a fixed accuracy level per year, positive when cost is falling. Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column. Standard error by the delta method on the same robust covariance, taken on the transformed quantity. Being symmetric it can reach past 100% where the estimated drop is near total. Robust (sandwich) standard errors, as the SFA objective is a quasi-likelihood in the Papke-Wooldridge sense. Quadratic adds ln cost<sup>2</sup>, time<sup>2</sup> and ln cost x time; the test is a likelihood ratio test of all three jointly.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column. Standard error by the delta method on the same robust covariance, taken on the transformed quantity. Being symmetric it can reach past 100% where the estimated drop is near total. Robust (sandwich) standard errors, as the SFA objective is a quasi-likelihood in the Papke-Wooldridge sense. Quadratic adds ln cost<sup>2</sup>, time<sup>2</sup> and ln cost x time; the test is a likelihood ratio test of all three jointly.</td></tr></tfoot></table>
 </body></html>

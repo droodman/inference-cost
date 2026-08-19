@@ -111,10 +111,11 @@ n_obs <- function(key, b, fit = NULL) {
 # (logits/log-$) = log-$/yr, while b_x/b_t would be years per log-dollar, which
 # is a cost-time tradeoff rather than a rate of decline.
 #
-# Reported after x -> 100*(1 - exp(x)), which turns log points per year into the
-# percentage drop per year and flips the sign so a genuine decline reads
-# positive. This is the same number plot_isoaccuracy.R prints from the endpoint
-# costs, so the two are directly comparable.
+# Reported PER QUARTER: tc is in years, so the annual log decline -b_t/b_x is
+# divided by 4 before the transform x -> 100*(1 - exp(x)), which turns log
+# points into a percentage drop and flips the sign so a genuine decline reads
+# positive. (Compounding, not division, relates it to the annual figure
+# plot_isoaccuracy.R prints: 1 - drop_yr = (1 - drop_qtr)^4.)
 #
 # The transformation is applied INSIDE the function differentiated, not to the
 # ratio afterwards: the delta method is not invariant to reparametrisation, and
@@ -131,7 +132,7 @@ n_obs <- function(key, b, fit = NULL) {
 #     d/db_x (-b_t/b_x) =  b_t/b_x^2
 #     d/db_t (-b_t/b_x) = -1/b_x
 # in the accompanying test rather than trusted blind.
-DECLINE <- function(p) 100 * (1 - exp(-p[["tc"]] / p[["lncost"]]))
+DECLINE <- function(p) 100 * (1 - exp(-p[["tc"]] / p[["lncost"]] / 4))
 
 cost_decline <- function(fit) {
   b <- coef(fit)
@@ -335,7 +336,7 @@ html_table <- function(key, label, cols) {
   has_decl_se <- any(vapply(cols, function(cl)
     !is.null(cl$decline) && !is.na(cl$decline$se), logical(1)))
   if (has_decl) {
-    o <- c(o, '<tr class="gap"><td>cost drop, %/yr</td>')
+    o <- c(o, '<tr class="gap"><td>cost drop, %/qtr</td>')
     for (j in seq_along(cols))
       o <- c(o, sprintf('<td%s>%s</td>', cls(j), decl_cell(cols[[j]], "est")))
     o <- c(o, '</tr>')
@@ -474,7 +475,7 @@ rtf_table <- function(key, label, cols) {
   has_decl_se <- any(vapply(cols, function(cl)
     !is.null(cl$decline) && !is.na(cl$decline$se), logical(1)))
   if (has_decl) {
-    o <- c(o, rtf_row(c("cost drop, %/yr",
+    o <- c(o, rtf_row(c("cost drop, %/qtr",
                         vapply(cols, function(cl) decl_cell(cl, "est"), character(1))),
                       widths, top = TRUE, sep = sep_data))
     if (has_decl_se)
@@ -518,9 +519,9 @@ notes_plain <- function(key, kind) {
     paste("Quadratic adds ln cost^2, time^2 and ln cost x time. Quasibinomial glms report no logLik, so the joint test",
           "of the three is a Wald test on the robust covariance, not a likelihood ratio test.")
   }
-  decl <- paste("cost drop, %/yr is 100*(1 - exp(-b_time / b_ln cost)): the percentage fall in the cost of a fixed accuracy",
-                "level per year, positive when cost is falling. Linear specification only -- with the quadratic's",
-                "ln cost x time term the cost slope moves with date, so no single rate describes the column.",
+  decl <- paste("cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed",
+                "accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the",
+                "quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.",
                 if (key %in% c("envelope", "paretologit")) "" else
                   paste("Standard error by the delta method on the same robust covariance, taken on the transformed",
                         "quantity. Being symmetric it can reach past 100% where the estimated drop is near total."))

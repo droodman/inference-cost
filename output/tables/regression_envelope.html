@@ -84,14 +84,14 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp"></td>
 <td>0.000</td>
 </tr>
-<tr class="gap"><td>cost drop, %/yr</td>
-<td>99.6</td>
+<tr class="gap"><td>cost drop, %/qtr</td>
+<td>75.6</td>
 <td></td>
-<td class="grp">99.2</td>
+<td class="grp">70.2</td>
 <td></td>
-<td class="grp">89.4</td>
+<td class="grp">43.0</td>
 <td></td>
-<td class="grp">99.9</td>
+<td class="grp">82.0</td>
 <td></td>
 </tr>
 <tr><td>N</td>
@@ -104,5 +104,5 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">2111</td>
 <td>2111</td>
 </tr>
-</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/yr is 100*(1 - exp(-b_time / b_ln cost)): the percentage fall in the cost of a fixed accuracy level per year, positive when cost is falling. Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: the envelope is the solution of a constrained optimisation with no likelihood behind it, so none are reported rather than invented. N is the runs it must clear. No quadratic-versus-linear test: there is no likelihood to test and no sampling distribution to appeal to.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: the envelope is the solution of a constrained optimisation with no likelihood behind it, so none are reported rather than invented. N is the runs it must clear. No quadratic-versus-linear test: there is no likelihood to test and no sampling distribution to appeal to.</td></tr></tfoot></table>
 </body></html>
