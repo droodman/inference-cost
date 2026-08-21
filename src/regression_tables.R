@@ -1,9 +1,10 @@
 # Regression tables: one per statistical model, in RTF and HTML.
 #
 # Columns are benchmark x specification (AIME linear, AIME quadratic, Chess
-# linear, ...), estimates with standard errors in parentheses beneath. Model
-# order and naming follow the plot viewer, which is the version of these names
-# that has actually been read by a human:
+# linear, ...), estimates with standard errors in parentheses beneath, plus a
+# final Pooled pair combining the benchmarks on the ECI capability scale (see
+# the pooling section below). Model order and naming follow the plot viewer,
+# which is the version of these names that has actually been read by a human:
 #
 #   S            Logistic, all tests
 #   A            Stochastic frontier
@@ -40,6 +41,22 @@ src_source("envelope_frontier.R")
 
 d <- load_runs(drop_gpt4o_chess = FALSE)
 benches <- sort(unique(d$benchmark))
+
+## ---- benchmark discriminations for pooling --------------------------------------
+#
+# alpha_b = estimated_slope_scaled: each benchmark's 2PL discrimination, in
+# logits per point of Epoch's ECI (Epoch Capabilities Index) scale -- the scale
+# anchored at Claude 3.5 Sonnet = 130 and GPT-5 = 150, on which the `edi`
+# column gives the benchmark's difficulty. TASK_LABEL (prepare_data.R) already
+# holds each benchmark's exact name in that table, so it doubles as the join
+# key.
+#
+# data/edi_scores.csv was downloaded from https://epoch.ai/data/edi_scores.csv
+# on 2026-08-20.
+ECI <- read.csv(data_path("edi_scores.csv"), stringsAsFactors = FALSE)
+ALPHA <- setNames(ECI$estimated_slope_scaled[match(TASK_LABEL, ECI$benchmark_name)],
+                  names(TASK_LABEL))
+stopifnot(!anyNA(ALPHA[benches]))
 
 ## ---- row layout ---------------------------------------------------------------
 
@@ -134,27 +151,38 @@ n_obs <- function(key, b, fit = NULL) {
 # in the accompanying test rather than trusted blind.
 DECLINE <- function(p) 100 * (1 - exp(-p[["tc"]] / p[["lncost"]] / 4))
 
-cost_decline <- function(fit) {
+# Coefficients (beta_ prefix stripped) and the covariance that goes with them,
+# or V = NULL where none exists: the envelope has no covariance matrix, and the
+# frontier logit's would be a fiction built on grid nodes.
+coef_vcov <- function(fit) {
   b <- coef(fit)
   names(b) <- sub("^beta_", "", names(b))
-  need <- c("lncost", "tc")
-  if (!all(need %in% names(b))) return(NULL)
-  est <- DECLINE(b)
-
-  # the envelope has no covariance matrix, and the frontier logit's would be a
-  # fiction built on grid nodes, so both point estimates stand alone
   if (inherits(fit, c("envelope_frontier", "pareto_grid_logit")))
-    return(list(est = est, se = NA_real_))
-
+    return(list(b = b, V = NULL))
   V <- if (inherits(fit, "glm")) sandwich::vcovHC(fit, type = "HC1") else
     vcov_robust(fit)
   if (is.null(rownames(V))) dimnames(V) <- list(names(coef(fit)), names(coef(fit)))
   dimnames(V) <- list(sub("^beta_", "", rownames(V)),
                       sub("^beta_", "", colnames(V)))
+  list(b = b, V = V)
+}
 
+# The delta-method core, on coefficients rather than a fit, so the pooled
+# column's slopes flow through the identical calculation. V = NULL means a
+# point estimate standing alone.
+decline_from <- function(b, V) {
+  need <- c("lncost", "tc")
+  if (!all(need %in% names(b))) return(NULL)
+  est <- DECLINE(b)
+  if (is.null(V)) return(list(est = est, se = NA_real_))
   g <- function(p) { names(p) <- need; DECLINE(p) }
   J <- numDeriv::grad(g, b[need])
   list(est = est, se = sqrt(drop(t(J) %*% V[need, need] %*% J)))
+}
+
+cost_decline <- function(fit) {
+  cv <- coef_vcov(fit)
+  decline_from(cv$b, cv$V)
 }
 
 # percentage points, so one decimal rather than the coefficients' three
@@ -194,14 +222,84 @@ fmt_p <- function(p) {
   if (is.na(p)) "" else if (p < 0.0001) "<0.0001" else formatC(p, format = "f", digits = 4)
 }
 
+## ---- pooling across benchmarks ---------------------------------------------------
+#
+# In the 2PL behind Epoch's ECI, logit accuracy on benchmark b is
+# alpha_b * (C - D_b) with C a common capability index, so every frontier
+# coefficient on the logit scale is alpha_b times the corresponding slope of C.
+# Dividing by alpha_b maps each benchmark's estimate onto the SAME capability
+# scale, where averaging is legitimate, and the 2PL's own information weights
+# are w_b = alpha_b^2, giving per term
+#
+#     theta_k = sum_b alpha_b beta_kb / sum_b alpha_b^2
+#
+# in ECI points per unit regressor. The pooled cost-decline ratio
+# -theta_t / theta_x is then -sum(alpha beta_t) / sum(alpha beta_x): the pooled
+# summary is what the pooled slopes imply, not a separate aggregate. The sigma
+# parameters are logit-scale too, but log sigma_u is a LOG of one, so it converts
+# by subtracting log alpha_b, and its time slope is already scale-free; both pool
+# with the plain w_b weights.
+#
+# Benchmark fits are independent, so pooled variances are the correspondingly
+# weighted sums of per-benchmark pieces, and the decline's delta method runs on
+# the pooled 2x2 block. For the envelope and the frontier logit the alpha^2
+# weights borrow an information interpretation those fits cannot support -- no
+# likelihood -- so their pooled figures are mechanical averages, point estimates
+# like the rest of those tables.
+pooled_col <- function(key, tt, fitlist) {
+  cv <- lapply(fitlist, coef_vcov)
+  bs <- names(fitlist)
+  disp <- vapply(TERMS, function(x) x$t, character(1))
+  present <- disp[disp %in% unique(unlist(lapply(cv, function(x) names(x$b))))]
+
+  rows <- lapply(present, function(k) {
+    # a benchmark contributes where the term was estimated; an aliased NA drops
+    # out and the weights renormalise over the rest
+    use <- bs[vapply(bs, function(b)
+      k %in% names(cv[[b]]$b) && is.finite(cv[[b]]$b[[k]]), logical(1))]
+    if (!length(use)) return(NULL)
+    a  <- ALPHA[use]
+    cc <- if (grepl("^logsig_", k)) a^2 / sum(a^2) else a / sum(a^2)
+    off <- if (k == "logsig_(Intercept)") -sum(a^2 / sum(a^2) * log(a)) else 0
+    est <- sum(cc * vapply(use, function(b) cv[[b]]$b[[k]], numeric(1))) + off
+    haveV <- all(vapply(use, function(b)
+      !is.null(cv[[b]]$V) && k %in% rownames(cv[[b]]$V), logical(1)))
+    se <- if (haveV)
+      sqrt(sum(cc^2 * vapply(use, function(b) cv[[b]]$V[k, k], numeric(1))))
+    else NA_real_
+    data.frame(term = k, est = est, se = se, stringsAsFactors = FALSE)
+  })
+  es <- do.call(rbind, rows)
+
+  decline <- NULL
+  if (tt == "lin" && all(c("lncost", "tc") %in% es$term)) {
+    need <- c("lncost", "tc")
+    b2 <- setNames(es$est[match(need, es$term)], need)
+    V2 <- NULL
+    if (all(vapply(bs, function(b) !is.null(cv[[b]]$V), logical(1)))) {
+      W  <- sum(ALPHA[bs]^2)
+      V2 <- matrix(0, 2, 2, dimnames = list(need, need))
+      for (b in bs) V2 <- V2 + (ALPHA[[b]] / W)^2 * cv[[b]]$V[need, need]
+    }
+    decline <- decline_from(b2, V2)
+  }
+
+  list(bench = "pooled", spec = tt, head = "Pooled (ECI pts)", es = es,
+       n = as.integer(sum(vapply(bs, function(b)
+         n_obs(key, b, fitlist[[b]]), numeric(1)))),
+       decline = decline, test = NULL)
+}
+
 # Build the whole grid for one model: a list of columns, each carrying its
-# estimates, N and (for quad) the test.
+# estimates, N and (for quad) the test; the pooled pair comes last.
 build_model <- function(key) {
   cols <- list()
+  fits_by_spec <- setNames(vector("list", length(TIME_FORMS)), names(TIME_FORMS))
   for (b in benches) {
     fits <- lapply(TIME_FORMS, function(f) fit_one(key, f, b))
     tst  <- quad_test(key, b, fits$lin, fits$quad)
     for (tt in names(TIME_FORMS)) {
+      fits_by_spec[[tt]][[b]] <- fits[[tt]]
       cols[[length(cols) + 1]] <- list(
         bench = b, spec = tt,
         # the benchmark name only; linear vs quadratic is not labelled per column
@@ -213,6 +311,8 @@ build_model <- function(key) {
         test = if (tt == "quad") tst else NULL)
     }
   }
+  for (tt in names(TIME_FORMS))
+    cols[[length(cols) + 1]] <- pooled_col(key, tt, fits_by_spec[[tt]])
   cols
 }
 
@@ -431,10 +531,10 @@ rtf_table <- function(key, label, cols) {
 
   # With the per-column "linear"/"quadratic" words gone, the widest data string
   # is an SE like "(11.102)" and the widest label is the test row, so the columns
-  # can be much narrower: 2400 + 8*950 = 10000 twips. That fits PORTRAIT letter
-  # (12240 wide less 2*720 margins = 10800 usable), so the tables no longer need a
-  # landscape page to be pasted into.
-  w1 <- 2400; wc <- 950
+  # can be much narrower. The pooled pair brings the count to ten, and
+  # 2400 + 10*840 = 10800 twips is exactly PORTRAIT letter (12240 wide less
+  # 2*720 margins), so the tables still need no landscape page to be pasted into.
+  w1 <- 2400; wc <- 840
   widths <- c(w1, w1 + seq_len(length(cols)) * wc)
 
   starts <- group_starts(cols)
@@ -525,8 +625,32 @@ notes_plain <- function(key, kind) {
                 if (key %in% c("envelope", "paretologit")) "" else
                   paste("Standard error by the delta method on the same robust covariance, taken on the transformed",
                         "quantity. Being symmetric it can reach past 100% where the estimated drop is near total."))
+  pool <- paste(
+    "Pooled maps the benchmarks onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which",
+    "logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same",
+    "capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average,",
+    "sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled",
+    sprintf("in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are %s,",
+            paste(sprintf("%s %.3f", benches, ALPHA[benches]), collapse = ", ")),
+    sprintf("so one logit is worth %.1f-%.1f ECI points and pooled slopes read several times larger than the",
+            min(1 / ALPHA[benches]), max(1 / ALPHA[benches])),
+    "logit-scale columns beside them.",
+    "The pooled cost drop is the same transform of the pooled slopes, -sum(alpha b_time) / sum(alpha b_ln cost)",
+    "inside it. The pooled intercept averages capability net of difficulty at each benchmark's own reference",
+    "date, so unlike the slopes it carries no clean interpretation, and pooled N sums the benchmark columns.",
+    if (key %in% c("A", "B"))
+      paste("log sigma_u, the log of a logit-scale spread, converts as log sigma_u - log alpha_b before averaging;",
+            "its time slope is scale-free and pools directly. Fits are independent across benchmarks, so pooled",
+            "standard errors sum the per-benchmark covariance pieces.")
+    else if (key == "S")
+      "Fits are independent across benchmarks, so pooled standard errors sum the per-benchmark covariance pieces."
+    else
+      paste("For this model the alpha^2 weights borrow an information interpretation the fit cannot support --",
+            "there is no likelihood behind it -- so the pooled figures are mechanical averages."),
+    "One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R),",
+    "a scale on which Epoch's alpha_gpqa was not necessarily estimated.")
   paste("Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own",
-        "reference date.", decl, se, tst)
+        "reference date.", decl, se, tst, pool)
 }
 
 notes_html <- function(key, kind) {

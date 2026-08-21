@@ -23,6 +23,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <th colspan="2" class="grp">Chess Puzzles</th>
 <th colspan="2" class="grp">FrontierMath, tiers 1-3</th>
 <th colspan="2" class="grp">GPQA Diamond</th>
+<th colspan="2" class="grp">Pooled (ECI pts)</th>
 </tr></thead><tbody>
 <tr><td>Intercept</td>
 <td>6.283</td>
@@ -33,6 +34,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>1.553</td>
 <td class="grp">2.936</td>
 <td>2.191</td>
+<td class="grp">21.980</td>
+<td>20.552</td>
 </tr>
 <tr><td>ln cost</td>
 <td>0.581</td>
@@ -43,6 +46,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>0.029</td>
 <td class="grp">0.230</td>
 <td>-0.021</td>
+<td class="grp">3.199</td>
+<td>1.857</td>
 </tr>
 <tr><td>time</td>
 <td>3.278</td>
@@ -53,6 +58,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>8.408</td>
 <td class="grp">1.579</td>
 <td>1.336</td>
+<td class="grp">13.048</td>
+<td>25.928</td>
 </tr>
 <tr><td>ln cost<sup>2</sup></td>
 <td></td>
@@ -63,6 +70,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>-0.106</td>
 <td class="grp"></td>
 <td>-0.022</td>
+<td class="grp"></td>
+<td>-0.206</td>
 </tr>
 <tr><td>time<sup>2</sup></td>
 <td></td>
@@ -73,6 +82,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>14.221</td>
 <td class="grp"></td>
 <td>-0.076</td>
+<td class="grp"></td>
+<td>22.429</td>
 </tr>
 <tr><td>ln cost &times; time</td>
 <td></td>
@@ -83,6 +94,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>0.082</td>
 <td class="grp"></td>
 <td>0.000</td>
+<td class="grp"></td>
+<td>0.842</td>
 </tr>
 <tr class="gap"><td>cost drop, %/qtr</td>
 <td>75.6</td>
@@ -92,6 +105,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">43.0</td>
 <td></td>
 <td class="grp">82.0</td>
+<td></td>
+<td class="grp">63.9</td>
 <td></td>
 </tr>
 <tr><td>N</td>
@@ -103,6 +118,8 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>266</td>
 <td class="grp">2111</td>
 <td>2111</td>
+<td class="grp">6001</td>
+<td>6001</td>
 </tr>
-</tbody><tfoot><tr><td colspan="9">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: the envelope is the solution of a constrained optimisation with no likelihood behind it, so none are reported rather than invented. N is the runs it must clear. No quadratic-versus-linear test: there is no likelihood to test and no sampling distribution to appeal to.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="11">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: the envelope is the solution of a constrained optimisation with no likelihood behind it, so none are reported rather than invented. N is the runs it must clear. No quadratic-versus-linear test: there is no likelihood to test and no sampling distribution to appeal to. Pooled maps the benchmarks onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average, sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are aime 0.223, chess 0.120, fm13 0.169, gpqa 0.120, so one logit is worth 4.5-8.4 ECI points and pooled slopes read several times larger than the logit-scale columns beside them. The pooled cost drop is the same transform of the pooled slopes, -sum(alpha b_time) / sum(alpha b_ln cost) inside it. The pooled intercept averages capability net of difficulty at each benchmark's own reference date, so unlike the slopes it carries no clean interpretation, and pooled N sums the benchmark columns. For this model the alpha^2 weights borrow an information interpretation the fit cannot support -- there is no likelihood behind it -- so the pooled figures are mechanical averages. One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R), a scale on which Epoch's alpha_gpqa was not necessarily estimated.</td></tr></tfoot></table>
 </body></html>
