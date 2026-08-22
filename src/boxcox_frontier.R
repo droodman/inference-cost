@@ -142,3 +142,23 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
   attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE, lambda_time = lt_free)
   fit
 }
+
+# All benchmarks of one family, on the shared worker cluster when one is
+# available (fit_cluster() in paths.R) -- the profiles are independent across
+# benchmarks, so the wall clock is the slowest one rather than the sum.
+# `lambda_starts` is a list benchmark -> c(lambda_c, lambda_t) seeding the
+# outer optimiser; missing entries start at (0, 1), the linear specification.
+fit_bc_by <- function(key, data, lambda_starts = list()) {
+  # Force the arguments BEFORE the closure ships: an unforced promise crossing
+  # the serialisation boundary re-evaluates its expression on the worker, where
+  # the caller's variables do not exist. as.list() both forces and lets a
+  # caller pass an environment (regression_tables.R's seed cache) directly.
+  force(key)
+  lambda_starts <- as.list(lambda_starts)
+  bs <- sort(unique(data$benchmark))
+  one <- function(b) fit_bc(key, data[data$benchmark == b, ],
+                            lambda_start = lambda_starts[[b]] %||% c(0, 1))
+  cl <- fit_cluster(length(bs))
+  fits <- if (is.null(cl)) lapply(bs, one) else parallel::parLapply(cl, bs, one)
+  setNames(fits, bs)
+}

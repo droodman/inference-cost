@@ -178,16 +178,30 @@ fit_panel_frontier <- function(formula_beta, formula_mu, data, u_group,
   res
 }
 
+# One fit per level of `by`, independent by construction, so they run on the
+# shared worker cluster when one is available (fit_cluster() in paths.R -- R
+# and its bundled BLAS are single-threaded, so run serially the benchmarks fit
+# one after another). The dots are captured with list() and re-spliced by
+# do.call because a closure shipped to a PSOCK worker cannot carry `...`
+# through serialisation.
 fit_panel_frontier_by <- function(formula_beta, formula_mu, data, u_group, by, ...) {
+  # Force every argument before the closure ships: an unforced promise crossing
+  # the serialisation boundary re-evaluates its expression on the worker, where
+  # the caller's variables do not exist. (data and by are forced by the next
+  # two lines; list(...) forces the dots.)
+  force(formula_beta)
+  force(formula_mu)
+  force(u_group)
   split_var <- data[[by]]
   levels <- sort(unique(split_var[!is.na(split_var)]))
-  fits <- setNames(vector("list", length(levels)), as.character(levels))
-  for (lev in levels) {
-    fits[[as.character(lev)]] <- fit_panel_frontier(
-      formula_beta, formula_mu, data[split_var == lev, , drop = FALSE], u_group, ...
-    )
-  }
-  fits
+  dots <- list(...)
+  one <- function(lev) do.call(fit_panel_frontier, c(
+    list(formula_beta, formula_mu, data[split_var == lev, , drop = FALSE],
+         u_group), dots))
+  cl <- fit_cluster(length(levels))
+  fits <- if (is.null(cl)) lapply(levels, one) else
+    parallel::parLapply(cl, levels, one)
+  setNames(fits, as.character(levels))
 }
 
 ## ---- cost of fixed frontier performance over time --------------------------------

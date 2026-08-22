@@ -349,11 +349,13 @@ BC_LSTART <- new.env(parent = emptyenv())
 build_model <- function(key) {
   cols <- list()
   grid <- fit_grid(key)
+  bc_fits <- fit_bc_by(key, d, as.list(BC_LSTART))
+  if (key == "S")
+    for (b in benches)
+      BC_LSTART[[b]] <- unname(attr(bc_fits[[b]], "bc_lambda"))
   for (b in benches) {
     fits <- lapply(grid, `[[`, b)
-    fits$bc <- fit_bc(key, d[d$benchmark == b, ],
-                      lambda_start = BC_LSTART[[b]] %||% c(0, 1))
-    if (key == "S") BC_LSTART[[b]] <- unname(attr(fits$bc, "bc_lambda"))
+    fits$bc <- bc_fits[[b]]
     tsts <- list(quad = quad_test(key, b, fits$lin, fits$quad),
                  bc   = bc_test(key, fits$lin, fits$bc))
     for (tt in c(names(TIME_FORMS), "bc")) {

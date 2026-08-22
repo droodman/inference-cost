@@ -213,9 +213,7 @@ for (k in names(SPECS)) {
 NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
                   "mid-2020) and their product, with the transform parameters",
                   "profiled against the envelope's own objective.")
-fits_bc <- setNames(lapply(benches, function(b) {
-  fit_bc("envelope", d[d$benchmark == b, ])
-}), benches)
+fits_bc <- fit_bc_by("envelope", d)
 
 curves <- frontier_curves(fits_bc, d, dates, bench_tbar(d))
 p <- frontier_plot(

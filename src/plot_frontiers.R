@@ -45,16 +45,14 @@ LEVELS <- seq(0.05, 0.95, by = 0.10)   # iso-accuracy contour targets
 
 specs <- fit_all_specs(d)
 
-# The Box-Cox fits, profiled per benchmark and family. S is profiled first --
-# its glm inner loop is cheap -- and its lambdas seed the slower SFA profiles
-# (a starting point, not a constraint).
+# The Box-Cox fits, profiled per benchmark and family -- across the shared
+# worker cluster, one benchmark per worker. S is profiled first -- its glm
+# inner loop is cheap -- and its lambdas seed the slower SFA profiles (a
+# starting point, not a constraint).
 bc_lam <- list()
 bc_fits <- list()
 for (fam in c("S", "A", "B")) {
-  bc_fits[[fam]] <- setNames(lapply(benches, function(b) {
-    fit_bc(fam, d[d$benchmark == b, ],
-           lambda_start = if (is.null(bc_lam[[b]])) c(0, 1) else bc_lam[[b]])
-  }), benches)
+  bc_fits[[fam]] <- fit_bc_by(fam, d, bc_lam)
   if (fam == "S")
     for (b in benches)
       bc_lam[[b]] <- unname(attr(bc_fits[[fam]][[b]], "bc_lambda"))

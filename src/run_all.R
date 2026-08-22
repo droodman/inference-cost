@@ -18,7 +18,7 @@
 #
 # The runnable scripts, in order. The order only matters for readability of
 # the log -- no script consumes another's OUTPUT FILES; everything downstream
-# of the data is refitted from analysis_data.dta each time via prepare_data.R.
+# of the data is refitted from the source CSVs each time via prepare_data.R.
 # The remaining .R files in src/ (paths.R, prepare_data.R, frontier_viz.R,
 # fit_specs.R, panel_frontier.R, fractional_frontier.R, envelope_frontier.R,
 # boxcox_frontier.R) are libraries the scripts below source; they produce
