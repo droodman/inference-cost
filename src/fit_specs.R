@@ -1,5 +1,5 @@
-# The parametric specification grid, shared by plot_frontiers.R and
-# plot_isoaccuracy.R so both figure families are built from identical fits.
+# The parametric specification grid, used by plot_frontiers.R (which draws both
+# figure families from one set of fits) and regression_tables.R.
 #
 # Two dimensions:
 #   inefficiency  A = SFA with mu = 0        (half-normal)

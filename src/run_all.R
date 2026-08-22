@@ -20,13 +20,13 @@
 # the log -- no script consumes another's OUTPUT FILES; everything downstream
 # of the data is refitted from analysis_data.dta each time via prepare_data.R.
 # The remaining .R files in src/ (paths.R, prepare_data.R, frontier_viz.R,
-# fit_specs.R, panel_frontier.R, fractional_frontier.R, envelope_frontier.R)
-# are libraries the scripts below source; they produce nothing and are not run
-# directly. "Model inference cost.do" is Stata and out of scope here.
+# fit_specs.R, panel_frontier.R, fractional_frontier.R, envelope_frontier.R,
+# boxcox_frontier.R) are libraries the scripts below source; they produce
+# nothing and are not run directly. "Model inference cost.do" is Stata and out
+# of scope here.
 SCRIPTS <- c(
   "pareto_frontiers.R",    # nonparametric staircase figure
-  "plot_frontiers.R",      # SFA quarterly-frontier figures + fit diagnostics
-  "plot_isoaccuracy.R",    # SFA + S iso-accuracy contour figures
+  "plot_frontiers.R",      # SFA + S figures, both views, + fit diagnostics
   "plot_envelope.R",       # envelope figures, both views, + touch diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
   "regression_tables.R",   # HTML + RTF tables in output/tables/

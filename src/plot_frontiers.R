@@ -1,24 +1,66 @@
-# Fitted frontier by cost, one curve per quarter, colour showing elapsed time.
+# Parametric-specification figures: BOTH views from ONE set of fits.
 #
-# Six figures: three inefficiency families crossed with linear and quadratic
-# time. See fit_specs.R for the grid. S (no inefficiency term) is the reference
-# case: with no u its "frontier" IS the conditional mean, so roughly half the
-# runs sit above it by construction. A and B are worth having only insofar as
-# they beat that.
+#   frontier_progression_<fam>_<spec>.png  fitted frontier by cost, one curve
+#                                          per quarter, colour = elapsed time
+#   isoaccuracy_<fam>_<spec>.png           the same fits with the axes swapped:
+#                                          what a fixed accuracy costs over time,
+#                                          one contour per accuracy target
+#
+# Nine fit sets: three inefficiency families crossed with linear / quadratic /
+# Box-Cox specifications. See fit_specs.R for the family grid and
+# boxcox_frontier.R for the third specification. S (no inefficiency term) is
+# the reference case: with no u its "frontier" IS the conditional mean, so
+# roughly half the runs sit above it by construction. A and B are worth having
+# only insofar as they beat that.
+#
+# This script absorbed plot_isoaccuracy.R (Aug 2026). The two views always used
+# identical fits, and each script refitted them -- tolerable at seconds per SFA
+# fit, not at the ~10 minutes the profiled Box-Cox specification added per
+# script. Everything is fitted ONCE, up front, and the fitted objects are passed
+# to the two figure builders.
+#
+# On the iso view's reading: each contour holds ACCURACY fixed and lets cost
+# vary, so these are isoquants, not isocosts (they were called isocost figures
+# until Aug 2026; that name says the opposite of what is drawn). Colour carries
+# accuracy there rather than date -- still a magnitude, so the same sequential
+# ramp is right -- and the observed runs are plotted at their (date, cost)
+# coloured by the accuracy they actually reached, so a run's shade can be read
+# against the contour it lies on.
 #
 # marginaleffects is not used -- it dispatches on classes with predict() methods
 # and cannot handle a raw maxLik fit -- but the prediction is one line.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")   # brings panel_frontier.R and frontier_viz.R with it
-src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox figures
+src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox fits
 
 d <- load_runs(drop_gpt4o_chess = FALSE)
 tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
 dates <- bench_dates(d)
 benches <- sort(unique(d$benchmark))
 
+LEVELS <- seq(0.05, 0.95, by = 0.10)   # iso-accuracy contour targets
+
+## ---- every fit, once ----------------------------------------------------------------
+
 specs <- fit_all_specs(d)
+
+# The Box-Cox fits, profiled per benchmark and family. S is profiled first --
+# its glm inner loop is cheap -- and its lambdas seed the slower SFA profiles
+# (a starting point, not a constraint).
+bc_lam <- list()
+bc_fits <- list()
+for (fam in c("S", "A", "B")) {
+  bc_fits[[fam]] <- setNames(lapply(benches, function(b) {
+    fit_bc(fam, d[d$benchmark == b, ],
+           lambda_start = if (is.null(bc_lam[[b]])) c(0, 1) else bc_lam[[b]])
+  }), benches)
+  if (fam == "S")
+    for (b in benches)
+      bc_lam[[b]] <- unname(attr(bc_fits[[fam]][[b]], "bc_lambda"))
+}
+
+## ---- quarterly frontier figures -------------------------------------------------------
 
 NOTES_BASE <- paste("All models retained. Data prepared once in prepare_data.R,",
                     "which also drops the duplicate rows, so every specification",
@@ -31,47 +73,68 @@ NOTES_BASE <- paste("All models retained. Data prepared once in prepare_data.R,"
 NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2, time^2,",
                     "cost x time) jointly; see this script's LR table and",
                     "monotonicity check for whether the block earns its keep.")
-
-for (k in names(specs)) {
-  sp <- specs[[k]]
-  curves <- frontier_curves(sp$fits, d, dates, tbar)
-  p <- frontier_plot(
-    curves, d,
-    ylab = if (sp$family == "S") "Fitted accuracy" else "Frontier accuracy",
-    notes = c(NOTES_BASE, if (sp$time == "quad") NOTES_QUAD))
-  f <- sprintf("frontier_progression_%s.png", k)
-  ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
-         device = ragg::agg_png)
-  cat("wrote", f, "\n")
-}
-
-## ---- the Box-Cox specification ---------------------------------------------------
-# The third specification (boxcox_frontier.R): profiled per benchmark and per
-# family, so it does not flow through fit_all_specs()' formula grid. Refitted
-# here rather than cached from regression_tables.R, matching how every other
-# fit in this repo is recomputed from the data each run. S is profiled first --
-# its glm inner loop is cheap -- and its lambdas seed the slower SFA profiles.
 NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
                   "mid-2020) and their product, with the transform parameters",
                   "profiled per benchmark; monotone in cost at every date.")
-bc_lam <- list()
-for (fam in c("S", "A", "B")) {
-  fits <- setNames(lapply(benches, function(b) {
-    fit_bc(fam, d[d$benchmark == b, ],
-           lambda_start = if (is.null(bc_lam[[b]])) c(0, 1) else bc_lam[[b]])
-  }), benches)
-  if (fam == "S")
-    for (b in benches) bc_lam[[b]] <- unname(attr(fits[[b]], "bc_lambda"))
+
+frontier_fig <- function(fits, fam, fname, extra_notes) {
   curves <- frontier_curves(fits, d, dates, tbar)
   p <- frontier_plot(
     curves, d,
     ylab = if (fam == "S") "Fitted accuracy" else "Frontier accuracy",
-    notes = c(NOTES_BASE, NOTES_BC))
-  f <- sprintf("frontier_progression_%s_bc.png", fam)
-  ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
+    notes = c(NOTES_BASE, extra_notes))
+  ggsave(out_path(fname), p, width = 10, height = 7.5, dpi = 200,
          device = ragg::agg_png)
-  cat("wrote", f, "\n")
+  cat("wrote", fname, "\n")
 }
+
+for (k in names(specs)) {
+  sp <- specs[[k]]
+  frontier_fig(sp$fits, sp$family, sprintf("frontier_progression_%s.png", k),
+               if (sp$time == "quad") NOTES_QUAD)
+}
+for (fam in names(bc_fits))
+  frontier_fig(bc_fits[[fam]], fam,
+               sprintf("frontier_progression_%s_bc.png", fam), NOTES_BC)
+
+## ---- iso-accuracy figures -------------------------------------------------------------
+
+# Pin the panels to the observed date and cost ranges, so blanked contour
+# segments cannot pull the axes around.
+iso_ranges <- do.call(rbind, lapply(benches, function(b) {
+  s <- d[d$benchmark == b, ]
+  data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
+}))
+
+ISO_NOTES_BASE <- c(
+  paste("Contours are accuracy targets from 5% to 95%; a falling contour means",
+        "the same performance costs less over time. Dots are observed runs,",
+        "coloured by the accuracy they reached."),
+  paste("Contours are cut where they leave the benchmark's observed cost range,",
+        "so a missing contour means that target lies outside the data rather",
+        "than that it costs nothing."))
+ISO_NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2,",
+                        "time^2, cost x time) jointly, so curvature here is the",
+                        "whole block's doing, not any one term's.")
+# The BC contours have ONE branch (phi is monotone, so the inversion has one
+# root), so ISO_BRANCH_NOTE does not apply and NOTES_BC takes its place.
+
+iso_fig <- function(fits, fname, extra_notes) {
+  curves <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
+  p <- iso_acc_plot(curves, d, notes = c(ISO_NOTES_BASE, extra_notes),
+                    ranges = iso_ranges)
+  ggsave(out_path(fname), p, width = 10, height = 7.5, dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", fname, "\n")
+}
+
+for (k in names(specs)) {
+  sp <- specs[[k]]
+  iso_fig(sp$fits, sprintf("isoaccuracy_%s.png", k),
+          if (sp$time == "quad") c(ISO_NOTES_QUAD, ISO_BRANCH_NOTE))
+}
+for (fam in names(bc_fits))
+  iso_fig(bc_fits[[fam]], sprintf("isoaccuracy_%s_bc.png", fam), NOTES_BC)
 
 ## ---- does each fitted curve actually envelope the data? -------------------------------
 # For S this is a sanity check, not a criticism: a conditional mean SHOULD have
@@ -93,3 +156,36 @@ for (b in benches) {
 report_quadratic_pathologies(specs, d)
 report_scale_lr(specs, d)
 report_quad_lr(specs)
+
+## ---- how much of each contour is inside the data? ------------------------------------
+# A contour that is mostly blank is the model extrapolating, not a cost decline.
+
+# Rising branch only. iso_acc_curves() returns both branches, so averaging
+# over all its rows would halve every figure here for reasons that have nothing
+# to do with coverage.
+cat("\nshare of each contour inside the observed cost range (%), model A linear\n")
+cv <- iso_acc_curves(specs$A_lin$fits, d, tbar, levels = LEVELS)
+cvr <- cv[cv$branch == "rising", ]
+print(round(100 * tapply(!is.na(cvr$cost), list(cvr$benchmark, cvr$acc), mean)))
+
+## ---- implied cost decline at 50% accuracy --------------------------------------------
+# Cost at the first vs last observed date. Under the linear specification the
+# ratio is the same at every accuracy level (the contours are parallel in logs);
+# the quadratic breaks that, so the two columns can differ.
+
+cat("\ncost of 50% accuracy, first vs last observed date\n")
+cat(sprintf("%-6s %-6s %12s %12s %8s %10s\n",
+            "spec", "bench", "at first", "at last", "ratio", "%/yr"))
+for (k in names(specs)) {
+  for (b in benches) {
+    co <- frontier_coefs(specs[[k]]$fits[[b]])
+    s  <- d[d$benchmark == b, ]
+    ends <- range(s$releasedate)
+    tc <- as_t(ends) - tbar[[b]]
+    cst <- exp((qlogis(0.5) - co[["b0"]] - co[["bt"]] * tc - co[["btt"]] * tc^2) /
+                 co[["bx"]])
+    yrs <- diff(as_t(ends))
+    cat(sprintf("%-6s %-6s %12.4f %12.4f %8.3f %9.1f%%\n", k, b, cst[1], cst[2],
+                cst[2] / cst[1], 100 * (1 - (cst[2] / cst[1])^(1 / yrs))))
+  }
+}

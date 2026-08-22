@@ -93,12 +93,22 @@ MODELS <- list(
 
 ## ---- fitting and extraction ---------------------------------------------------
 
-fit_one <- function(key, form, b) {
-  if (key == "envelope")
-    return(fit_envelope(d[d$benchmark == b, ], formula = form))
-  if (key == "paretologit")
-    return(fit_pareto_logit(d[d$benchmark == b, ], formula = form))
-  fit_family(key, form, d)[[b]]
+# One fit per specification x benchmark, fitted UP FRONT: fit_family() fits
+# every benchmark in a single call, so for the likelihood families the loop is
+# over specifications only. The predecessor (fit_one) called fit_family() once
+# per benchmark-spec cell and kept [[b]], recomputing each SFA fit four times
+# for one use of it. The envelope and the frontier logit fit one benchmark at a
+# time, so they gain nothing but lose nothing either.
+fit_grid <- function(key) {
+  lapply(TIME_FORMS, function(form) {
+    if (key == "envelope")
+      setNames(lapply(benches, function(b)
+        fit_envelope(d[d$benchmark == b, ], formula = form)), benches)
+    else if (key == "paretologit")
+      setNames(lapply(benches, function(b)
+        fit_pareto_logit(d[d$benchmark == b, ], formula = form)), benches)
+    else fit_family(key, form, d)
+  })
 }
 
 # estimate/SE table with one row per term. maxLik keeps a beta_/logsig_ prefix;
@@ -142,7 +152,7 @@ n_obs <- function(key, b, fit = NULL) {
 # divided by 4 before the transform x -> 100*(1 - exp(x)), which turns log
 # points into a percentage drop and flips the sign so a genuine decline reads
 # positive. (Compounding, not division, relates it to the annual figure
-# plot_isoaccuracy.R prints: 1 - drop_yr = (1 - drop_qtr)^4.)
+# plot_frontiers.R prints: 1 - drop_yr = (1 - drop_qtr)^4.)
 #
 # The transformation is applied INSIDE the function differentiated, not to the
 # ratio afterwards: the delta method is not invariant to reparametrisation, and
@@ -338,16 +348,15 @@ BC_LSTART <- new.env(parent = emptyenv())
 # estimates, N and (for quad and bc) the test; the pooled pair comes last.
 build_model <- function(key) {
   cols <- list()
-  fits_by_spec <- setNames(vector("list", length(TIME_FORMS)), names(TIME_FORMS))
+  grid <- fit_grid(key)
   for (b in benches) {
-    fits <- lapply(TIME_FORMS, function(f) fit_one(key, f, b))
+    fits <- lapply(grid, `[[`, b)
     fits$bc <- fit_bc(key, d[d$benchmark == b, ],
                       lambda_start = BC_LSTART[[b]] %||% c(0, 1))
     if (key == "S") BC_LSTART[[b]] <- unname(attr(fits$bc, "bc_lambda"))
     tsts <- list(quad = quad_test(key, b, fits$lin, fits$quad),
                  bc   = bc_test(key, fits$lin, fits$bc))
     for (tt in c(names(TIME_FORMS), "bc")) {
-      if (tt %in% names(TIME_FORMS)) fits_by_spec[[tt]][[b]] <- fits[[tt]]
       cols[[length(cols) + 1]] <- list(
         bench = b, spec = tt,
         # the benchmark name only; the specifications are not labelled per column
@@ -362,7 +371,7 @@ build_model <- function(key) {
     }
   }
   for (tt in names(TIME_FORMS))
-    cols[[length(cols) + 1]] <- pooled_col(key, tt, fits_by_spec[[tt]])
+    cols[[length(cols) + 1]] <- pooled_col(key, tt, grid[[tt]])
   cols
 }
 
