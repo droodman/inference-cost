@@ -44,7 +44,6 @@ build_runs <- function(curves_csv = data_path("caisi_curves_all.csv"),
                        models_csv = data_path("Model versions-Grid view.csv")) {
 
   x <- read.csv(curves_csv, stringsAsFactors = FALSE)
-  x$task  <- unname(TASK_LABEL[x$benchmark])
   x$model <- clean_model_name(x$model)
 
   agg <- x %>%

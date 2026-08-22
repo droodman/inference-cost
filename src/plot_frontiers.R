@@ -11,6 +11,7 @@
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")   # brings panel_frontier.R and frontier_viz.R with it
+src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox figures
 
 d <- load_runs(drop_gpt4o_chess = FALSE)
 tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
@@ -39,6 +40,34 @@ for (k in names(specs)) {
     ylab = if (sp$family == "S") "Fitted accuracy" else "Frontier accuracy",
     notes = c(NOTES_BASE, if (sp$time == "quad") NOTES_QUAD))
   f <- sprintf("frontier_progression_%s.png", k)
+  ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", f, "\n")
+}
+
+## ---- the Box-Cox specification ---------------------------------------------------
+# The third specification (boxcox_frontier.R): profiled per benchmark and per
+# family, so it does not flow through fit_all_specs()' formula grid. Refitted
+# here rather than cached from regression_tables.R, matching how every other
+# fit in this repo is recomputed from the data each run. S is profiled first --
+# its glm inner loop is cheap -- and its lambdas seed the slower SFA profiles.
+NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
+                  "mid-2020) and their product, with the transform parameters",
+                  "profiled per benchmark; monotone in cost at every date.")
+bc_lam <- list()
+for (fam in c("S", "A", "B")) {
+  fits <- setNames(lapply(benches, function(b) {
+    fit_bc(fam, d[d$benchmark == b, ],
+           lambda_start = if (is.null(bc_lam[[b]])) c(0, 1) else bc_lam[[b]])
+  }), benches)
+  if (fam == "S")
+    for (b in benches) bc_lam[[b]] <- unname(attr(fits[[b]], "bc_lambda"))
+  curves <- frontier_curves(fits, d, dates, tbar)
+  p <- frontier_plot(
+    curves, d,
+    ylab = if (fam == "S") "Fitted accuracy" else "Frontier accuracy",
+    notes = c(NOTES_BASE, NOTES_BC))
+  f <- sprintf("frontier_progression_%s_bc.png", fam)
   ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
          device = ragg::agg_png)
   cat("wrote", f, "\n")

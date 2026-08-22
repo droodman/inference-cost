@@ -1,10 +1,12 @@
 # Regression tables: one per statistical model, in RTF and HTML.
 #
-# Columns are benchmark x specification (AIME linear, AIME quadratic, Chess
-# linear, ...), estimates with standard errors in parentheses beneath, plus a
-# final Pooled pair combining the benchmarks on the ECI capability scale (see
-# the pooling section below). Model order and naming follow the plot viewer,
-# which is the version of these names that has actually been read by a human:
+# Columns are benchmark x specification (AIME linear, AIME quadratic, AIME
+# Box-Cox, Chess linear, ...), estimates with standard errors in parentheses
+# beneath, plus a final Pooled pair combining the benchmarks on the ECI
+# capability scale (see the pooling section below; the Box-Cox specification is
+# excluded from pooling -- its per-benchmark transforms leave no common scale).
+# Model order and naming follow the plot viewer, which is the version of these
+# names that has actually been read by a human:
 #
 #   S            Logistic, all tests
 #   A            Stochastic frontier
@@ -38,6 +40,7 @@
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")
 src_source("envelope_frontier.R")
+src_source("boxcox_frontier.R")
 
 d <- load_runs(drop_gpt4o_chess = FALSE)
 benches <- sort(unique(d$benchmark))
@@ -69,6 +72,13 @@ TERMS <- list(
   list(t = "I(lncost^2)",      p = "ln cost^2",          h = "ln cost<sup>2</sup>"),
   list(t = "I(tc^2)",          p = "time^2",             h = "time<sup>2</sup>"),
   list(t = "lncost:tc",        p = "ln cost x time",     h = "ln cost &times; time"),
+  # the Box-Cox specification's rows (boxcox_frontier.R): transformed cost and
+  # time, their product, and the profiled transform parameters themselves
+  list(t = "phic",             p = "BC cost",            h = "BC cost"),
+  list(t = "phit",             p = "BC time",            h = "BC time"),
+  list(t = "phixt",            p = "BC cost x BC time",  h = "BC cost &times; BC time"),
+  list(t = "lambda_cost",      p = "lambda_cost",        h = "&lambda;<sub>cost</sub>"),
+  list(t = "lambda_time",      p = "lambda_time",        h = "&lambda;<sub>time</sub>"),
   list(t = "logsig_(Intercept)", p = "log sigma_u",      h = "log &sigma;<sub>u</sub>"),
   list(t = "logsig_tc",        p = "log sigma_u x time", h = "log &sigma;<sub>u</sub> &times; time")
 )
@@ -193,7 +203,8 @@ decl_cell <- function(cl, which = "est") {
 }
 
 # Quadratic block test. LR where a likelihood exists, Wald where it does not,
-# nothing for the envelope. Returns label + statistic + df + p.
+# nothing for the envelope. Returns label + statistic + df + p, plus `row`
+# naming which test row of the table the result belongs to.
 quad_test <- function(key, b, fit_lin, fit_quad) {
   extra <- c("I(lncost^2)", "I(tc^2)", "lncost:tc")
   # no test for the envelope or the frontier logit: no likelihood, and no
@@ -203,7 +214,7 @@ quad_test <- function(key, b, fit_lin, fit_quad) {
     df <- sum(activePar(fit_quad)) - sum(activePar(fit_lin))
     stat <- 2 * (as.numeric(logLik(fit_quad)) - as.numeric(logLik(fit_lin)))
     return(list(kind = "LR", stat = max(stat, 0), df = df,
-                p = pchisq(max(stat, 0), df, lower.tail = FALSE)))
+                p = pchisq(max(stat, 0), df, lower.tail = FALSE), row = "quad"))
   }
   V <- sandwich::vcovHC(fit_quad, type = "HC1")
   bq <- coef(fit_quad)
@@ -212,7 +223,34 @@ quad_test <- function(key, b, fit_lin, fit_quad) {
   if (!length(i)) return(NULL)
   stat <- drop(t(bq[i]) %*% solve(V[i, i, drop = FALSE]) %*% bq[i])
   list(kind = "Wald", stat = stat, df = length(i),
-       p = pchisq(stat, length(i), lower.tail = FALSE))
+       p = pchisq(stat, length(i), lower.tail = FALSE), row = "quad")
+}
+
+# Box-Cox vs linear. The BC specification nests the linear one at lambda_cost =
+# 0, lambda_time = 1, b_phixt = 0, so for the likelihood families the profile
+# LR has one df per free lambda plus one for the product term -- 3, or 2 where
+# lambda_time is fixed (fm13). S gets nothing: its lambdas are profiled on the
+# quasi-deviance, which supports no LR, and a Wald statistic has no covariance
+# for the lambdas to draw on.
+bc_test <- function(key, fit_lin, fit_bc) {
+  if (!key %in% c("A", "B")) return(NULL)
+  df <- sum(activePar(fit_bc)) - sum(activePar(fit_lin)) +
+    sum(attr(fit_bc, "bc_lambda_free"))
+  stat <- 2 * (as.numeric(logLik(fit_bc)) - as.numeric(logLik(fit_lin)))
+  list(kind = "LR", stat = max(stat, 0), df = df,
+       p = pchisq(max(stat, 0), df, lower.tail = FALSE), row = "bc")
+}
+
+# The BC fit's estimate/SE rows, plus the profiled lambdas as rows of their own:
+# point values only (the profile provides no covariance for them), and only the
+# FREE ones -- printing fm13's fixed lambda_time as if estimated would be a lie
+# the notes would then have to walk back.
+est_se_bc <- function(fit) {
+  lam  <- attr(fit, "bc_lambda")
+  free <- attr(fit, "bc_lambda_free")
+  rbind(est_se(fit),
+        data.frame(term = names(lam)[free], est = unname(lam[free]),
+                   se = NA_real_, stringsAsFactors = FALSE))
 }
 
 fmt <- function(x, digits = 3) {
@@ -290,25 +328,37 @@ pooled_col <- function(key, tt, fitlist) {
        decline = decline, test = NULL)
 }
 
+# The S family's profiled lambdas, cached per benchmark as the starting point
+# for the slower families' profiles (S runs first in MODELS, and its glm inner
+# loop makes its profile the cheap one). A start, not a constraint: each family
+# still profiles its own lambdas.
+BC_LSTART <- new.env(parent = emptyenv())
+
 # Build the whole grid for one model: a list of columns, each carrying its
-# estimates, N and (for quad) the test; the pooled pair comes last.
+# estimates, N and (for quad and bc) the test; the pooled pair comes last.
 build_model <- function(key) {
   cols <- list()
   fits_by_spec <- setNames(vector("list", length(TIME_FORMS)), names(TIME_FORMS))
   for (b in benches) {
     fits <- lapply(TIME_FORMS, function(f) fit_one(key, f, b))
-    tst  <- quad_test(key, b, fits$lin, fits$quad)
-    for (tt in names(TIME_FORMS)) {
-      fits_by_spec[[tt]][[b]] <- fits[[tt]]
+    fits$bc <- fit_bc(key, d[d$benchmark == b, ],
+                      lambda_start = BC_LSTART[[b]] %||% c(0, 1))
+    if (key == "S") BC_LSTART[[b]] <- unname(attr(fits$bc, "bc_lambda"))
+    tsts <- list(quad = quad_test(key, b, fits$lin, fits$quad),
+                 bc   = bc_test(key, fits$lin, fits$bc))
+    for (tt in c(names(TIME_FORMS), "bc")) {
+      if (tt %in% names(TIME_FORMS)) fits_by_spec[[tt]][[b]] <- fits[[tt]]
       cols[[length(cols) + 1]] <- list(
         bench = b, spec = tt,
-        # the benchmark name only; linear vs quadratic is not labelled per column
-        # but read off the pattern -- the quadratic column is the one carrying the
-        # second-order rows, and it is always the right-hand member of the pair
+        # the benchmark name only; the specifications are not labelled per column
+        # but read off the pattern -- within each trio the quadratic is the one
+        # carrying the second-order rows, the Box-Cox the one carrying the BC
+        # rows, and the order is always linear, quadratic, Box-Cox
         head = LABELS[[b]],
-        es = est_se(fits[[tt]]), n = n_obs(key, b, fits[[tt]]),
+        es = if (tt == "bc") est_se_bc(fits$bc) else est_se(fits[[tt]]),
+        n = n_obs(key, b, fits[[tt]]),
         decline = if (tt == "lin") cost_decline(fits[[tt]]) else NULL,
-        test = if (tt == "quad") tst else NULL)
+        test = tsts[[tt]])
     }
   }
   for (tt in names(TIME_FORMS))
@@ -345,22 +395,33 @@ group_starts <- function(cols) {
   cumsum(c(1, head(g$span, -1)))[-1]
 }
 
-# df is folded into the row LABEL when every column shares it -- which they all
-# do here, quad adding the same three terms everywhere. That removes "(df 3)"
-# from eight cells, and the width of that string was setting the column width for
-# the whole table.
-test_label <- function(cols, kind) {
-  dfs <- unique(unlist(lapply(cols, function(cl) cl$test$df)))
-  if (length(dfs) == 1) sprintf("%s vs linear (df %d)", kind[1], dfs) else
-    sprintf("%s vs linear", kind[1])
+# One rendered test row per test family (quad vs linear, bc vs linear), each
+# with its chi-square cells and p cells. df is folded into the row LABEL when
+# every column in the row shares it -- quad always does, adding the same three
+# terms everywhere; bc does except where fm13's fixed lambda_time drops its df
+# to 2, in which case the df moves into the cells. Returns NULL when no column
+# carries a test of this family, and otherwise list(label, cells, ps).
+test_row_data <- function(cols, tr) {
+  tests <- lapply(cols, function(cl)
+    if (!is.null(cl$test) && identical(cl$test$row, tr)) cl$test else NULL)
+  live <- !vapply(tests, is.null, logical(1))
+  if (!any(live)) return(NULL)
+  kind <- unique(vapply(tests[live], `[[`, character(1), "kind"))[1]
+  dfs  <- unique(vapply(tests[live], `[[`, numeric(1), "df"))
+  nm   <- c(quad = "quadratic", bc = "Box-Cox")[[tr]]
+  label <- if (length(dfs) == 1)
+    sprintf("%s vs linear, %s (df %d)", nm, kind, dfs) else
+      sprintf("%s vs linear, %s", nm, kind)
+  cells <- vapply(tests, function(t) {
+    if (is.null(t)) "" else if (length(dfs) == 1) fmt(t$stat, 2) else
+      sprintf("%s (df %d)", fmt(t$stat, 2), t$df)
+  }, character(1))
+  ps <- vapply(tests, function(t) if (is.null(t)) "" else fmt_p(t$p),
+               character(1))
+  list(label = label, cells = cells, ps = ps)
 }
 
-test_cell <- function(cl, cols) {
-  if (is.null(cl$test)) return("")
-  dfs <- unique(unlist(lapply(cols, function(c2) c2$test$df)))
-  if (length(dfs) == 1) fmt(cl$test$stat, 2) else
-    sprintf("%s (df %d)", fmt(cl$test$stat, 2), cl$test$df)
-}
+TEST_ROWS <- c("quad", "bc")
 
 ## ---- HTML ---------------------------------------------------------------------
 
@@ -371,7 +432,6 @@ html_escape <- function(x) {
 
 html_table <- function(key, label, cols) {
   trm <- active_terms(cols)
-  has_test <- any(vapply(cols, function(cl) !is.null(cl$test), logical(1)))
   kind <- unique(unlist(lapply(cols, function(cl) cl$test$kind)))
   # the envelope has no standard errors, so it gets no (empty) SE rows either
   has_se <- any(!is.na(unlist(lapply(cols, function(cl) cl$es$se))))
@@ -453,19 +513,18 @@ html_table <- function(key, label, cols) {
     o <- c(o, sprintf('<td%s>%d</td>', cls(j), cols[[j]]$n))
   o <- c(o, '</tr>')
 
-  if (has_test) {
-    o <- c(o, sprintf('<tr><td>%s, &chi;&sup2;</td>',
-                      html_escape(test_label(cols, kind))))
+  for (tr in TEST_ROWS) {
+    trd <- test_row_data(cols, tr)
+    if (is.null(trd)) next
+    o <- c(o, sprintf('<tr><td>%s, &chi;&sup2;</td>', html_escape(trd$label)))
     for (j in seq_along(cols))
-      o <- c(o, sprintf('<td%s>%s</td>', cls(j), test_cell(cols[[j]], cols)))
+      o <- c(o, sprintf('<td%s>%s</td>', cls(j), trd$cells[j]))
     o <- c(o, '</tr><tr class="se"><td>p</td>')
     # html_escape, not raw: fmt_p can return "<0.0001", and an unescaped "<0"
     # is swallowed by the parser as the start of a tag -- the cell renders empty,
     # which reads as "no test" exactly where the test is most significant.
     for (j in seq_along(cols))
-      o <- c(o, sprintf('<td%s>%s</td>', cls(j),
-                        if (is.null(cols[[j]]$test)) "" else
-                          html_escape(fmt_p(cols[[j]]$test$p))))
+      o <- c(o, sprintf('<td%s>%s</td>', cls(j), html_escape(trd$ps[j])))
     o <- c(o, '</tr>')
   }
 
@@ -525,16 +584,16 @@ rtf_row <- function(cells, widths, bold = FALSE, top = FALSE, bottom = FALSE,
 
 rtf_table <- function(key, label, cols) {
   trm <- active_terms(cols)
-  has_test <- any(vapply(cols, function(cl) !is.null(cl$test), logical(1)))
   kind <- unique(unlist(lapply(cols, function(cl) cl$test$kind)))
   has_se <- any(!is.na(unlist(lapply(cols, function(cl) cl$es$se))))
 
   # With the per-column "linear"/"quadratic" words gone, the widest data string
-  # is an SE like "(11.102)" and the widest label is the test row, so the columns
-  # can be much narrower. The pooled pair brings the count to ten, and
-  # 2400 + 10*840 = 10800 twips is exactly PORTRAIT letter (12240 wide less
-  # 2*720 margins), so the tables still need no landscape page to be pasted into.
-  w1 <- 2400; wc <- 840
+  # is an SE like "(11.102)" and the widest label is the test row. The Box-Cox
+  # columns take the count to fourteen (four benchmark trios plus the pooled
+  # pair), which no longer fits portrait letter at a readable width, so the page
+  # is LANDSCAPE: 15840 wide less 2*720 margins = 14400 usable, and
+  # 2400 + 14*850 = 14300 fits.
+  w1 <- 2400; wc <- 850
   widths <- c(w1, w1 + seq_len(length(cols)) * wc)
 
   starts <- group_starts(cols)
@@ -543,7 +602,7 @@ rtf_table <- function(key, label, cols) {
 
   o <- c("{\\rtf1\\ansi\\ansicpg1252\\deff0",
          "{\\fonttbl{\\f0\\fswiss Calibri;}}",
-         "\\paperw12240\\paperh15840\\margl720\\margr720\\margt720\\margb720",
+         "\\paperw15840\\paperh12240\\landscape\\margl720\\margr720\\margt720\\margb720",
          "\\f0\\fs18",
          sprintf("\\pard\\ql{\\b\\fs24 %s}\\par", rtf_escape(label)),
          sprintf("\\pard\\ql{\\i %s}\\par\\par",
@@ -584,12 +643,12 @@ rtf_table <- function(key, label, cols) {
   }
   o <- c(o, rtf_row(c("N", vapply(cols, function(cl) as.character(cl$n), character(1))),
                     widths, top = !has_decl, sep = sep_data))
-  if (has_test) {
-    o <- c(o, rtf_row(c(rtf_escape(sprintf("%s, chi-sq", test_label(cols, kind))),
-                        vapply(cols, function(cl) test_cell(cl, cols), character(1))),
+  for (tr in TEST_ROWS) {
+    trd <- test_row_data(cols, tr)
+    if (is.null(trd)) next
+    o <- c(o, rtf_row(c(rtf_escape(sprintf("%s, chi-sq", trd$label)), trd$cells),
                       widths, sep = sep_data))
-    o <- c(o, rtf_row(c("p vs linear", vapply(cols, function(cl) if (is.null(cl$test)) "" else
-      fmt_p(cl$test$p), character(1))), widths, sep = sep_data))
+    o <- c(o, rtf_row(c("p", trd$ps), widths, sep = sep_data))
   }
   # \pard closes the table: without it the notes paragraph is still inside table
   # context and Word treats the whole run as a malformed table.
@@ -649,8 +708,36 @@ notes_plain <- function(key, kind) {
             "there is no likelihood behind it -- so the pooled figures are mechanical averages."),
     "One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R),",
     "a scale on which Epoch's alpha_gpqa was not necessarily estimated.")
+  bc <- paste(
+    "BC columns are a Box-Cox alternative to the quadratic: the logit is linear in phi(cost), phi(time) and",
+    "their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost per",
+    "task and to years since mid-2020, GPT-3's release -- so the BC intercept is the fit at $1 per task in",
+    "mid-2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in",
+    "cost at every date -- the quadratic's bending back toward the data cannot happen -- while the product term",
+    "still allows the cost slope one sign change over time.",
+    "lambda_cost and lambda_time are estimated per benchmark by profiling",
+    switch(key, S = "the quasibinomial deviance,", A = , B = "the likelihood,",
+           paretologit = "the grid deviance,",
+           envelope = "the envelope's mean fitted height,"),
+    "and are reported without standard errors: the profile provides none, and",
+    if (key %in% c("envelope", "paretologit"))
+      "this model reports none anywhere."
+    else
+      paste("the coefficient standard errors are conditional on the profiled lambdas --",
+            "they carry no lambda uncertainty."),
+    if (key %in% c("A", "B"))
+      paste("The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) --",
+            "its LR row tests exactly those restrictions -- but not the quadratic.")
+    else
+      "The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) but not the quadratic.",
+    "fm13's five months of data sit 5.7-6.1 years from the origin, over which every lambda_time fits alike, so",
+    "lambda_time is fixed at 1 there rather than estimated; elsewhere it is weakly identified and best read as",
+    "a shape the data tolerates rather than demands -- a lambda_time of exactly 3 or -2 sits on the edge of the",
+    "search box, the flat profile having run to the wall. The pooled pair covers the linear and quadratic",
+    "specifications only: per-benchmark lambdas put the BC slopes on different transforms of cost and time,",
+    "leaving no common scale for the alpha-weighted average to land on.")
   paste("Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own",
-        "reference date.", decl, se, tst, pool)
+        "reference date (the BC columns instead use uncentered years since mid-2020).", decl, se, tst, bc, pool)
 }
 
 notes_html <- function(key, kind) {

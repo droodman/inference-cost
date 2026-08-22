@@ -30,6 +30,7 @@
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")          # TIME_FORMS, TIME_LABEL, viz
 src_source("envelope_frontier.R")  # fit_pareto_logit(), pareto_binding()
+src_source("boxcox_frontier.R")    # fit_bc(), for the Box-Cox figures
 
 LEVELS <- seq(0.05, 0.95, by = 0.10)
 
@@ -143,6 +144,37 @@ for (tt in names(TIME_FORMS)) {
          device = ragg::agg_png)
   cat("wrote", fi, "\n")
 }
+
+## ---- the Box-Cox specification ------------------------------------------------------
+# fit_bc with key "paretologit" profiles the transform parameters against the
+# grid deviance, on the same fixed grid as the other two specifications. The
+# contours have one branch (phi is monotone), so ISO_BRANCH_NOTE is replaced by
+# the BC note rather than joined by it -- the caption budget is 6 lines.
+NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
+                  "mid-2020) and their product, with the transform parameters",
+                  "profiled against the grid deviance.")
+fits_bc <- setNames(lapply(benches, function(b) {
+  fit_bc("paretologit", d[d$benchmark == b, ])
+}), benches)
+
+curves <- frontier_curves(fits_bc, d, dates, tbar)
+p <- frontier_plot(
+  curves, d, ranges = axis_ranges,
+  ylab = "Fitted frontier accuracy",
+  notes = c(NOTES_FRONTIER, NOTES_BC)) +
+  pareto_step_layer(steps)
+ggsave(out_path("paretologit_bc.png"), p, width = 10, height = 7.5, dpi = 200,
+       device = ragg::agg_png)
+cat("wrote paretologit_bc.png\n")
+
+iso <- iso_acc_curves(fits_bc, d, tbar, levels = LEVELS, cost_cap = iso_steps)
+pi <- iso_acc_plot(
+  iso, d, ranges = iso_ranges,
+  notes = c(head(NOTES_ISO, -1), NOTES_BC)) +
+  iso_pareto_layer(iso_steps)
+ggsave(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = 7.5,
+       dpi = 200, device = ragg::agg_png)
+cat("wrote isoaccuracy_paretologit_bc.png\n")
 
 ## ---- what does moving from the cloud to the frontier change? ------------------------
 # Model S on all runs vs the same functional form fitted to the sampled frontier.

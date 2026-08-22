@@ -1,8 +1,7 @@
 # Visualising the deterministic envelope frontier against the data it must cover.
 #
-# Two specifications:
-#   lin   z = b0 + b_x*ln c + b_t*tc
-#   quad  z = b0 + b_x*ln c + b_xx*(ln c)^2 + b_t*tc      (bends in cost)
+# Three specifications: linear and quadratic below, and the Box-Cox alternative
+# (boxcox_frontier.R) in its own section at the end of this script.
 #
 # Each figure draws, at a handful of annual dates so the panels stay legible:
 #   solid  the fitted envelope
@@ -13,6 +12,7 @@
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("envelope_frontier.R")
+src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox figures
 
 d <- load_runs()
 benches <- sort(unique(d$benchmark))
@@ -202,4 +202,75 @@ for (k in names(SPECS)) {
                   if (isTRUE(ok)) "in range" else "OUT OF RANGE -- ignore"))
     }
   }
+}
+
+## ---- the Box-Cox envelope ----------------------------------------------------------
+# Same objective, profiled over the transform parameters as well (fit_bc with
+# key "envelope"): the lowest-sitting BC-logistic surface above every run.
+# Monotonicity is imposed in the transformed coordinates, which is monotonicity
+# in cost and date because phi is increasing; the contours have one branch, so
+# ISO_BRANCH_NOTE does not apply.
+NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
+                  "mid-2020) and their product, with the transform parameters",
+                  "profiled against the envelope's own objective.")
+fits_bc <- setNames(lapply(benches, function(b) {
+  fit_bc("envelope", d[d$benchmark == b, ])
+}), benches)
+
+curves <- frontier_curves(fits_bc, d, dates, bench_tbar(d))
+p <- frontier_plot(
+  curves, d, ranges = axis_ranges,
+  ylab = "Frontier accuracy",
+  notes = c(
+    paste("Solid: the lowest logistic surface above every run. ONE surface",
+          "spans all dates, pinned at only a few runs, so a curve need not",
+          "meet its staircase."),
+    PARETO_STEP_NOTE,
+    paste("Monotonicity in cost and time is imposed, so the surface cannot",
+          "slope backwards in either."),
+    NOTES_BC)) +
+  pareto_step_layer(steps)
+ggsave(out_path("envelope_bc.png"), p, width = 10, height = 7.5, dpi = 200,
+       device = ragg::agg_png)
+cat("wrote envelope_bc.png\n")
+
+iso <- iso_acc_curves(fits_bc, d, bench_tbar(d), levels = LEVELS,
+                      cost_cap = iso_steps)
+iso_ranges <- do.call(rbind, lapply(benches, function(b) {
+  s <- d[d$benchmark == b, ]
+  data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
+}))
+pi <- iso_acc_plot(
+  iso, d, ranges = iso_ranges,
+  notes = c(
+    paste("Contours are accuracy targets from 5% to 95% read off the",
+          "deterministic envelope; a falling contour means the same",
+          "performance costs less over time."),
+    ISO_PARETO_NOTE,
+    paste("Cut at the observed cost range and above each level's dashed",
+          "record, so a level never achieved by any run shows no contour at",
+          "all."),
+    NOTES_BC)) +
+  iso_pareto_layer(iso_steps)
+ggsave(out_path("isoaccuracy_envelope_bc.png"), pi, width = 10, height = 7.5,
+       dpi = 200, device = ragg::agg_png)
+cat("wrote isoaccuracy_envelope_bc.png\n")
+
+# Monotonicity check in the transformed coordinates: dz/dphi_c = b_phic +
+# b_phixt*phi_t and dz/dphi_t = b_phit + b_phixt*phi_c, each linear in the
+# OTHER coordinate, so the ends of the observed ranges bound them -- and phi is
+# increasing, so non-negativity here is non-negativity in cost and date.
+cat("\n== bc: monotonicity actually achieved (imposed, so must hold) ==\n")
+cat(sprintf("%-6s %12s %12s %10s  %s\n", "bench", "min dz/dphic",
+            "min dz/dphit", "slack", "status"))
+for (b in benches) {
+  f <- fits_bc[[b]]
+  p2 <- bc_pieces(f)
+  s <- d[d$benchmark == b, ]
+  phic <- bc_tf(s$cost, p2$lc)
+  phit <- bc_tf(bc_tau(s$releasedate), p2$lt)
+  bd <- c(min(p2$bx + p2$bxt * range(phit)), min(p2$bt + p2$bxt * range(phic)))
+  cat(sprintf("%-6s %12.4f %12.4f %10.2e  %s\n", b, bd[1], bd[2],
+              f$worst_slack,
+              if (all(bd >= -1e-6)) "ok" else "CONSTRAINT FAILED"))
 }

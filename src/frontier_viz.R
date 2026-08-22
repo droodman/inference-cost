@@ -130,14 +130,59 @@ frontier_slope_bounds <- function(co, lncost, tc) {
     dtime = min(frontier_dtime(co, g$lncost, g$tc)))
 }
 
+## ---- Box-Cox primitives ------------------------------------------------------------
+
+# The transform pair the Box-Cox specification is built on. They live HERE, not
+# in boxcox_frontier.R, because the model-agnostic curve builders below must
+# evaluate and invert BC fits, and boxcox_frontier.R already sources this file
+# (via fit_specs.R) -- defining them there would close a source cycle.
+BC_T0 <- 2020.5   # GPT-3's release, halfway through 2020: the origin for tau
+
+bc_tf <- function(y, l) if (abs(l) < 1e-6) log(y) else (y^l - 1) / l
+
+# Inverse transform; NA where 1 + l*phi <= 0, i.e. where no positive argument
+# attains phi -- the BC analogue of a negative discriminant.
+bc_inv <- function(phi, l) {
+  if (abs(l) < 1e-6) return(exp(phi))
+  base <- 1 + l * phi
+  ifelse(base > 0, base^(1 / l), NA_real_)
+}
+
+# A BC fit announces itself by the lambda attribute fit_bc() stamps on it;
+# every fit the older specifications produce lacks it.
+is_bc_fit <- function(fit) !is.null(attr(fit, "bc_lambda"))
+
+# Named pieces of a BC fit: coefficients (beta_ prefix stripped, as in
+# frontier_coefs) plus the profiled lambdas.
+bc_pieces <- function(fit) {
+  cf <- coef(fit)
+  names(cf) <- sub("^beta_", "", names(cf))
+  lam <- attr(fit, "bc_lambda")
+  list(b0 = unname(cf[["(Intercept)"]]), bx = unname(cf[["phic"]]),
+       bt = unname(cf[["phit"]]), bxt = unname(cf[["phixt"]]),
+       lc = unname(lam[["lambda_cost"]]), lt = unname(lam[["lambda_time"]]))
+}
+
+# tau, the BC time coordinate, from a Date: years since BC_T0. Uncentered --
+# the BC specification does not use tbar (load_runs: year = 2023 + t).
+bc_tau <- function(date) as_t(date) + 2023 - BC_T0
+
 # Fitted frontier (u = 0) over a cost grid, for each date in `dates`.
 frontier_curves <- function(fitset, data, dates_by_bench, tbar, n_cost = 200) {
   do.call(rbind, lapply(names(fitset), function(b) {
-    co <- frontier_coefs(fitset[[b]])
+    fit <- fitset[[b]]
     sub <- data[data$benchmark == b, ]
     cost <- exp(seq(log(min(sub$cost)), log(max(sub$cost)), length.out = n_cost))
     g <- expand.grid(cost = cost, qdate = dates_by_bench[[b]])
-    g$value <- plogis(frontier_index(co, log(g$cost), as_t(g$qdate) - tbar[[b]]))
+    if (is_bc_fit(fit)) {
+      p <- bc_pieces(fit)
+      phic <- bc_tf(g$cost, p$lc)
+      phit <- bc_tf(bc_tau(g$qdate), p$lt)
+      g$value <- plogis(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit)
+    } else {
+      co <- frontier_coefs(fit)
+      g$value <- plogis(frontier_index(co, log(g$cost), as_t(g$qdate) - tbar[[b]]))
+    }
     g$benchmark <- b
     g$year <- 2023 + as_t(g$qdate)
     g
@@ -454,38 +499,60 @@ iso_acc_curves <- function(fitset, data, tbar,
                             levels = seq(0.05, 0.95, by = 0.10), n_date = 300,
                             min_slope = 0.05, cost_cap = NULL) {
   do.call(rbind, lapply(names(fitset), function(b) {
-    co  <- frontier_coefs(fitset[[b]])
+    fit <- fitset[[b]]
     sub <- data[data$benchmark == b, ]
     urng <- range(sub$lncost)
     dts <- seq(min(sub$releasedate), max(sub$releasedate), length.out = n_date)
     g   <- expand.grid(date = dts, acc = levels)
-    tc  <- as_t(g$date) - tbar[[b]]
-    aa <- co[["bxx"]]
-    # NOT the cost slope: this is the coefficient on u in the quadratic below.
-    # The two coincide only when bxx = 0, where the quadratic degenerates to the
-    # division and the u-coefficient IS the derivative.
-    bb <- co[["bx"]] + co[["bxt"]] * tc
-    cc <- co[["b0"]] + co[["bt"]] * tc + co[["btt"]] * tc^2 - qlogis(g$acc)
 
-    if (abs(aa) < 1e-10) {
-      # No curvature in cost: one root, and the min_slope guard is needed here
-      # because the inversion is a division that blows up as bb -> 0.
-      u <- -cc / bb
-      u[bb < min_slope] <- NA_real_
-      roots <- list(rising = u)
+    if (is_bc_fit(fit)) {
+      # Still closed form: holding z fixed, phi_c = (z - b0 - bt*phit) /
+      # (bx + bxt*phit), and the transform inverts analytically. phi is
+      # monotone, so there is ONE root -- no falling branch, no fold. The
+      # inversion blanks in two honest ways: a non-positive slope in phi_c
+      # (free disposal failing at that date), and 1 + lambda*phi_c <= 0, where
+      # NO positive cost attains the target (bc_inv returns NA) -- the BC
+      # analogue of a negative discriminant. Near-zero positive slopes need no
+      # guard of their own: they send phi_c to +/-Inf, which lands outside the
+      # observed cost range and is removed by the clip below.
+      p <- bc_pieces(fit)
+      phit <- bc_tf(bc_tau(g$date), p$lt)
+      bb <- p$bx + p$bxt * phit
+      phic <- (qlogis(g$acc) - p$b0 - p$bt * phit) / bb
+      phic[bb <= 0] <- NA_real_
+      roots <- list(rising = log(bc_inv(phic, p$lc)))
       disc <- rep(NA_real_, nrow(g))
     } else {
-      disc  <- bb^2 - 4 * aa * cc
-      slope <- sqrt(pmax(disc, 0))                 # |dz/du| at either root
-      roots <- list(rising  = (-bb + slope) / (2 * aa),
-                    falling = (-bb - slope) / (2 * aa))
-      # disc < 0 means the target is not attained at ANY cost on that date
-      roots <- lapply(roots, function(u) { u[disc < 0] <- NA_real_; u })
-      # No min_slope guard on this branch: nothing blows up here (the roots stay
-      # bounded, and a near-linear surface sends the spurious root outside the
-      # cost range, where the clip below removes it), and gapping at sqrt(disc)
-      # ~ 0 would punch a hole exactly at the turning point where the two
-      # branches meet -- the one place the contour is genuinely continuous.
+      co <- frontier_coefs(fit)
+      tc <- as_t(g$date) - tbar[[b]]
+      aa <- co[["bxx"]]
+      # NOT the cost slope: this is the coefficient on u in the quadratic below.
+      # The two coincide only when bxx = 0, where the quadratic degenerates to
+      # the division and the u-coefficient IS the derivative.
+      bb <- co[["bx"]] + co[["bxt"]] * tc
+      cc <- co[["b0"]] + co[["bt"]] * tc + co[["btt"]] * tc^2 - qlogis(g$acc)
+
+      if (abs(aa) < 1e-10) {
+        # No curvature in cost: one root, and the min_slope guard is needed here
+        # because the inversion is a division that blows up as bb -> 0.
+        u <- -cc / bb
+        u[bb < min_slope] <- NA_real_
+        roots <- list(rising = u)
+        disc <- rep(NA_real_, nrow(g))
+      } else {
+        disc  <- bb^2 - 4 * aa * cc
+        slope <- sqrt(pmax(disc, 0))               # |dz/du| at either root
+        roots <- list(rising  = (-bb + slope) / (2 * aa),
+                      falling = (-bb - slope) / (2 * aa))
+        # disc < 0 means the target is not attained at ANY cost on that date
+        roots <- lapply(roots, function(u) { u[disc < 0] <- NA_real_; u })
+        # No min_slope guard on this branch: nothing blows up here (the roots
+        # stay bounded, and a near-linear surface sends the spurious root
+        # outside the cost range, where the clip below removes it), and gapping
+        # at sqrt(disc) ~ 0 would punch a hole exactly at the turning point
+        # where the two branches meet -- the one place the contour is genuinely
+        # continuous.
+      }
     }
     # Per-row upper clip in log cost: the benchmark maximum by default, the
     # level's own empirical record where cost_cap supplies one. -Inf for a level

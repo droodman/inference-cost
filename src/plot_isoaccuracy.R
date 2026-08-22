@@ -16,6 +16,7 @@
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")
+src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox figures
 
 LEVELS <- seq(0.05, 0.95, by = 0.10)
 
@@ -52,6 +53,32 @@ for (k in names(specs)) {
               if (sp$time == "quad") c(NOTES_QUAD, ISO_BRANCH_NOTE)),
     ranges = axis_ranges)
   f <- sprintf("isoaccuracy_%s.png", k)
+  ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", f, "\n")
+}
+
+## ---- the Box-Cox specification ---------------------------------------------------
+# Same fits as plot_frontiers.R's Box-Cox section, recomputed here as every
+# other specification's are. The contours stay closed form: phi(cost) =
+# (logit(target) - b0 - b_t phi(t)) / (b_x + b_xt phi(t)), inverted through the
+# transform; phi is monotone, so each contour has ONE branch and no fold --
+# ISO_BRANCH_NOTE does not apply.
+NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
+                  "mid-2020) and their product, with the transform parameters",
+                  "profiled per benchmark; monotone in cost at every date.")
+bc_lam <- list()
+for (fam in c("S", "A", "B")) {
+  fits <- setNames(lapply(benches, function(b) {
+    fit_bc(fam, d[d$benchmark == b, ],
+           lambda_start = if (is.null(bc_lam[[b]])) c(0, 1) else bc_lam[[b]])
+  }), benches)
+  if (fam == "S")
+    for (b in benches) bc_lam[[b]] <- unname(attr(fits[[b]], "bc_lambda"))
+  curves <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
+  p <- iso_acc_plot(curves, d, notes = c(NOTES_BASE, NOTES_BC),
+                    ranges = axis_ranges)
+  f <- sprintf("isoaccuracy_%s_bc.png", fam)
   ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
          device = ragg::agg_png)
   cat("wrote", f, "\n")

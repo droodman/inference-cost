@@ -133,6 +133,10 @@ objective_grid <- function(data, n_cost = 100, n_date = 40) {
 #   formula  two-sided FORMULA with response acc, terms as in fit_envelope()
 #   n_cost   SCALAR integer, forwarded to objective_grid()
 #   n_date   SCALAR integer, forwarded to objective_grid()
+#   grid_augment  optional FUNCTION applied to the grid data frame after
+#            construction, adding columns derived from its (lncost, tc)
+#            coordinates -- how the Box-Cox terms (boxcox_frontier.R) become
+#            evaluable at grid nodes. The staircase itself is untouched.
 #
 # Returns a glm object with class "pareto_grid_logit" prepended, carrying two
 # attributes:
@@ -142,8 +146,9 @@ objective_grid <- function(data, n_cost = 100, n_date = 40) {
 #   n_corners  SCALAR integer, undominated runs defining the staircase, i.e.
 #              how many real data points the n_grid fitted values resample
 fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
-                             n_cost = 100, n_date = 40) {
+                             n_cost = 100, n_date = 40, grid_augment = NULL) {
   gr <- objective_grid(data, n_cost, n_date)
+  if (!is.null(grid_augment)) gr <- grid_augment(gr)
   s  <- data[order(data$lncost), ]
   gr$acc <- NA_real_
   # one staircase per grid date: runs released by then, best accuracy at each
@@ -175,16 +180,21 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 #            `tc` (used directly for the Pareto reduction and the objective grid)
 #            and `n_samples` (used by clip_acc). Extra columns are ignored.
 #   formula  two-sided FORMULA, response ~ terms. Terms may be any subset of
-#            lncost, I(lncost^2), tc, I(tc^2) and lncost:tc; the monotonicity
-#            block and frontier_coefs_envelope() both key off exactly those
-#            names, so a term spelled differently would be silently unconstrained
-#            and silently dropped from the plotted surface.
+#            lncost, I(lncost^2), tc, I(tc^2) and lncost:tc, OR the Box-Cox trio
+#            phic, phit, phixt (boxcox_frontier.R); the monotonicity block and
+#            frontier_coefs_envelope() both key off exactly those names, so a
+#            term spelled differently would be silently unconstrained and
+#            silently dropped from the plotted surface.
 #   n_cost   SCALAR integer, grid points in log cost for the objective
 #   n_date   SCALAR integer, grid points in tc. The grid is the objective's
 #            weighting only -- the data enters through the constraints.
 #   margin   SCALAR numeric, logit units by which the starting surface is lifted
 #            clear of the highest constraint, so the solver begins strictly
 #            inside the feasible set rather than exactly on its boundary.
+#   grid_augment  optional FUNCTION applied to the grid data frame after
+#            construction, adding columns derived from its (lncost, tc)
+#            coordinates so terms like the Box-Cox trio are evaluable at grid
+#            nodes. The run data must already carry the same columns.
 #
 # Returns an object of class "envelope_frontier": a LIST with
 #
@@ -204,7 +214,8 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 #                   env_slack, naming the candidates
 #   formula         the formula as supplied, so the fit carries its own spec
 fit_envelope <- function(data, formula = acc ~ lncost + tc,
-                         n_cost = 100, n_date = 40, margin = 0.05) {
+                         n_cost = 100, n_date = 40, margin = 0.05,
+                         grid_augment = NULL) {
   mf <- model.frame(formula, data)
   y  <- model.response(mf)
   X  <- model.matrix(formula, data)
@@ -220,6 +231,7 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   # fixed grid: the objective's weighting, independent of where runs cluster;
   # shared with fit_pareto_logit() via objective_grid()
   gr <- objective_grid(data, n_cost, n_date)
+  if (!is.null(grid_augment)) gr <- grid_augment(gr)
   Xg <- model.matrix(delete.response(terms(formula)), gr)
 
   # monotonicity, evaluated at the corners (both derivatives are linear in beta)
@@ -252,14 +264,30 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   # sweeping cost at a single date leaves the surface free to slope backwards at
   # another. e() returns a zero vector for an absent term, so this one block
   # covers every specification -- linear, cost-quadratic, time-quadratic, full.
-  corners <- expand.grid(lc0 = range(gr$lncost), tc0 = range(gr$tc))
-  mono <- rbind(
-    t(mapply(function(lc0, tc0)
-      e("lncost") + 2 * lc0 * e("I(lncost^2)") + tc0 * e("lncost:tc"),
-      corners$lc0, corners$tc0)),
-    t(mapply(function(lc0, tc0)
-      e("tc") + 2 * tc0 * e("I(tc^2)") + lc0 * e("lncost:tc"),
-      corners$lc0, corners$tc0)))
+  if ("phic" %in% nmv) {
+    # Box-Cox terms (boxcox_frontier.R): z = b0 + bx*phic + bt*phit +
+    # bxt*phic*phit, and phi is strictly increasing in its argument whatever
+    # lambda is, so monotonicity in cost and date IS monotonicity in phic and
+    # phit:
+    #   dz/dphic = b_phic + b_phixt*phit >= 0
+    #   dz/dphit = b_phit + b_phixt*phic >= 0
+    # Each is linear in ONE other coordinate, so the ends of that coordinate's
+    # grid range enforce it throughout.
+    mono <- rbind(
+      t(vapply(range(gr$phit), function(p) e("phic") + p * e("phixt"),
+               numeric(ncol(X)))),
+      t(vapply(range(gr$phic), function(p) e("phit") + p * e("phixt"),
+               numeric(ncol(X)))))
+  } else {
+    corners <- expand.grid(lc0 = range(gr$lncost), tc0 = range(gr$tc))
+    mono <- rbind(
+      t(mapply(function(lc0, tc0)
+        e("lncost") + 2 * lc0 * e("I(lncost^2)") + tc0 * e("lncost:tc"),
+        corners$lc0, corners$tc0)),
+      t(mapply(function(lc0, tc0)
+        e("tc") + 2 * tc0 * e("I(tc^2)") + lc0 * e("lncost:tc"),
+        corners$lc0, corners$tc0)))
+  }
   # Without the cross terms all four corners collapse to the same row; drop the
   # duplicates rather than hand the solver the same constraint four times.
   mono <- unique(mono)
@@ -284,11 +312,12 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   # Zero the interaction too, not just the squares: it also enters both
   # derivatives, so leaving glm's value in place can hand SLSQP a start that
   # violates monotonicity, and an infeasible start is how "no feasible envelope
-  # found" happens on a problem that is perfectly feasible.
-  for (nm in c("I(lncost^2)", "I(tc^2)", "lncost:tc"))
+  # found" happens on a problem that is perfectly feasible. phixt is the same
+  # kind of hazard for the Box-Cox terms.
+  for (nm in c("I(lncost^2)", "I(tc^2)", "lncost:tc", "phixt"))
     if (nm %in% names(b0)) b0[[nm]] <- 0
-  b0[["lncost"]] <- max(b0[["lncost"]], 0.05)
-  b0[["tc"]]     <- max(b0[["tc"]], 0.05)
+  for (nm in c("lncost", "tc", "phic", "phit"))
+    if (nm %in% names(b0)) b0[[nm]] <- max(b0[[nm]], 0.05)
   b0[1] <- b0[1] + max(0, max(Lb - drop(Xb %*% b0))) + margin
   starts <- list(b0)
 
