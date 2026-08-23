@@ -1,6 +1,7 @@
 ## Viewers
 * [Plots](https://droodman.github.io/inference-cost/viewers/frontier_plot_viewer.html)
 * [Tables](https://droodman.github.io/inference-cost/viewers/regression_table_viewer.html)
+(Claude has put long notes under the tables, which I need to clean up.)
 
 ## Models
 Given a set of time, cost, accuracy triples $\left(t_i, c_i, a_i\right)$, define the Pareto frontier by
