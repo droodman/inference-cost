@@ -3,7 +3,7 @@
 * [Tables](viewers/regression_table_viewer.html)
 
 ## Models
-Given a set of time, cost, accuracy triples (t_i, c_i, a_i), define the Pareto frontier by
+Given a set of time, cost, accuracy triples $\left(t_i, c_i, a_i\right)$, define the Pareto frontier by
 
 $$P_t(c) = \max\limits_{i | c_i \le c, t_i \le t} a_i$$
 
