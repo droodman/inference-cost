@@ -60,14 +60,16 @@ dollar_log <- function(x) {
 
 ## ---- date grid ------------------------------------------------------------------
 
-# Quarterly cadence anchored to the LAST observation and stepped backwards, not
-# to calendar quarter starts. The final curve then lands exactly on the last run
+# Semiannual cadence anchored to the LAST observation and stepped backwards, not
+# to calendar half-year starts. The final curve then lands exactly on the last run
 # (so no observation sits outside every frontier) while consecutive curves stay
-# exactly three months apart -- the spacing between curves is read as elapsed
-# time, so it has to be uniform.
-quarter_dates <- function(first, last) {
-  n <- ceiling(as.numeric(as.Date(last) - as.Date(first)) / 365.25 * 4) + 1
-  qs <- seq(as.Date(last), by = "-3 months", length.out = n)
+# exactly six months apart -- the spacing between curves is read as elapsed
+# time, so it has to be uniform. Was quarterly; at that cadence successive
+# Pareto staircases often coincided, so the figures showed fewer staircases
+# than smooth curves and the counts looked mismatched.
+grid_dates <- function(first, last) {
+  n <- ceiling(as.numeric(as.Date(last) - as.Date(first)) / 365.25 * 2) + 1
+  qs <- seq(as.Date(last), by = "-6 months", length.out = n)
   sort(qs[qs >= as.Date(first)])
 }
 
@@ -248,8 +250,8 @@ frontier_plot <- function(curves, pts, title = NULL, subtitle = NULL, ylab,
   }
 
   base_notes <- c(
-    paste("Curves are quarterly, stepped back from each benchmark's last run so",
-          "spacing is exactly three months and the final curve lands on the last",
+    paste("Curves are semiannual, stepped back from each benchmark's last run so",
+          "spacing is exactly six months and the final curve lands on the last",
           "observation."),
     paste("Dots are observed runs, on the same time scale as the curves."))
 
@@ -366,7 +368,7 @@ ISO_BRANCH_NOTE <- paste(
 
 ## ---- the empirical staircase in iso-accuracy space ------------------------------
 
-# The same Pareto staircase the quarterly-frontier figures overlay, read the
+# The same Pareto staircase the frontier figures overlay, read the
 # other way round: the minimum cost at which accuracy AT LEAST `level` had been
 # achieved by each date,
 #
@@ -496,7 +498,7 @@ ISO_PARETO_NOTE <- paste(
 # both this function and iso_pareto_curves(). NULL (the default) keeps the
 # benchmark-wide clip, which is what the S/A/B figures use.
 iso_acc_curves <- function(fitset, data, tbar,
-                            levels = seq(0.05, 0.95, by = 0.10), n_date = 300,
+                            levels = seq(0.10, 0.90, by = 0.20), n_date = 300,
                             min_slope = 0.05, cost_cap = NULL) {
   do.call(rbind, lapply(names(fitset), function(b) {
     fit <- fitset[[b]]
@@ -735,7 +737,7 @@ bench_tbar <- function(d) {
   tapply(d$t - d$tc, d$benchmark, function(x) x[1])
 }
 
-# ONE global quarterly grid, anchored to the latest run across all benchmarks;
+# ONE global semiannual grid, anchored to the latest run across all benchmarks;
 # each benchmark takes the dates at or after its own first run. Anchoring per
 # benchmark instead would give fm13 its own grid (its last run is 3 days before
 # the others'), putting its curves on dates no other panel has -- frames where
@@ -748,7 +750,7 @@ bench_tbar <- function(d) {
 # would have its fitted curve extrapolated forward -- cap it here if that arises.
 bench_dates <- function(d) {
   benches <- sort(unique(d$benchmark))
-  grid <- quarter_dates(min(d$releasedate), max(d$releasedate))
+  grid <- grid_dates(min(d$releasedate), max(d$releasedate))
   setNames(lapply(benches, function(b) {
     grid[grid >= min(d$releasedate[d$benchmark == b])]
   }), benches)

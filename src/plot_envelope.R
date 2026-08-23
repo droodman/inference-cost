@@ -26,7 +26,7 @@ SPECS <- list(
   quad = list(form = acc ~ lncost * tc + I(lncost^2) + I(tc^2))
 )
 
-# The same quarterly grid as every other figure, via bench_dates(), so the
+# The same semiannual grid as every other figure, via bench_dates(), so the
 # envelope can be compared with the SFA and Pareto panels curve for curve.
 dates <- bench_dates(d)
 
@@ -37,7 +37,7 @@ steps <- pareto_curves(d, dates)
 
 # Its iso-accuracy counterpart, at the same levels as the fitted contours:
 # the minimum cost of achieving each accuracy level by each date.
-LEVELS <- seq(0.05, 0.95, by = 0.10)
+LEVELS <- seq(0.10, 0.90, by = 0.20)
 iso_steps <- iso_pareto_curves(d, LEVELS)
 
 axis_ranges <- do.call(rbind, lapply(benches, function(b) {
@@ -103,7 +103,7 @@ for (k in names(SPECS)) {
   pi <- iso_acc_plot(
     iso, d, ranges = iso_ranges,
     notes = c(
-      paste("Contours are accuracy targets from 5% to 95% read off the",
+      paste("Contours are accuracy targets from 10% to 90% read off the",
             "deterministic envelope; a falling contour means the same",
             "performance costs less over time."),
       ISO_PARETO_NOTE,
@@ -127,7 +127,7 @@ for (k in names(SPECS)) {
   # it cannot.
   # WHERE the surface touches the data, and whether that is visible on the
   # figure. It generally is not: contact happens at each binding run's OWN
-  # release date, the curves are drawn on a quarterly grid, and the surface
+  # release date, the curves are drawn on a semiannual grid, and the surface
   # rises with date -- so a curve drawn after a run it touches sits above it by
   # the time-growth in between. On fm13 that is the whole apparent gap between
   # the solid curves and the dashed staircases; the fit is tight, the slices just
@@ -135,7 +135,7 @@ for (k in names(SPECS)) {
   # be checked rather than eyeballed.
   cat(sprintf("\n== %s: where the envelope touches the data ==\n", k))
   cat(sprintf("%-6s %8s %10s %9s %-12s %s\n", "bench", "n touch", "worst slack",
-              "at acc", "run date", "a drawn quarter?"))
+              "at acc", "run date", "a drawn date?"))
   for (b in benches) {
     f <- fits[[b]]
     s <- d[d$benchmark == b, ]
@@ -241,7 +241,7 @@ iso_ranges <- do.call(rbind, lapply(benches, function(b) {
 pi <- iso_acc_plot(
   iso, d, ranges = iso_ranges,
   notes = c(
-    paste("Contours are accuracy targets from 5% to 95% read off the",
+    paste("Contours are accuracy targets from 10% to 90% read off the",
           "deterministic envelope; a falling contour means the same",
           "performance costs less over time."),
     ISO_PARETO_NOTE,

@@ -1,7 +1,7 @@
 # Parametric-specification figures: BOTH views from ONE set of fits.
 #
 #   frontier_progression_<fam>_<spec>.png  fitted frontier by cost, one curve
-#                                          per quarter, colour = elapsed time
+#                                          per half-year, colour = elapsed time
 #   isoaccuracy_<fam>_<spec>.png           the same fits with the axes swapped:
 #                                          what a fixed accuracy costs over time,
 #                                          one contour per accuracy target
@@ -39,7 +39,7 @@ tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
 dates <- bench_dates(d)
 benches <- sort(unique(d$benchmark))
 
-LEVELS <- seq(0.05, 0.95, by = 0.10)   # iso-accuracy contour targets
+LEVELS <- seq(0.10, 0.90, by = 0.20)   # iso-accuracy contour targets
 
 ## ---- every fit, once ----------------------------------------------------------------
 
@@ -58,7 +58,7 @@ for (fam in c("S", "A", "B")) {
       bc_lam[[b]] <- unname(attr(bc_fits[[fam]][[b]], "bc_lambda"))
 }
 
-## ---- quarterly frontier figures -------------------------------------------------------
+## ---- semiannual frontier figures ------------------------------------------------------
 
 NOTES_BASE <- paste("All models retained. Data prepared once in prepare_data.R,",
                     "which also drops the duplicate rows, so every specification",
@@ -105,7 +105,7 @@ iso_ranges <- do.call(rbind, lapply(benches, function(b) {
 }))
 
 ISO_NOTES_BASE <- c(
-  paste("Contours are accuracy targets from 5% to 95%; a falling contour means",
+  paste("Contours are accuracy targets from 10% to 90%; a falling contour means",
         "the same performance costs less over time. Dots are observed runs,",
         "coloured by the accuracy they reached."),
   paste("Contours are cut where they leave the benchmark's observed cost range,",

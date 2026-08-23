@@ -32,7 +32,7 @@ src_source("fit_specs.R")          # TIME_FORMS, TIME_LABEL, viz
 src_source("envelope_frontier.R")  # fit_pareto_logit(), pareto_binding()
 src_source("boxcox_frontier.R")    # fit_bc(), for the Box-Cox figures
 
-LEVELS <- seq(0.05, 0.95, by = 0.10)
+LEVELS <- seq(0.10, 0.90, by = 0.20)
 
 d <- load_runs(drop_gpt4o_chess = FALSE)
 tbar    <- bench_tbar(d)
@@ -89,7 +89,7 @@ NOTES_FRONTIER <- c(
         "monotonicity is not imposed."))
 
 NOTES_ISO <- c(
-  paste("Contours are accuracy targets from 5% to 95%; a falling contour means the",
+  paste("Contours are accuracy targets from 10% to 90%; a falling contour means the",
         "same performance costs less over time. Dots are observed runs."),
   ISO_PARETO_NOTE,
   paste("Read off a logit fitted to the empirical Pareto frontier sampled on a",

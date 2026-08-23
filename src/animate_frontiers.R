@@ -1,9 +1,10 @@
-# Animated quartets: one frame per quarter, frontiers and runs accumulating.
+# Animated quartets: one frame per grid date (semiannual), frontiers and runs
+# accumulating.
 #
 # gganimate is deliberately not used. It is built for TWEENING between states,
 # interpolating positions frame to frame; here the content is discrete -- a
 # frontier appears, dots arrive -- and nothing should slide. Rendering one PNG
-# per quarter and encoding them is simpler, exact, and reuses frontier_plot()
+# per grid date and encoding them is simpler, exact, and reuses frontier_plot()
 # unchanged, so frames are identical in style to the static figures.
 #
 # av bundles ffmpeg's libraries in its CRAN Windows binary, so no external
@@ -12,8 +13,8 @@
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")   # the shared spec grid; brings the other files with it
 
-FPS       <- 1      # quarters per second
-HOLD_LAST <- 6      # extra frames on the final quarter, so it can be read
+FPS       <- 1      # grid dates per second
+HOLD_LAST <- 6      # extra frames on the final date, so it can be read
 WIDTH     <- 1600
 HEIGHT    <- 1200
 
@@ -27,13 +28,13 @@ benches <- sort(unique(d$benchmark))
 # interaction, and that difference is what drives the cheap-end reversal.
 ANIMATE <- c("A_lin", "A_quad", "S_lin")
 
-# One global frame timeline: the union of every benchmark's quarter dates, so all
+# One global frame timeline: the union of every benchmark's grid dates, so all
 # four panels advance on the same clock even though their spans differ. One extra
-# date is prepended, a quarter before the first, so the animation opens on empty
-# axes and the viewer sees the grid before anything lands on it. Stepping back by
-# a quarter keeps the cadence uniform.
+# date is prepended, six months before the first, so the animation opens on
+# empty axes and the viewer sees the grid before anything lands on it. Stepping
+# back by one grid interval keeps the cadence uniform.
 timeline <- sort(unique(do.call(c, unname(dates))))
-timeline <- c(seq(min(timeline), by = "-3 months", length.out = 2)[2], timeline)
+timeline <- c(seq(min(timeline), by = "-6 months", length.out = 2)[2], timeline)
 
 # Fixed axis ranges, so every frame -- including the empty opening one -- shares
 # the panel geometry of the last. Without this the free_x scales would be read
@@ -91,7 +92,7 @@ render_movie <- function(curve_fn, title, subtitle, ylab, notes, outfile,
 
 ## ---- the movies -------------------------------------------------------------------------
 
-# Parametric: curves for every quarter up to `upto`, so they accumulate.
+# Parametric: curves for every grid date up to `upto`, so they accumulate.
 param_curves <- function(fitset) function(upto) {
   dd <- lapply(dates, function(x) x[x <= upto])
   dd <- dd[vapply(dd, length, 1L) > 0]
@@ -99,7 +100,7 @@ param_curves <- function(fitset) function(upto) {
   frontier_curves(fitset[names(dd)], d, dd, tbar)
 }
 
-# Pareto: recomputed at each visible quarter, which is the honest thing -- the
+# Pareto: recomputed at each visible grid date, which is the honest thing -- the
 # empirical frontier at date q genuinely only knows runs released by q.
 # pareto_curves() itself is shared (frontier_viz.R); all this adds is trimming the
 # date grid to the frame being drawn, so an animation frame and the corresponding
@@ -111,7 +112,7 @@ pareto_curves_upto <- function(upto) {
   pareto_curves(d, dd)
 }
 
-NOTES <- c("Frontiers and runs accumulate quarterly; models are fitted once on the full sample.",
+NOTES <- c("Frontiers and runs accumulate semiannually; models are fitted once on the full sample.",
            "All models retained; data prepared once in prepare_data.R, which also drops duplicates.")
 
 for (k in ANIMATE) {
@@ -128,6 +129,6 @@ render_movie(pareto_curves_upto,
              "Empirical Pareto frontier of accuracy by cost per task",
              "running maximum over runs released by each date",
              "Best accuracy achieved",
-             c("Frontiers and runs accumulate quarterly; the frontier at each date uses only runs released by then.",
+             c("Frontiers and runs accumulate semiannually; the frontier at each date uses only runs released by then.",
                "All models retained; data prepared once in prepare_data.R."),
              "frontier_anim_pareto.mp4", step = TRUE)

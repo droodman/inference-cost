@@ -30,7 +30,7 @@ SCRIPTS <- c(
   "plot_envelope.R",       # envelope figures, both views, + touch diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
   "regression_tables.R",   # HTML + RTF tables in output/tables/
-  "animate_frontiers.R"    # quarterly-accumulation movies (slow; skippable)
+  "animate_frontiers.R"    # semiannual-accumulation movies (slow; skippable)
 )
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
