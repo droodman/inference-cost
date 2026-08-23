@@ -5,7 +5,7 @@
 ## Models
 Given a set of time, cost, accuracy triples (t_i, c_i, a_i), define the Pareto frontier by
 
-$$P_t(c) = \max\limits_{i : c_i \le c, t_i \le t} a_i$$.
+$$P_t(c) = \max\limits_{i | c_i \le c, t_i \le t} a_i$$.
 
 * The "Logistic, Pareto points" model fits a logistic to these points with time and cost as controls, along with higher-order terms in some variants.
 * The "string logistic model" finds the lowest logistic surface that stays above the Pareto frontier throughout.
