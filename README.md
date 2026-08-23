@@ -7,6 +7,7 @@ Given a set of time, cost, accuracy triples $\left(t_i, c_i, a_i\right)$, define
 
 $$P_t(c) = \max\limits_{i | c_i \le c, t_i \le t} a_i$$
 
+
 * The "Logistic, Pareto points" model fits a logistic to these points, with controls based on time and cost.
 * The "string logistic model" finds the lowest logistic surface that stays above the Pareto frontier throughout.
 * The "logistic, all points" model simply fits the logistic to all triples.
