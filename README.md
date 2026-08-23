@@ -1,4 +1,4 @@
-## Viewers
+## Viewers (best accessed via [GitHub Pages rendering of this README](https://droodman.github.io/inference-cost))
 * [Plots](viewers/frontier_plot_viewer.html)
 * [Tables](viewers/regression_table_viewer.html)
 
