@@ -16,6 +16,6 @@ $$P_t(c) = \max\limits_{i | c_i \le c, t_i \le t} a_i$$
 
 ## Controls sets
 * Linear: Just time (in years) and log cost.
-* Quadratic: Adds time^2, (log cost)^2 and time * log cost.
+* Quadratic: Adds time^2, (log cost)^2 and time × log cost.
 * Box-Cox: Drops linear and quadratic terms in favor of [Box-Cox transforms](https://en.wikipedia.org/wiki/Power_transform#Box%E2%80%93Cox_transformation) of time and cost, with time expressed as years since the release of GPT3 in mid-2020. Each is allowed its own exponent (where 0=log and 1=linear). The product of these two is also included, with the same exponents. 
 
