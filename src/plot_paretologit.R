@@ -34,7 +34,7 @@ src_source("boxcox_frontier.R")    # fit_bc(), for the Box-Cox figures
 
 LEVELS <- seq(0.10, 0.90, by = 0.20)
 
-d <- load_runs(drop_gpt4o_chess = FALSE)
+d <- load_runs()
 tbar    <- bench_tbar(d)
 dates   <- bench_dates(d)
 benches <- sort(unique(d$benchmark))

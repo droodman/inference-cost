@@ -34,7 +34,7 @@ source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")   # brings panel_frontier.R and frontier_viz.R with it
 src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox fits
 
-d <- load_runs(drop_gpt4o_chess = FALSE)
+d <- load_runs()
 tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
 dates <- bench_dates(d)
 benches <- sort(unique(d$benchmark))

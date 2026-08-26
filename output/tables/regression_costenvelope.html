@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Strict cost envelope</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Strict cost envelope</h1>
+<p class="sub">Point estimates only; see the notes for why no standard errors.</p>
+<table><thead><tr><th></th>
+<th colspan="3">AIME (OTIS Mock)</th>
+<th colspan="3" class="grp">Chess Puzzles</th>
+<th colspan="3" class="grp">FrontierMath, tiers 1-3</th>
+<th colspan="3" class="grp">GPQA Diamond</th>
+<th colspan="1" class="grp">Pooled (log $)</th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>-10.818</td>
+<td>-11.842</td>
+<td>50.939</td>
+<td class="grp">-6.131</td>
+<td>-5.982</td>
+<td>744.839</td>
+<td class="grp">-3.011</td>
+<td>-3.258</td>
+<td>41.776</td>
+<td class="grp">-9.030</td>
+<td>-8.973</td>
+<td>390.268</td>
+<td class="grp"></td>
+</tr>
+<tr><td>logit accuracy</td>
+<td>1.722</td>
+<td>1.795</td>
+<td></td>
+<td class="grp">0.840</td>
+<td>1.148</td>
+<td></td>
+<td class="grp">0.787</td>
+<td>0.998</td>
+<td></td>
+<td class="grp">0.380</td>
+<td>0.630</td>
+<td></td>
+<td class="grp"></td>
+</tr>
+<tr><td>time</td>
+<td>-5.644</td>
+<td>-7.221</td>
+<td></td>
+<td class="grp">-1.229</td>
+<td>-0.590</td>
+<td></td>
+<td class="grp">-0.000</td>
+<td>-1.528</td>
+<td></td>
+<td class="grp">-0.438</td>
+<td>-0.338</td>
+<td></td>
+<td class="grp">-1.828</td>
+</tr>
+<tr><td>logit accuracy<sup>2</sup></td>
+<td></td>
+<td>0.080</td>
+<td></td>
+<td class="grp"></td>
+<td>0.108</td>
+<td></td>
+<td class="grp"></td>
+<td>0.131</td>
+<td></td>
+<td class="grp"></td>
+<td>0.050</td>
+<td></td>
+<td class="grp"></td>
+</tr>
+<tr><td>time<sup>2</sup></td>
+<td></td>
+<td>0.811</td>
+<td></td>
+<td class="grp"></td>
+<td>0.414</td>
+<td></td>
+<td class="grp"></td>
+<td>0.000</td>
+<td></td>
+<td class="grp"></td>
+<td>0.191</td>
+<td></td>
+<td class="grp"></td>
+</tr>
+<tr><td>logit accuracy &times; time</td>
+<td></td>
+<td>-0.893</td>
+<td></td>
+<td class="grp"></td>
+<td>0.000</td>
+<td></td>
+<td class="grp"></td>
+<td>-0.417</td>
+<td></td>
+<td class="grp"></td>
+<td>0.000</td>
+<td></td>
+<td class="grp"></td>
+</tr>
+<tr><td>BC odds</td>
+<td></td>
+<td></td>
+<td>25.034</td>
+<td class="grp"></td>
+<td></td>
+<td>1249.339</td>
+<td class="grp"></td>
+<td></td>
+<td>58.441</td>
+<td class="grp"></td>
+<td></td>
+<td>267.620</td>
+<td class="grp"></td>
+</tr>
+<tr><td>BC time</td>
+<td></td>
+<td></td>
+<td>-23.873</td>
+<td class="grp"></td>
+<td></td>
+<td>-1550.099</td>
+<td class="grp"></td>
+<td></td>
+<td>-9.285</td>
+<td class="grp"></td>
+<td></td>
+<td>-825.597</td>
+<td class="grp"></td>
+</tr>
+<tr><td>BC odds &times; BC time</td>
+<td></td>
+<td></td>
+<td>-6.505</td>
+<td class="grp"></td>
+<td></td>
+<td>-2568.420</td>
+<td class="grp"></td>
+<td></td>
+<td>-11.551</td>
+<td class="grp"></td>
+<td></td>
+<td>-524.637</td>
+<td class="grp"></td>
+</tr>
+<tr><td>&lambda;<sub>odds</sub></td>
+<td></td>
+<td></td>
+<td>0.199</td>
+<td class="grp"></td>
+<td></td>
+<td>1.774</td>
+<td class="grp"></td>
+<td></td>
+<td>1.421</td>
+<td class="grp"></td>
+<td></td>
+<td>1.178</td>
+<td class="grp"></td>
+</tr>
+<tr><td>&lambda;<sub>time</sub></td>
+<td></td>
+<td></td>
+<td>0.737</td>
+<td class="grp"></td>
+<td></td>
+<td>-2.000</td>
+<td class="grp"></td>
+<td></td>
+<td></td>
+<td class="grp"></td>
+<td></td>
+<td>-1.896</td>
+<td class="grp"></td>
+</tr>
+<tr class="gap"><td>cost drop, %/qtr</td>
+<td>75.6</td>
+<td></td>
+<td></td>
+<td class="grp">26.5</td>
+<td></td>
+<td></td>
+<td class="grp">0.0</td>
+<td></td>
+<td></td>
+<td class="grp">10.4</td>
+<td></td>
+<td></td>
+<td class="grp">36.7</td>
+</tr>
+<tr><td>N</td>
+<td>1167</td>
+<td>1167</td>
+<td>1167</td>
+<td class="grp">597</td>
+<td>597</td>
+<td>597</td>
+<td class="grp">181</td>
+<td>181</td>
+<td>181</td>
+<td class="grp">1040</td>
+<td>1040</td>
+<td>1040</td>
+<td class="grp">2985</td>
+</tr>
+</tbody><tfoot><tr><td colspan="14">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero are excluded -- logit 0 is unusable as a coordinate -- and runs scoring n/n are clipped by their own sample size. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: the envelope is the highest plane lying at or below every positive-accuracy run's log cost -- a constrained optimisation with no likelihood behind it, monotone by constraint and pinned by a few extreme runs. N is the runs it must clear.  cost drop, %/qtr is 100*(1 - exp(b_time / 4)): the time coefficient transformed directly -- the estimand is a single coefficient here, not the ratio of two as in the accuracy-direction tables. Standard error by the delta method on the transform, where a covariance exists. Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope moves with accuracy and date, so no single rate describes those columns. No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling distribution to appeal to. BC columns are a Box-Cox alternative to the quadratic: ln cost is linear in phi(odds), phi(time) and their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to the ODDS a/(1-a) -- at lambda_odds = 0, phi(odds) IS logit accuracy -- and to years since mid-2020, GPT-3's release. The specification nests the linear one (lambda_odds = 0, lambda_time = 1, no product term) but not the quadratic. The lambdas are profiled against the envelope's mean fitted height, and are reported without standard errors; a lambda of exactly 3 or -2 sits on the edge of the search box, the flat profile having run to the wall. fm13's lambda_time is fixed at 1 (its five months of data identify no time curvature).  Pooled: the time coefficient is d ln cost / d year at fixed accuracy -- log dollars per year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is needed. It is pooled by inverse-variance weights where every benchmark carries a covariance, and by an unweighted mean otherwise (a mechanical average, as for the accuracy tables' envelope and Pareto-grid columns). The other coefficients are in each benchmark's own logit units and are not pooled. Pooled N sums the benchmark columns. The pooled pair covers the linear specification only.</td></tr></tfoot></table>
+</body></html>

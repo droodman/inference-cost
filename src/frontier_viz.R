@@ -707,14 +707,11 @@ iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
 
 # Analysis sample: build_runs() supplies the data (already deduplicated there,
 # mirroring the .do file's `duplicates drop`), and this adds only the derived
-# time variables. `drop_gpt4o_chess` is explicit rather than assumed -- the
-# figures have differed on it before, and a silent default is how they drifted.
-load_runs <- function(drop_gpt4o_chess = FALSE) {
+# time variables.
+load_runs <- function() {
   d <- build_runs()
   d$t <- as_t(d$releasedate)
   d <- d[stats::complete.cases(d[c("acc", "lncost", "t", "model", "effort")]), ]
-  if (drop_gpt4o_chess)
-    d <- d[!(d$benchmark == "chess" & d$model == "gpt-4o"), ]
   # demeaned within benchmark: beta_tc is then the improvement rate at each
   # benchmark's own reference date, and tc is decorrelated from its square
   d$tc <- ave(d$t, d$benchmark, FUN = function(x) x - mean(x))

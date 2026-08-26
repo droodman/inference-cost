@@ -41,8 +41,9 @@ source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")
 src_source("envelope_frontier.R")
 src_source("boxcox_frontier.R")
+src_source("cost_frontier.R")     # the cost-direction duals' tables
 
-d <- load_runs(drop_gpt4o_chess = FALSE)
+d <- load_runs()
 benches <- sort(unique(d$benchmark))
 
 ## ---- benchmark discriminations for pooling --------------------------------------
@@ -68,17 +69,28 @@ stopifnot(!anyNA(ALPHA[benches]))
 TERMS <- list(
   list(t = "(Intercept)",      p = "Intercept",          h = "Intercept"),
   list(t = "lncost",           p = "ln cost",            h = "ln cost"),
+  # the cost-direction tables' regressor: clipped logit accuracy
+  list(t = "la",               p = "logit accuracy",     h = "logit accuracy"),
   list(t = "tc",               p = "time",               h = "time"),
   list(t = "I(lncost^2)",      p = "ln cost^2",          h = "ln cost<sup>2</sup>"),
+  list(t = "I(la^2)",          p = "logit accuracy^2",   h = "logit accuracy<sup>2</sup>"),
   list(t = "I(tc^2)",          p = "time^2",             h = "time<sup>2</sup>"),
   list(t = "lncost:tc",        p = "ln cost x time",     h = "ln cost &times; time"),
+  list(t = "la:tc",            p = "logit accuracy x time", h = "logit accuracy &times; time"),
   # the Box-Cox specification's rows (boxcox_frontier.R): transformed cost and
   # time, their product, and the profiled transform parameters themselves
   list(t = "phic",             p = "BC cost",            h = "BC cost"),
+  # the cost-direction BC terms (fit_cost_bc): transformed odds a/(1-a)
+  list(t = "phia",             p = "BC odds",            h = "BC odds"),
   list(t = "phit",             p = "BC time",            h = "BC time"),
   list(t = "phixt",            p = "BC cost x BC time",  h = "BC cost &times; BC time"),
+  list(t = "phiat",            p = "BC odds x BC time",  h = "BC odds &times; BC time"),
   list(t = "lambda_cost",      p = "lambda_cost",        h = "&lambda;<sub>cost</sub>"),
+  list(t = "lambda_odds",      p = "lambda_odds",        h = "&lambda;<sub>odds</sub>"),
   list(t = "lambda_time",      p = "lambda_time",        h = "&lambda;<sub>time</sub>"),
+  # the cost-direction SFA's noise scale; the u rows below are shared with the
+  # accuracy-direction SFA tables
+  list(t = "logsig_v",         p = "log sigma_v",        h = "log &sigma;<sub>v</sub>"),
   list(t = "logsig_(Intercept)", p = "log sigma_u",      h = "log &sigma;<sub>u</sub>"),
   list(t = "logsig_tc",        p = "log sigma_u x time", h = "log &sigma;<sub>u</sub> &times; time")
 )
@@ -88,8 +100,29 @@ MODELS <- list(
   list(key = "A",           label = "Stochastic frontier"),
   list(key = "B",           label = "Stochastic frontier (time-dependent inefficiency spread)"),
   list(key = "paretologit", label = "Logistic, Pareto points"),
-  list(key = "envelope",    label = "Strict logistic envelope")
+  list(key = "envelope",    label = "Strict logistic envelope"),
+  # the cost-direction duals (cost_frontier.R), in the same order as their
+  # accuracy-direction counterparts above; linear specification only, so one
+  # column per benchmark and no quadratic or Box-Cox tests
+  list(key = "costols",      label = "Least squares on log cost, all tests"),
+  list(key = "costsfa",      label = "Stochastic cost frontier"),
+  list(key = "costsfab",     label = "Stochastic cost frontier (time-dependent inefficiency spread)"),
+  list(key = "costgridols",  label = "Least squares on log cost, Pareto grid"),
+  list(key = "costenvelope", label = "Strict cost envelope")
 )
+
+COST_KEYS <- c("costols", "costsfa", "costsfab", "costgridols", "costenvelope")
+
+# One fitted dual for one benchmark's rows -- same fitters the figures use
+# (plot_cost_frontier.R), so table and figure cannot drift apart.
+fit_cost_model <- function(key, s, form = COST_FORMS$lin) {
+  switch(key,
+    costols      = lm(form, data = iso_runs(s)),
+    costsfa      = fit_cost_sfa(s, form),
+    costsfab     = fit_cost_sfa(s, form, formula_sigma = ~ tc),
+    costgridols  = fit_lncost_grid(s, form),
+    costenvelope = fit_cost_envelope(s, form))
+}
 
 ## ---- fitting and extraction ---------------------------------------------------
 
@@ -114,14 +147,18 @@ fit_grid <- function(key) {
 # estimate/SE table with one row per term. maxLik keeps a beta_/logsig_ prefix;
 # strip beta_ only, so the sigma terms stay distinguishable from the frontier's.
 est_se <- function(fit) {
-  # This branch must precede the glm one: the frontier logit IS a glm, but its
-  # rows are grid nodes, so any SE the glm machinery reports is a fiction.
-  if (inherits(fit, c("envelope_frontier", "pareto_grid_logit"))) {
+  # This branch must precede the glm/lm ones: the frontier logit IS a glm and
+  # the grid OLS IS an lm, but their rows are grid nodes, so any SE that
+  # machinery reports is a fiction. The two envelopes have no likelihood at
+  # all.
+  if (inherits(fit, c("envelope_frontier", "pareto_grid_logit",
+                      "lncost_grid_ols", "cost_envelope_frontier"))) {
     cf <- coef(fit)
     return(data.frame(term = names(cf), est = unname(cf),
                       se = NA_real_, stringsAsFactors = FALSE))
   }
-  if (inherits(fit, "glm")) {
+  # glm before lm: a glm inherits "lm" too
+  if (inherits(fit, "glm") || inherits(fit, "lm")) {
     m <- lmtest::coeftest(fit, vcov = sandwich::vcovHC(fit, type = "HC1"))
     return(data.frame(term = rownames(m), est = m[, 1], se = m[, 2],
                       stringsAsFactors = FALSE))
@@ -177,9 +214,11 @@ DECLINE <- function(p) 100 * (1 - exp(-p[["tc"]] / p[["lncost"]] / 4))
 coef_vcov <- function(fit) {
   b <- coef(fit)
   names(b) <- sub("^beta_", "", names(b))
-  if (inherits(fit, c("envelope_frontier", "pareto_grid_logit")))
+  if (inherits(fit, c("envelope_frontier", "pareto_grid_logit",
+                      "lncost_grid_ols", "cost_envelope_frontier")))
     return(list(b = b, V = NULL))
-  V <- if (inherits(fit, "glm")) sandwich::vcovHC(fit, type = "HC1") else
+  V <- if (inherits(fit, "glm") || inherits(fit, "lm"))
+    sandwich::vcovHC(fit, type = "HC1") else
     vcov_robust(fit)
   if (is.null(rownames(V))) dimnames(V) <- list(names(coef(fit)), names(coef(fit)))
   dimnames(V) <- list(sub("^beta_", "", rownames(V)),
@@ -203,6 +242,26 @@ decline_from <- function(b, V) {
 cost_decline <- function(fit) {
   cv <- coef_vcov(fit)
   decline_from(cv$b, cv$V)
+}
+
+# The cost-direction version: the response is already ln cost, so the decline
+# is the TIME COEFFICIENT's direct transform, 100*(1 - exp(b_tc/4)) -- no
+# ratio, no b_x in the denominator. The SE is the delta method on that
+# transform, |d/db| = exp(b_tc/4)/4 in closed form (checked against numDeriv
+# in the accompanying test); NA where the fit carries no covariance.
+DECLINE_DUAL <- function(g) 100 * (1 - exp(g / 4))
+
+decline_dual_from <- function(g, se_g) {
+  list(est = DECLINE_DUAL(g),
+       se = if (is.na(se_g)) NA_real_ else 100 * exp(g / 4) * se_g / 4)
+}
+
+cost_decline_dual <- function(fit) {
+  cv <- coef_vcov(fit)
+  if (!"tc" %in% names(cv$b)) return(NULL)
+  se_g <- if (is.null(cv$V) || !"tc" %in% rownames(cv$V)) NA_real_ else
+    sqrt(cv$V["tc", "tc"])
+  decline_dual_from(cv$b[["tc"]], se_g)
 }
 
 # percentage points, so one decimal rather than the coefficients' three
@@ -338,6 +397,109 @@ pooled_col <- function(key, tt, fitlist) {
        decline = decline, test = NULL)
 }
 
+## ---- the cost-direction tables ---------------------------------------------------
+#
+# One column per benchmark (linear specification only) plus a pooled pair of
+# rows. Pooling is far simpler than the accuracy tables': the time coefficient
+# is d ln cost / d year at fixed accuracy -- LOG DOLLARS PER YEAR on every
+# benchmark, common units, so no ECI rescaling is needed. It is pooled by
+# inverse-variance weights where every benchmark carries a covariance (the
+# run-level fits), and by an unweighted mean where none does (the grid OLS and
+# the envelope, whose pooled figures are mechanical averages exactly as in the
+# accuracy tables). The OTHER coefficients are not pooled: the logit-accuracy
+# slope is in each benchmark's own logit units (ECI-convertible in principle,
+# but the estimand this table exists for is the time slope), and the intercept
+# has no common meaning.
+pooled_col_cost <- function(fitlist) {
+  cv <- lapply(fitlist, coef_vcov)
+  gts <- vapply(cv, function(x) x$b[["tc"]], numeric(1))
+  ses <- vapply(cv, function(x) {
+    if (is.null(x$V) || !"tc" %in% rownames(x$V)) NA_real_ else
+      sqrt(x$V["tc", "tc"])
+  }, numeric(1))
+  if (all(is.finite(ses))) {
+    w <- (1 / ses^2) / sum(1 / ses^2)
+    est <- sum(w * gts)
+    se <- sqrt(sum(w^2 * ses^2))   # = 1/sqrt(sum 1/se^2); fits are independent
+  } else {
+    est <- mean(gts)
+    se <- NA_real_
+  }
+  list(bench = "pooled", spec = "lin", head = "Pooled (log $)",
+       es = data.frame(term = "tc", est = est, se = se,
+                       stringsAsFactors = FALSE),
+       n = NA_integer_, decline = decline_dual_from(est, se), test = NULL)
+}
+
+# Quadratic-vs-linear for the cost models: LR where a likelihood exists (the
+# SFA duals), the Wald analogue on the HC1 covariance for the all-runs OLS
+# (mirroring model S), nothing for the two grid-based fits.
+cost_quad_test <- function(key, fit_lin, fit_quad) {
+  if (key %in% c("costgridols", "costenvelope")) return(NULL)
+  if (key %in% c("costsfa", "costsfab")) {
+    df <- sum(activePar(fit_quad)) - sum(activePar(fit_lin))
+    stat <- 2 * (as.numeric(logLik(fit_quad)) - as.numeric(logLik(fit_lin)))
+    return(list(kind = "LR", stat = max(stat, 0), df = df,
+                p = pchisq(max(stat, 0), df, lower.tail = FALSE), row = "quad"))
+  }
+  V <- sandwich::vcovHC(fit_quad, type = "HC1")
+  bq <- coef(fit_quad)
+  i <- intersect(c("I(la^2)", "I(tc^2)", "la:tc"), names(bq))
+  i <- i[!is.na(bq[i])]
+  if (!length(i)) return(NULL)
+  stat <- drop(t(bq[i]) %*% solve(V[i, i, drop = FALSE]) %*% bq[i])
+  list(kind = "Wald", stat = stat, df = length(i),
+       p = pchisq(stat, length(i), lower.tail = FALSE), row = "quad")
+}
+
+# Box-Cox vs linear, SFA duals only: the profile LR on the product term plus
+# one df per free lambda, exactly as bc_test() counts for A and B. The
+# least-squares fits get nothing -- their lambdas are profiled on SSR, which
+# supports no LR without a distributional commitment the accuracy-direction
+# S model also declines to make.
+cost_bc_test <- function(key, fit_lin, fit_bc) {
+  if (!key %in% c("costsfa", "costsfab")) return(NULL)
+  df <- sum(activePar(fit_bc)) - sum(activePar(fit_lin)) +
+    sum(attr(fit_bc, "bc_lambda_free"))
+  stat <- 2 * (as.numeric(logLik(fit_bc)) - as.numeric(logLik(fit_lin)))
+  list(kind = "LR", stat = max(stat, 0), df = df,
+       p = pchisq(max(stat, 0), df, lower.tail = FALSE), row = "bc")
+}
+
+build_model_cost <- function(key) {
+  fits <- list()
+  for (tt in names(COST_FORMS))
+    fits[[tt]] <- setNames(lapply(benches, function(b)
+      fit_cost_model(key, d[d$benchmark == b, ], COST_FORMS[[tt]])), benches)
+  fits$bc <- setNames(lapply(benches, function(b)
+    fit_cost_bc(key, d[d$benchmark == b, ])), benches)
+
+  cols <- list()
+  for (b in benches) {
+    # the grid fit's "sample" is defined grid nodes, resampling a few dozen
+    # staircase corners; everything else fits the positive-accuracy runs
+    # (zeros carry no logit coordinate)
+    n_runs <- nrow(iso_runs(d[d$benchmark == b, ]))
+    tsts <- list(quad = cost_quad_test(key, fits$lin[[b]], fits$quad[[b]]),
+                 bc   = cost_bc_test(key, fits$lin[[b]], fits$bc[[b]]))
+    for (tt in c(names(COST_FORMS), "bc")) {
+      f <- fits[[tt]][[b]]
+      cols[[length(cols) + 1]] <- list(
+        bench = b, spec = tt, head = LABELS[[b]],
+        es = if (tt == "bc") est_se_bc(f) else est_se(f),
+        n = if (key == "costgridols") attr(f, "n_grid") else n_runs,
+        decline = if (tt == "lin") cost_decline_dual(f) else NULL,
+        test = tsts[[tt]])
+    }
+  }
+  pooled <- pooled_col_cost(fits$lin)
+  pooled$n <- sum(vapply(benches, function(b)
+    as.integer(if (key == "costgridols")
+      attr(fits$lin[[b]], "n_grid") else
+      nrow(iso_runs(d[d$benchmark == b, ]))), integer(1)))
+  c(cols, list(pooled))
+}
+
 # The S family's profiled lambdas, cached per benchmark as the starting point
 # for the slower families' profiles (S runs first in MODELS, and its glm inner
 # loop makes its profile the cheap one). A start, not a constraint: each family
@@ -347,6 +509,7 @@ BC_LSTART <- new.env(parent = emptyenv())
 # Build the whole grid for one model: a list of columns, each carrying its
 # estimates, N and (for quad and bc) the test; the pooled pair comes last.
 build_model <- function(key) {
+  if (key %in% COST_KEYS) return(build_model_cost(key))
   cols <- list()
   grid <- fit_grid(key)
   bc_fits <- fit_bc_by(key, d, as.list(BC_LSTART))
@@ -671,7 +834,84 @@ rtf_table <- function(key, label, cols) {
 
 ## ---- the notes that keep each table honest -------------------------------------
 
+# Notes for the cost-direction tables. Shorter than the accuracy notes: no
+# quadratic or Box-Cox columns, and the pooling needs no ECI machinery.
+notes_cost <- function(key) {
+  dir <- paste(
+    "This model fits LN COST as the response, linear in logit accuracy and time (years,",
+    "centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the",
+    "benchmark's reference date. Runs scoring zero are excluded -- logit 0 is unusable as a",
+    "coordinate -- and runs scoring n/n are clipped by their own sample size. Accuracy is a",
+    "REGRESSOR here, so its sampling noise is measurement error, which attenuates the",
+    "logit-accuracy slope.")
+  se <- switch(key,
+    costols = paste(
+      "Robust (HC1) standard errors. This is the reverse regression of the plain logistic: the",
+      "TYPICAL cost of a run scoring a given accuracy, not a frontier."),
+    costsfa = , costsfab = paste(
+      "Robust (sandwich) standard errors, clustered at the model x effort group level, where the",
+      "one-sided inefficiency term lives (u >= 0 is excess cost). Read the time coefficient with",
+      "care: it tracks the dense cheap edge of the model-effort cells, which grows dearer as",
+      "expensive reasoning configurations arrive at every accuracy level -- the cost-direction",
+      "dual of the run-distribution story, not the record's decline."),
+    costgridols = paste(
+      "No standard errors: the response is the record cost ln C_a(t) sampled on a uniform",
+      "(logit accuracy, date) grid -- the mirror of the accuracy-direction fits' (cost, date)",
+      "grid -- and grid nodes are not observations. N is the nodes at which a level is defined;",
+      "they resample a few dozen staircase corners, so N measures resolution, not information."),
+    costenvelope = paste(
+      "No standard errors: the envelope is the highest plane lying at or below every",
+      "positive-accuracy run's log cost -- a constrained optimisation with no likelihood behind",
+      "it, monotone by constraint and pinned by a few extreme runs. N is the runs it must clear."))
+  extra <- if (key == "costsfab") paste(
+    "log sigma_u x time lets the inefficiency spread move with date; the constant-scale variant",
+    "is the table before this one.") else ""
+  decl <- paste(
+    "cost drop, %/qtr is 100*(1 - exp(b_time / 4)): the time coefficient transformed directly --",
+    "the estimand is a single coefficient here, not the ratio of two as in the accuracy-direction",
+    "tables. Standard error by the delta method on the transform, where a covariance exists.",
+    "Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope",
+    "moves with accuracy and date, so no single rate describes those columns.")
+  tst <- switch(key,
+    costsfa = , costsfab = paste(
+      "Quadratic adds logit accuracy^2, time^2 and logit accuracy x time; the test is a",
+      "likelihood ratio test of all three jointly -- a real one, since this model has a genuine",
+      "likelihood."),
+    costols = paste(
+      "Quadratic adds logit accuracy^2, time^2 and logit accuracy x time, tested jointly by a",
+      "Wald test on the robust covariance."),
+    paste("No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling",
+          "distribution to appeal to."))
+  bc <- paste(
+    "BC columns are a Box-Cox alternative to the quadratic: ln cost is linear in phi(odds),",
+    "phi(time) and their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0)",
+    "applied to the ODDS a/(1-a) -- at lambda_odds = 0, phi(odds) IS logit accuracy -- and to",
+    "years since mid-2020, GPT-3's release. The specification nests the linear one (lambda_odds",
+    "= 0, lambda_time = 1, no product term) but not the quadratic. The lambdas are profiled",
+    switch(key,
+           costols = "against the residual sum of squares,",
+           costgridols = "against the grid residual sum of squares,",
+           costenvelope = "against the envelope's mean fitted height,",
+           "against the likelihood,"),
+    "and are reported without standard errors; a lambda of exactly 3 or -2 sits on the edge of",
+    "the search box, the flat profile having run to the wall. fm13's lambda_time is fixed at 1",
+    "(its five months of data identify no time curvature).",
+    if (key %in% c("costsfa", "costsfab"))
+      "The BC LR row tests the nesting restrictions, one df per free lambda plus the product term."
+    else "")
+  pool <- paste(
+    "Pooled: the time coefficient is d ln cost / d year at fixed accuracy -- log dollars per",
+    "year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is",
+    "needed. It is pooled by inverse-variance weights where every benchmark carries a covariance,",
+    "and by an unweighted mean otherwise (a mechanical average, as for the accuracy tables'",
+    "envelope and Pareto-grid columns). The other coefficients are in each benchmark's own logit",
+    "units and are not pooled. Pooled N sums the benchmark columns. The pooled pair covers the",
+    "linear specification only.")
+  paste(dir, se, extra, decl, tst, bc, pool)
+}
+
 notes_plain <- function(key, kind) {
+  if (key %in% COST_KEYS) return(notes_cost(key))
   se <- switch(key,
     S = "Robust (HC1) standard errors: the quasibinomial objective is a quasi-likelihood, so inverse-Hessian errors would be wrong.",
     paretologit = paste("No standard errors: the response is the empirical Pareto frontier P_t(c) sampled at the nodes of the",
@@ -754,8 +994,9 @@ notes_plain <- function(key, kind) {
 notes_html <- function(key, kind) {
   x <- notes_plain(key, kind)
   x <- html_escape(x)
-  gsub("ln cost^2", "ln cost<sup>2</sup>", gsub("time^2", "time<sup>2</sup>", x,
-       fixed = TRUE), fixed = TRUE)
+  x <- gsub("ln cost^2", "ln cost<sup>2</sup>", x, fixed = TRUE)
+  x <- gsub("logit accuracy^2", "logit accuracy<sup>2</sup>", x, fixed = TRUE)
+  gsub("time^2", "time<sup>2</sup>", x, fixed = TRUE)
 }
 
 ## ---- emit ----------------------------------------------------------------------

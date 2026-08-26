@@ -18,7 +18,7 @@ HOLD_LAST <- 6      # extra frames on the final date, so it can be read
 WIDTH     <- 1600
 HEIGHT    <- 1200
 
-d <- load_runs(drop_gpt4o_chess = FALSE)
+d <- load_runs()
 tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
 dates <- bench_dates(d)
 benches <- sort(unique(d$benchmark))

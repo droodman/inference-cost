@@ -128,13 +128,24 @@
 
     <div class="layout">
       <div class="controls">
+        <!-- Which variable the fit models directly. The cost direction shows
+             the DUAL of each accuracy-direction model (plot_cost_frontier.R):
+             same frontier object where one exists, misfit priced in log
+             dollars instead of logits. Model labels swap to the duals' names;
+             all three orders exist in both directions. -->
+        <div class="control-group">
+          <div class="group-label">Modeled variable</div>
+          <label><input type="radio" name="direction" value="acc" checked /> Accuracy</label>
+          <label><input type="radio" name="direction" value="cost" /> Cost</label>
+        </div>
+
         <div class="control-group">
           <div class="group-label">Model</div>
-          <label><input type="radio" name="model" value="paretologit" checked autocomplete="off"/> Logistic, Pareto points</label>
-          <label><input type="radio" name="model" value="envelope" /> Strict logistic envelope</label>
-          <label><input type="radio" name="model" value="S" /> Logistic, all points</label>
-          <label><input type="radio" name="model" value="A"/> Stochastic frontier</label>
-          <label><input type="radio" name="model" value="B" /> Stochastic frontier (time-dependent inefficiency spread)</label>
+          <label><input type="radio" name="model" value="paretologit" checked autocomplete="off"/> <span data-acc="Logistic, Pareto points" data-cost="Least squares, Pareto grid">Logistic, Pareto points</span></label>
+          <label><input type="radio" name="model" value="envelope" /> <span data-acc="Strict logistic envelope" data-cost="Strict cost envelope">Strict logistic envelope</span></label>
+          <label><input type="radio" name="model" value="S" /> <span data-acc="Logistic, all points" data-cost="Least squares, all points">Logistic, all points</span></label>
+          <label><input type="radio" name="model" value="A"/> <span data-acc="Stochastic frontier" data-cost="Stochastic cost frontier">Stochastic frontier</span></label>
+          <label><input type="radio" name="model" value="B" /> <span data-acc="Stochastic frontier (time-dependent inefficiency spread)" data-cost="Stochastic cost frontier (time-dependent inefficiency spread)">Stochastic frontier (time-dependent inefficiency spread)</span></label>
         </div>
 
         <div class="control-group">
@@ -163,10 +174,29 @@
         return checked ? checked.value : "";
       }
 
+      // Cost-direction file keys, per accuracy-direction model value. Cost
+      // figures are <key>_<order>.png / isoaccuracy_<key>_<order>.png
+      // (plot_cost_frontier.R) -- own-script naming, like envelope and
+      // paretologit in the accuracy direction.
+      const COST_KEY = {
+        paretologit: "costgridols",
+        envelope: "costenvelope",
+        S: "costols",
+        A: "costsfa",
+        B: "costsfab",
+      };
+
       function buildFilename() {
         const model = getRadioValue("model");
         const order = getRadioValue("order");
         const plotType = getRadioValue("plotType");
+
+        if (getRadioValue("direction") === "cost") {
+          const key = COST_KEY[model];
+          return plotType === "frontier"
+            ? `${key}_${order}.png`
+            : `isoaccuracy_${key}_${order}.png`;
+        }
 
         // Models with their own fitting script (envelope, Pareto-point logit)
         // are named <model>_<order>.png rather than following the SFA grid's
@@ -185,7 +215,17 @@
         return `isoaccuracy_${model}_${order}.png`;
       }
 
+      // Rename each model radio to its dual when the cost direction is
+      // chosen; every order exists in both directions.
+      function syncDirection() {
+        const cost = getRadioValue("direction") === "cost";
+        document.querySelectorAll('span[data-acc]').forEach((el) => {
+          el.textContent = cost ? el.dataset.cost : el.dataset.acc;
+        });
+      }
+
       function update() {
+        syncDirection();
         const filename = buildFilename();
         const img = document.getElementById("plot");
         const label = document.getElementById("filename");

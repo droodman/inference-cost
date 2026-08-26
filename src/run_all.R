@@ -21,14 +21,16 @@
 # of the data is refitted from the source CSVs each time via prepare_data.R.
 # The remaining .R files in src/ (paths.R, prepare_data.R, frontier_viz.R,
 # fit_specs.R, panel_frontier.R, fractional_frontier.R, envelope_frontier.R,
-# boxcox_frontier.R) are libraries the scripts below source; they produce
-# nothing and are not run directly. "Model inference cost.do" is Stata and out
+# boxcox_frontier.R, cost_frontier.R) are libraries the scripts below source;
+# they produce nothing and are not run directly. "Model inference cost.do" is Stata and out
 # of scope here.
 SCRIPTS <- c(
   "pareto_frontiers.R",    # nonparametric staircase figure
   "plot_frontiers.R",      # SFA + S figures, both views, + fit diagnostics
   "plot_envelope.R",       # envelope figures, both views, + touch diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
+  "plot_cost_frontier.R",  # cost-direction dual figures, both views
+  "cost_frontier_report.R",# cost-direction dual fits: rate comparison (console)
   "regression_tables.R",   # HTML + RTF tables in output/tables/
   "animate_frontiers.R"    # semiannual-accumulation movies (slow; skippable)
 )

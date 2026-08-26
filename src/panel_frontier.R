@@ -257,7 +257,7 @@ if (sys.nframe() == 0) {
   # within benchmark, all models retained. Keep the two in step -- reporting
   # coefficients here that differ from the plotted curves is how they drifted
   # apart before. Deduplication happens once, in prepare_data.R.
-  d <- load_runs(drop_gpt4o_chess = FALSE)
+  d <- load_runs()
   FORM <- acc ~ lncost + tc + I(tc^2)
 
   # delta_t is constrained out of both (formula_mu = ~1); they differ only in

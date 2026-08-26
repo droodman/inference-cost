@@ -40,13 +40,47 @@ duplicates drop model effort acc cost releasedate benchmark, force  // duplicate
 saveold analysis_data, replace version(12)
 
 
+// preserve
+use analysis_data if benchmark=="gpqa", clear
+replace acc = (max(.25, acc) - .25)/.75
+local Ncostgrid 100
+local Ntimegrid 40
+cap set obs `=`Ntimegrid'*`Ncostgrid''
+sum lncost if releasedate<. & acc>0 & acc<.
+local lncost_min = r(min)
+local lncost_max = r(max)
+sum releaseyear if releasedate<. & acc>0 & acc<.
+local time_min = r(min)
+local time_max = r(max)
+local i 1
+gen _cgrid = .
+gen cgrid = .
+gen tgrid = .
+gen accgrid = .
+qui forvalues c=`lncost_min'(`=(`lncost_max'-`lncost_min')/(`Ncostgrid'-1)')`=`lncost_max'+1e-6' {
+  forvalues t=`time_min'(`=(`time_max'-`time_min')/(`Ntimegrid'-1)')`=`time_max'+1e-6' {
+    sum acc if lncost<=`c' & releaseyear<=`t', meanonly
+    replace accgrid = logit(r(max)) in `i'
+    sum lncost if acc>=r(max) & releaseyear<=`t', meanonly
+    replace cgrid = r(min) in `i'
+    replace _cgrid = `c' in `i'
+    replace tgrid = `t' in `i'
+    local ++i
+  }
+}
+regress cgrid accgrid tgrid
+margins, at(tgrid=(`=td(1jan2024)/365.25'(.1)`=td(1jul2026)/365.25') accgrid=(`=logit(.1)' `=logit(.2)' `=logit(.3)' `=logit(.4)' `=logit(.5)' `=logit(.6)' `=logit(.7)' `=logit(.8)' `=logit(.9)'))
+marginsplot, plotdim(accgrid)
+restore
+
+sum acc if 
 fracreg logit acc ibn.benchmarkid#(c.lncost c.releaseyear) ibn.benchmarkid, nocons
 margins, at(benchmarkid=(1/4) releaseyear=(`=td(1jan2025)/365.25' `=td(1jan2026)/365.25') lncost=(`=ln(.001)' `=ln(.01)' `=ln(.1)' `=ln(1)'))
 marginsplot, plotdimension(releaseyear) bydimension(benchmark)
 
 
 jl save
-jl: df = df[.!ismissing.(df.releasedate) .&& .!ismissing.(df.cost_per_task_usd) .&& df.cost_per_task_usd.>0,:]
+jl: df = df[.!ismissing.(df.releasedate) .&& .!ismissing.(df.cost) .&& df.cost.>0,:]
 jl: sort!(df, [:model, :budget])
 jl: using CairoMakie
 jl: set_theme!(theme_black())
@@ -56,7 +90,7 @@ jl: f = Figure(size=(1500,1000)); ///
       daterange = extrema(df.releasedate[df.benchmark.==title]); ///
       for r in eachrow(unique(Matrix(df[!, [:model, :effort]]), dims=1)) ///
         thisrun = df.benchmark.==title .&& df.model.==r[1] .&& df.effort.==r[2]; ///
-        any(thisrun) && lines!(df[thisrun, :cost_per_task_usd], df[thisrun, :acc]; color=df[thisrun, :releasedate][1], colorrange=daterange, linewidth=2, colormap=:jet) ///
+        any(thisrun) && lines!(df[thisrun, :cost], df[thisrun, :acc]; color=df[thisrun, :releasedate][1], colorrange=daterange, linewidth=2, colormap=:jet) ///
       end ///
     end
 jl: f |> display

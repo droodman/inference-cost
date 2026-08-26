@@ -131,16 +131,22 @@
 
     <div class="layout">
       <div class="controls">
-        <!-- Same options, same order, same default as the Model group in
-             frontier_plot_viewer.html. Kept in sync by hand; if one changes the
-             other should follow. -->
+        <!-- Same options, same order, same default as the corresponding groups
+             in frontier_plot_viewer.html. Kept in sync by hand; if one changes
+             the other should follow. -->
+        <div class="control-group">
+          <div class="group-label">Modeled variable</div>
+          <label><input type="radio" name="direction" value="acc" checked /> Accuracy</label>
+          <label><input type="radio" name="direction" value="cost" /> Cost</label>
+        </div>
+
         <div class="control-group">
           <div class="group-label">Model</div>
-          <label><input type="radio" name="model" value="paretologit" checked  autocomplete="off" /> Logistic, Pareto points</label>
-          <label><input type="radio" name="model" value="envelope" /> Strict logistic envelope</label>
-          <label><input type="radio" name="model" value="S" /> Logistic, all points</label>
-          <label><input type="radio" name="model" value="A"/> Stochastic frontier</label>
-          <label><input type="radio" name="model" value="B" /> Stochastic frontier (time-dependent inefficiency spread)</label>
+          <label><input type="radio" name="model" value="paretologit" checked  autocomplete="off" /> <span data-acc="Logistic, Pareto points" data-cost="Least squares, Pareto grid">Logistic, Pareto points</span></label>
+          <label><input type="radio" name="model" value="envelope" /> <span data-acc="Strict logistic envelope" data-cost="Strict cost envelope">Strict logistic envelope</span></label>
+          <label><input type="radio" name="model" value="S" /> <span data-acc="Logistic, all points" data-cost="Least squares, all points">Logistic, all points</span></label>
+          <label><input type="radio" name="model" value="A"/> <span data-acc="Stochastic frontier" data-cost="Stochastic cost frontier">Stochastic frontier</span></label>
+          <label><input type="radio" name="model" value="B" /> <span data-acc="Stochastic frontier (time-dependent inefficiency spread)" data-cost="Stochastic cost frontier (time-dependent inefficiency spread)">Stochastic frontier (time-dependent inefficiency spread)</span></label>
         </div>
       </div>
 
@@ -156,11 +162,33 @@
         return checked ? checked.value : "";
       }
 
+      // Cost-direction table keys, per accuracy-direction model value --
+      // regression_<key>.html, from the COST_KEYS block of regression_tables.R
+      const COST_KEY = {
+        paretologit: "costgridols",
+        envelope: "costenvelope",
+        S: "costols",
+        A: "costsfa",
+        B: "costsfab",
+      };
+
       function buildFilename() {
-        return `regression_${getRadioValue("model")}.html`;
+        const model = getRadioValue("model");
+        const key = getRadioValue("direction") === "cost" ? COST_KEY[model] : model;
+        return `regression_${key}.html`;
+      }
+
+      // Rename each model radio to its dual when the cost direction is chosen,
+      // exactly as frontier_plot_viewer.html does.
+      function syncDirection() {
+        const cost = getRadioValue("direction") === "cost";
+        document.querySelectorAll("span[data-acc]").forEach((el) => {
+          el.textContent = cost ? el.dataset.cost : el.dataset.acc;
+        });
       }
 
       function update() {
+        syncDirection();
         const filename = buildFilename();
         const frame = document.getElementById("table");
         const label = document.getElementById("filename");

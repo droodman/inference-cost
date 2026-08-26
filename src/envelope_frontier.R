@@ -145,10 +145,12 @@ objective_grid <- function(data, n_cost = 100, n_date = 40) {
 #              set) and are dropped, not imputed
 #   n_corners  SCALAR integer, undominated runs defining the staircase, i.e.
 #              how many real data points the n_grid fitted values resample
-fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
-                             n_cost = 100, n_date = 40, grid_augment = NULL) {
+# The staircase resampled on the objective grid: P_t(c) at every node, nodes
+# where P is undefined dropped. Split out of fit_pareto_logit() so the Box-Cox
+# lambda search (boxcox_frontier.R) can compute it ONCE per benchmark -- the
+# staircase does not depend on the lambdas, only the regressor columns do.
+pareto_grid_response <- function(data, n_cost = 100, n_date = 40) {
   gr <- objective_grid(data, n_cost, n_date)
-  if (!is.null(grid_augment)) gr <- grid_augment(gr)
   s  <- data[order(data$lncost), ]
   gr$acc <- NA_real_
   # one staircase per grid date: runs released by then, best accuracy at each
@@ -162,7 +164,86 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
     idx <- findInterval(gr$lncost[rows], el$lncost)
     gr$acc[rows] <- ifelse(idx >= 1, m[pmax(idx, 1)], NA_real_)
   }
-  gr <- gr[!is.na(gr$acc), , drop = FALSE]
+  gr[!is.na(gr$acc), , drop = FALSE]
+}
+
+# Nonparametric sense check on the fitted models' "cost drop, %/qtr" summary
+# (regression_tables.R): the same quantity read straight off the Pareto
+# staircase, with no functional form anywhere.
+#
+# At each node of objective_grid() -- the SAME grid the envelope's objective
+# and the Pareto logit's response use -- take the frontier's performance there,
+# a = P_t(c), and ask what a costs dt years on: C_a(t + dt) = min{c_i :
+# t_i <= t + dt, acc_i >= a}, the record cost iso_pareto_steps()
+# (frontier_viz.R) traces. The base is C_a(t), NOT the node's own cost: the
+# staircase is flat between jumps, so the node cost typically overpays for a by
+# the width of its step, and measuring from it would count that slack as
+# decline even over a stretch where no new model appeared. With the record at
+# both ends, each node's change is the horizontal shift of the staircase at
+# that node's level -- exactly what -b_t/b_x measures on a fitted surface.
+# The grid still sets the weighting: each level counts in proportion to the
+# log-cost width of its step, each date uniformly, the same weighting the two
+# grid-based models score on.
+#
+# Measured over a YEAR, expressed per QUARTER: at a fixed level the record is
+# a step function, and over one quarter it usually has not moved, so the
+# average is a few real drops diluted by zeros. A year of change dilutes less;
+# the geometric mean log change is then compounded down (divide by 4dt) into
+# the quarterly rate the tables print. A benchmark observed for less than dt
+# (fm13: five months, so far) has no measurable horizon and returns NULL --
+# an honest gap until its data span grows.
+#
+# Nodes are DROPPED, not imputed, in three cases:
+#   * P undefined there (cheaper and earlier than every run), as in
+#     pareto_grid_response();
+#   * a = 0: every run "achieves" at least 0, so C_0 is merely the cheapest
+#     run so far and its movement measures cheap-model arrival, not the
+#     frontier;
+#   * base dates within dt of the last run: past its last run the staircase is
+#     flat by construction, so a change measured across that boundary would be
+#     biased toward zero.
+#
+#   data    DATA FRAME, one benchmark's runs; needs acc, lncost, tc
+#   n_cost  SCALAR integer, forwarded to objective_grid(); the default matches
+#   n_date  the fits, which is the point -- same grid, same weighting
+#   dt      SCALAR, the measurement horizon in years of tc
+#
+# Returns NULL if no node survives, else a LIST:
+#   pct_qtr      SCALAR, 100*(1 - exp(mean(dln) / 4dt)): the geometric-mean
+#                decline as a compound quarterly rate, comparable to the
+#                tables' 100*(1 - exp(-b_t/b_x/4))
+#   share_moved  SCALAR in [0, 1], fraction of nodes whose record moved at all
+#                over the horizon
+#   n_nodes      SCALAR integer, nodes entering the average
+pareto_decline_qtr <- function(data, n_cost = 100, n_date = 40, dt = 1) {
+  gr <- pareto_grid_response(data, n_cost, n_date)
+  gr <- gr[gr$acc > 0 & gr$tc + dt <= max(data$tc), , drop = FALSE]
+  if (!nrow(gr)) return(NULL)
+  s <- data[order(data$lncost), ]
+  # log record cost of each level at date t: cheapest run no later than t
+  # scoring at least the level. Over cost-sorted runs cummax(acc) is the
+  # running best, so the first index where it reaches the level is the record.
+  # Every level handed in is on the staircase at t or earlier, so a match
+  # exists at both dates and which() cannot come back empty.
+  rec <- function(t, levels) {
+    el <- s[s$tc <= t, ]
+    m <- cummax(el$acc)
+    vapply(levels, function(a) el$lncost[which(m >= a)[1]], numeric(1))
+  }
+  dln <- unlist(lapply(unique(gr$tc), function(tk) {
+    a <- gr$acc[gr$tc == tk]
+    rec(tk + dt, a) - rec(tk, a)
+  }))
+  list(pct_qtr     = 100 * (1 - exp(mean(dln) / (4 * dt))),
+       share_moved = mean(dln < 0),
+       n_nodes     = length(dln))
+}
+
+fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
+                             n_cost = 100, n_date = 40, grid_augment = NULL) {
+  gr <- pareto_grid_response(data, n_cost, n_date)
+  if (!is.null(grid_augment)) gr <- grid_augment(gr)
+  s <- data[order(data$lncost), ]
   fit <- glm(formula, data = gr, family = quasibinomial(link = "logit"))
   attr(fit, "n_grid")    <- nrow(gr)
   attr(fit, "n_corners") <- length(pareto_binding(s$lncost, s$tc, s$acc))
