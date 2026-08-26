@@ -30,6 +30,7 @@ SCRIPTS <- c(
   "plot_envelope.R",       # envelope figures, both views, + touch diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
   "plot_cost_frontier.R",  # cost-direction dual figures, both views
+  "plot_surfaces_3d.R",    # interactive 3-D surfaces for the Pareto-grid pair
   "cost_frontier_report.R",# cost-direction dual fits: rate comparison (console)
   "regression_tables.R",   # HTML + RTF tables in output/tables/
   "animate_frontiers.R"    # semiannual-accumulation movies (slow; skippable)

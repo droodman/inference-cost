@@ -194,12 +194,17 @@ fit_lncost_grid <- function(data, formula = COST_FORMS$lin,
 #   bind           integer VECTOR of candidate row indices
 fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
                               n_level = 100, n_date = 40, margin = 0.05,
-                              grid_augment = NULL) {
+                              grid_augment = NULL, response_lambda = 0) {
   s <- iso_runs(data)
   bind <- pareto_binding(s$lncost, s$tc, s$la)
   X  <- model.matrix(formula, s)
   Xb <- X[bind, , drop = FALSE]
-  cb <- s$lncost[bind]
+  # the response as the formula states it: ln cost for the linear and
+  # quadratic specifications, phi(cost; response_lambda) for the doubly-
+  # transformed BC one -- the feasible set of COST surfaces is the same
+  # either way, phi being monotone; only the parameterization moves
+  y  <- model.response(model.frame(formula, s))
+  cb <- y[bind]
   gr <- iso_grid(data, n_level, n_date)
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
   Xg <- model.matrix(delete.response(terms(formula)), gr)
@@ -265,7 +270,30 @@ fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
     starts <- c(starts, list(unname(bs)))
   }
 
-  grad <- -colMeans(Xg)   # maximize mean height = minimize its negative
+  # Objective: mean fitted LOG COST over the grid, maximized -- the index
+  # inverted node by node, so the objective is in log dollars for EVERY
+  # response_lambda (at 0 the index is ln cost and this is the familiar
+  # linear objective with constant gradient). Where the index leaves phi's
+  # range the inversion is clamped rather than NA: below range (lambda > 0)
+  # reads as a huge negative log cost, which the maximizer flees, and every
+  # node's contribution is capped a little above the dearest observed run,
+  # closing the unbounded ray a NEGATIVE response_lambda would otherwise open
+  # (index -> range edge there means cost -> infinity).
+  cap <- max(s$lncost) + 5
+  obj_pieces <- function(g) {
+    eta <- drop(Xg %*% g)
+    if (abs(response_lambda) < 1e-8) {
+      lnc <- eta
+      w <- rep(1, length(eta))
+    } else {
+      base <- 1 + response_lambda * eta
+      lnc <- log(pmax(base, 1e-12)) / response_lambda
+      w <- ifelse(base > 1e-12, 1 / base, 0)
+    }
+    w[lnc >= cap] <- 0
+    lnc <- pmin(lnc, cap)
+    list(obj = -mean(lnc), grad = -drop(crossprod(Xg, w)) / nrow(Xg))
+  }
   slack <- function(g) min(c(cb - drop(Xb %*% g), drop(mono %*% g)))
   # Coefficient box: with near-collinear columns (a Box-Cox lambda that makes
   # phi(tau) nearly constant) the LP can have an unbounded improving ray, and
@@ -276,19 +304,22 @@ fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
   run1 <- function(x0) {
     r <- nloptr::nloptr(
       x0 = x0,
-      eval_f = function(g) list(objective = -mean(Xg %*% g), gradient = grad),
+      eval_f = function(g) {
+        p <- obj_pieces(g)
+        list(objective = p$obj, gradient = p$grad)
+      },
       eval_g_ineq = function(g) list(
         constraints = c(drop(Xb %*% g) - cb, -drop(mono %*% g)),
         jacobian = rbind(Xb, -mono)),
       lb = rep(-bound, ncol(X)), ub = rep(bound, ncol(X)),
       opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
                   maxeval = 5000, print_level = 0))
-    list(g = r$solution, obj = -mean(Xg %*% r$solution),
+    list(g = r$solution, obj = obj_pieces(r$solution)$obj,
          slack = slack(r$solution))
   }
   cand <- c(lapply(starts, run1),
             lapply(starts, function(x)
-              list(g = x, obj = -mean(Xg %*% x), slack = slack(x))))
+              list(g = x, obj = obj_pieces(x)$obj, slack = slack(x))))
   ok <- vapply(cand, function(z) z$slack >= -1e-8, logical(1))
   if (!any(ok)) stop("no feasible cost envelope found")
   best <- cand[ok][[which.min(vapply(cand[ok], `[[`, numeric(1), "obj"))]]
@@ -483,14 +514,19 @@ cost_surface <- function(fit, sub) {
     cf <- coef(fit)
     names(cf) <- sub("^beta_", "", names(cf))
     lam <- attr(fit, "bc_lambda")
-    lo <- unname(lam[[1]]); lt <- unname(lam[[2]])
+    lC <- unname(lam[["lambda_cost"]])
+    lo <- unname(lam[["lambda_odds"]]); lt <- unname(lam[["lambda_time"]])
     off <- (sub$year - sub$tc)[1] - BC_T0
     g0 <- cf[["(Intercept)"]]; ga <- cf[["phia"]]
     gt <- cf[["phit"]]; gat <- cf[["phiat"]]
+    # the index is phi(cost; lambda_cost); ln_bc_inv reads it back as log
+    # cost, NA where no positive cost attains it -- an honest blank in the
+    # figures. d lnC/d la keeps the index-derivative's sign (the inversion's
+    # own factor is positive in-domain).
     list(f = function(la, tc) {
            pa <- bc_tf(exp(la), lo)          # odds = exp(logit)
            pt <- bc_tf(tc + off, lt)
-           g0 + ga * pa + gt * pt + gat * pa * pt
+           ln_bc_inv(g0 + ga * pa + gt * pt + gat * pa * pt, lC)
          },
          dacc = function(la, tc) ga + gat * bc_tf(tc + off, lt))
   } else {
@@ -605,27 +641,57 @@ cost_iso_curves <- function(fitset, data, tbar,
 # is fixed at 1 where the observed tau span cannot identify it (bc_lt_free;
 # fm13), exactly as in the accuracy direction.
 
-COST_BC_FORM <- lncost ~ phia + phit + phiat
+# The DOUBLY-transformed family: the response side carries its own lambda,
+#
+#   phi(cost; lambda_cost) = g0 + ga*phi(odds; lambda_odds)
+#                               + gt*phi(tau; lambda_time) + gat*product
+#
+# nesting the single-transform version at lambda_cost = 0 (where phi(cost) is
+# ln cost) and the linear model at (0, 0, 1). This is the family that treats
+# odds and cost fully symmetrically -- closed under inversion, so its
+# accuracy-direction counterpart (fit_bc's envelope and paretologit keys)
+# estimates the same surface class and the direction choice is purely which
+# axis misfit is priced in. Fit is ASSESSED on lambda-invariant scales
+# throughout: the least-squares and SFA profiles carry the classical Box-Cox
+# Jacobian term (lambda_cost - 1)*sum(ln cost), and the envelope's objective
+# inverts the transform node by node to score mean fitted LOG COST.
+COST_BC_FORM <- phicost ~ phia + phit + phiat
 
 # lambda_odds search box: odds spans roughly e^-7..e^7 here, so the same
 # considerations as BC_BOX_C apply and the same box serves.
 COST_BC_BOX_O <- BC_BOX_C
 
+# ln of the inverse transform: the fitted index read back as log cost, NA
+# where no positive cost attains the index (phi's range edge) -- the honest
+# blank the figures inherit. The lambda = 0 member is the identity.
+ln_bc_inv <- function(eta, l) {
+  if (abs(l) < 1e-8) return(eta)
+  base <- 1 + l * eta
+  out <- rep(NA_real_, length(base))
+  ok <- !is.na(base) & base > 0
+  out[ok] <- log(base[ok]) / l
+  out
+}
+
 # The transformed columns, on run data carrying la (i.e. AFTER iso_runs)...
-cost_bc_augment <- function(s, lo, lt, off) {
-  s$phia  <- bc_tf(exp(s$la), lo)
-  s$phit  <- bc_tf(s$tc + off, lt)
-  s$phiat <- s$phia * s$phit
+cost_bc_augment <- function(s, lC, lo, lt, off) {
+  s$phicost <- bc_tf(s$cost, lC)
+  s$phia    <- bc_tf(exp(s$la), lo)
+  s$phit    <- bc_tf(s$tc + off, lt)
+  s$phiat   <- s$phia * s$phit
   s
 }
 
 # ... and on the (la, tc) grid, for the grid OLS response and the envelope
 # objective; `off` is the benchmark's tc -> tau shift, as in bc_grid_augment.
-cost_bc_grid_augment <- function(lo, lt, off) {
+# The response column is transformed too where the grid carries one (the grid
+# OLS aliases its sampled record to lncost before augmenting).
+cost_bc_grid_augment <- function(lC, lo, lt, off) {
   function(gr) {
     gr$phia  <- bc_tf(exp(gr$la), lo)
     gr$phit  <- bc_tf(gr$tc + off, lt)
     gr$phiat <- gr$phia * gr$phit
+    if ("lncost" %in% names(gr)) gr$phicost <- bc_tf(exp(gr$lncost), lC)
     gr
   }
 }
@@ -634,60 +700,73 @@ cost_bc_grid_augment <- function(lo, lt, off) {
 # at the profiled optimum, carrying the same bc_lambda / bc_lambda_free
 # attributes fit_bc() stamps, so est_se_bc() and the curve builders treat
 # both directions' BC fits identically.
-fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
+fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
   s <- iso_runs(data)
   off <- (s$year - s$tc)[1] - BC_T0
   lt_free <- bc_lt_free(s$year - BC_T0)
   ws <- new.env(parent = emptyenv())
+  # The classical Box-Cox Jacobian sums, what makes transformed-scale
+  # objectives comparable across lambda_cost: sum(ln y) over each fit's own
+  # response sample -- the runs' costs for the run-level fits, the sampled
+  # record costs for the grid fit (whose node set does not move with the
+  # lambdas, so this is computed once).
+  sumlny_runs <- sum(s$lncost)
+  gr0 <- iso_grid_response(s)
+  sumlny_grid <- sum(gr0$lnC)
 
-  fit_at <- function(lo, lt) {
-    sa <- cost_bc_augment(s, lo, lt, off)
-    ga <- cost_bc_grid_augment(lo, lt, off)
+  fit_at <- function(lC, lo, lt) {
+    sa <- cost_bc_augment(s, lC, lo, lt, off)
+    ga <- cost_bc_grid_augment(lC, lo, lt, off)
     if (key == "costols") {
       f <- lm(COST_BC_FORM, data = sa)
-      list(fit = f, obj = -sum(residuals(f)^2))
+      list(fit = f, obj = -nrow(sa) / 2 * log(sum(residuals(f)^2)) +
+             (lC - 1) * sumlny_runs)
     } else if (key == "costgridols") {
       f <- fit_lncost_grid(sa, COST_BC_FORM, grid_augment = ga)
-      list(fit = f, obj = -sum(residuals(f)^2))
+      list(fit = f, obj = -attr(f, "n_grid") / 2 * log(sum(residuals(f)^2)) +
+             (lC - 1) * sumlny_grid)
     } else if (key == "costenvelope") {
-      f <- fit_cost_envelope(sa, COST_BC_FORM, grid_augment = ga)
+      f <- fit_cost_envelope(sa, COST_BC_FORM, grid_augment = ga,
+                             response_lambda = lC)
       # a solution with huge coefficients means the LP degenerated (see the
       # coefficient box in fit_cost_envelope): score these lambdas as
       # unfittable rather than letting a numerically meaningless objective
       # win the profile
       if (max(abs(coef(f))) > 1e4) stop("degenerate envelope LP")
-      list(fit = f, obj = f$value)   # the HIGHEST surface under the runs
+      # f$value is mean fitted LOG COST -- already lambda-invariant units,
+      # no Jacobian wanted. The HIGHEST surface under the runs.
+      list(fit = f, obj = f$value)
     } else {
       f <- fit_cost_sfa(sa, COST_BC_FORM,
                         formula_sigma = if (key == "costsfab") ~ tc else ~ 1,
                         start = ws$start)
       ws$start <- coef(f)   # warm-start the next profile evaluation
-      list(fit = f, obj = as.numeric(logLik(f)))
+      list(fit = f, obj = as.numeric(logLik(f)) + (lC - 1) * sumlny_runs)
     }
   }
 
   # A failed inner fit scores -1e6: bad, not fatal, so the outer search
   # steers away from lambdas where the model cannot be fitted.
   neg <- function(l) {
-    lo <- l[1]; lt <- if (lt_free) l[2] else 1
-    if (lo < COST_BC_BOX_O[1] || lo > COST_BC_BOX_O[2] ||
+    lC <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
+    if (lC < BC_BOX_C[1] || lC > BC_BOX_C[2] ||
+        lo < COST_BC_BOX_O[1] || lo > COST_BC_BOX_O[2] ||
         lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
-    r <- tryCatch(fit_at(lo, lt), error = function(e) NULL)
+    r <- tryCatch(fit_at(lC, lo, lt), error = function(e) NULL)
     if (is.null(r) || !is.finite(r$obj)) return(1e6)
     -r$obj
   }
-  if (lt_free) {
-    opt <- optim(lambda_start, neg, method = "Nelder-Mead",
-                 control = list(reltol = 1e-6, maxit = 300))
-    lam <- opt$par
-  } else {
-    opt <- optimize(function(x) neg(c(x, 1)), interval = COST_BC_BOX_O,
-                    tol = 1e-4)
-    lam <- c(opt$minimum, 1)
-  }
+  opt <- optim(c(lambda_start[1], lambda_start[2],
+                 if (lt_free) lambda_start[3]), neg,
+               method = "Nelder-Mead",
+               control = list(reltol = 1e-6, maxit = 300))
+  lC <- opt$par[1]; lo <- opt$par[2]
+  lt <- if (lt_free) opt$par[3] else 1
 
-  fit <- fit_at(lam[1], lam[2])$fit
-  attr(fit, "bc_lambda") <- c(lambda_odds = lam[1], lambda_time = lam[2])
-  attr(fit, "bc_lambda_free") <- c(lambda_odds = TRUE, lambda_time = lt_free)
+  fit <- fit_at(lC, lo, lt)$fit
+  attr(fit, "bc_lambda") <- c(lambda_cost = lC, lambda_odds = lo,
+                              lambda_time = lt)
+  attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE, lambda_odds = TRUE,
+                                   lambda_time = lt_free)
   fit
 }

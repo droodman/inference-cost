@@ -150,9 +150,10 @@ for (tt in names(TIME_FORMS)) {
 # grid deviance, on the same fixed grid as the other two specifications. The
 # contours have one branch (phi is monotone), so ISO_BRANCH_NOTE is replaced by
 # the BC note rather than joined by it -- the caption budget is 6 lines.
-NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
-                  "mid-2020) and their product, with the transform parameters",
-                  "profiled against the grid deviance.")
+NOTES_BC <- paste("Box-Cox both sides: phi(odds) -- the logit at lambda_odds",
+                  "= 0 -- is linear in phi(cost), phi(years since mid-2020)",
+                  "and their product, all three lambdas profiled against the",
+                  "probability-scale quasi-likelihood.")
 fits_bc <- fit_bc_by("paretologit", d)
 
 curves <- frontier_curves(fits_bc, d, dates, tbar)

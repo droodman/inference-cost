@@ -150,19 +150,47 @@ bc_inv <- function(phi, l) {
   ifelse(base > 0, base^(1 / l), NA_real_)
 }
 
+# Mean accuracy implied by a BC-transformed-odds index eta = phi(odds;
+# lambda_odds): odds = bc_inv(eta), mu = odds/(1+odds) -- the logit link at
+# lambda_odds = 0, a parametric link family elsewhere. Where eta falls outside
+# phi's range the link is extended by continuity rather than left NA: for
+# lambda > 0 the range edge is odds = 0 (mu = 0), for lambda < 0 odds = Inf
+# (mu = 1) -- so an optimiser sees a defined, bounded objective everywhere.
+# Computed via 1/(1 + odds^-1) so huge odds cannot overflow to NaN.
+bc_mu <- function(eta, lo) {
+  if (abs(lo) < 1e-8) return(plogis(eta))
+  base <- 1 + lo * eta
+  qinv <- ifelse(base > 0, base^(-1 / lo), if (lo > 0) Inf else 0)
+  1 / (1 + qinv)
+}
+
+# d mu / d eta = mu(1-mu)/(1 + lo*eta) in-domain (1 at lo = 0 recovers the
+# logistic's mu(1-mu)); 0 outside, matching the clamped link.
+bc_mu_eta <- function(eta, lo) {
+  m <- bc_mu(eta, lo)
+  if (abs(lo) < 1e-8) return(m * (1 - m))
+  base <- 1 + lo * eta
+  ifelse(base > 0, m * (1 - m) / base, 0)
+}
+
 # A BC fit announces itself by the lambda attribute fit_bc() stamps on it;
 # every fit the older specifications produce lacks it.
 is_bc_fit <- function(fit) !is.null(attr(fit, "bc_lambda"))
 
 # Named pieces of a BC fit: coefficients (beta_ prefix stripped, as in
-# frontier_coefs) plus the profiled lambdas.
+# frontier_coefs) plus the profiled lambdas. lambda_odds is the doubly-
+# transformed family's response-side parameter (fit_bc for the envelope and
+# Pareto-grid fits); fits without it -- the run-level families keep the logit
+# link -- read as 0, the logit.
 bc_pieces <- function(fit) {
   cf <- coef(fit)
   names(cf) <- sub("^beta_", "", names(cf))
   lam <- attr(fit, "bc_lambda")
   list(b0 = unname(cf[["(Intercept)"]]), bx = unname(cf[["phic"]]),
        bt = unname(cf[["phit"]]), bxt = unname(cf[["phixt"]]),
-       lc = unname(lam[["lambda_cost"]]), lt = unname(lam[["lambda_time"]]))
+       lc = unname(lam[["lambda_cost"]]), lt = unname(lam[["lambda_time"]]),
+       lo = if ("lambda_odds" %in% names(lam))
+         unname(lam[["lambda_odds"]]) else 0)
 }
 
 # tau, the BC time coordinate, from a Date: years since BC_T0. Uncentered --
@@ -180,7 +208,10 @@ frontier_curves <- function(fitset, data, dates_by_bench, tbar, n_cost = 200) {
       p <- bc_pieces(fit)
       phic <- bc_tf(g$cost, p$lc)
       phit <- bc_tf(bc_tau(g$qdate), p$lt)
-      g$value <- plogis(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit)
+      # bc_mu, not plogis: the doubly-transformed fits' index is phi(odds;
+      # lambda_odds), which is the logit exactly when lambda_odds = 0
+      g$value <- bc_mu(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit,
+                       p$lo)
     } else {
       co <- frontier_coefs(fit)
       g$value <- plogis(frontier_index(co, log(g$cost), as_t(g$qdate) - tbar[[b]]))
@@ -520,7 +551,9 @@ iso_acc_curves <- function(fitset, data, tbar,
       p <- bc_pieces(fit)
       phit <- bc_tf(bc_tau(g$date), p$lt)
       bb <- p$bx + p$bxt * phit
-      phic <- (qlogis(g$acc) - p$b0 - p$bt * phit) / bb
+      # the index a target accuracy must reach: phi of its odds, which is
+      # qlogis exactly when lambda_odds = 0 (bc_tf's log branch)
+      phic <- (bc_tf(g$acc / (1 - g$acc), p$lo) - p$b0 - p$bt * phit) / bb
       phic[bb <= 0] <- NA_real_
       roots <- list(rising = log(bc_inv(phic, p$lc)))
       disc <- rep(NA_real_, nrow(g))

@@ -276,6 +276,14 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 #            construction, adding columns derived from its (lncost, tc)
 #            coordinates so terms like the Box-Cox trio are evaluable at grid
 #            nodes. The run data must already carry the same columns.
+#   lambda_odds  SCALAR, the response-side Box-Cox parameter of the doubly-
+#            transformed family (fit_bc): the surface's index is phi(odds;
+#            lambda_odds) rather than the logit, which is the special case
+#            lambda_odds = 0 (the default -- every non-BC caller). The run
+#            constraints become surface >= phi(odds_i) -- the same set of
+#            accuracy surfaces, reparameterized -- and the objective stays on
+#            the ACCURACY scale via the inverse link (bc_mu), so it is
+#            comparable across lambda_odds values by construction.
 #
 # Returns an object of class "envelope_frontier": a LIST with
 #
@@ -296,15 +304,20 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 #   formula         the formula as supplied, so the fit carries its own spec
 fit_envelope <- function(data, formula = acc ~ lncost + tc,
                          n_cost = 100, n_date = 40, margin = 0.05,
-                         grid_augment = NULL) {
+                         grid_augment = NULL, lambda_odds = 0) {
   mf <- model.frame(formula, data)
   y  <- model.response(mf)
   X  <- model.matrix(formula, data)
-  L  <- qlogis(clip_acc(y, data$n_samples))
+  pc <- clip_acc(y, data$n_samples)
+  L  <- if (abs(lambda_odds) < 1e-8) qlogis(pc) else
+    bc_tf(pc / (1 - pc), lambda_odds)
 
   # runs scoring zero impose nothing (logit -Inf), so drop them before the
-  # Pareto reduction rather than letting -Inf into the constraint matrix
-  pos <- which(is.finite(L))
+  # Pareto reduction rather than letting -Inf into the constraint matrix.
+  # The explicit y > 0 matters when lambda_odds > 0: phi(0 odds) is then
+  # FINITE (-1/lambda), and keeping it would smuggle the zero runs back in as
+  # constraints the logit version deliberately excludes.
+  pos <- which(is.finite(L) & y > 0)
   bind <- pos[pareto_binding(data$lncost[pos], data$tc[pos], L[pos])]
   Xb <- X[bind, , drop = FALSE]
   Lb <- L[bind]
@@ -374,16 +387,18 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   mono <- unique(mono)
   for (i in seq_len(nrow(mono))) add(mono[i, ])
 
-  # mean fitted accuracy over the grid -- the surface's average height.
+  # mean fitted accuracy over the grid -- the surface's average height, on
+  # the PROBABILITY scale whatever lambda_odds is (bc_mu is the logistic at
+  # lambda_odds = 0), which is what makes the objective comparable across
+  # response transforms.
   # fn(b):    b a numeric VECTOR of length ncol(X). Returns a SCALAR.
   # gr_fn(b): the same argument; returns the gradient, a numeric VECTOR of
   #           length ncol(X). Supplied analytically because SLSQP asks for it on
   #           every iteration and a finite-difference gradient over ~200 grid
   #           points would dominate the run time.
-  fn <- function(b) mean(plogis(drop(Xg %*% b)))
+  fn <- function(b) mean(bc_mu(drop(Xg %*% b), lambda_odds))
   gr_fn <- function(b) {
-    p <- plogis(drop(Xg %*% b))
-    drop(crossprod(Xg, p * (1 - p))) / nrow(Xg)
+    drop(crossprod(Xg, bc_mu_eta(drop(Xg %*% b), lambda_odds))) / nrow(Xg)
   }
 
   # Feasible start: a quasibinomial fit with curvature zeroed and linear slopes

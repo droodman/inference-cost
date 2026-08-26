@@ -883,16 +883,23 @@ notes_cost <- function(key) {
     paste("No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling",
           "distribution to appeal to."))
   bc <- paste(
-    "BC columns are a Box-Cox alternative to the quadratic: ln cost is linear in phi(odds),",
-    "phi(time) and their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0)",
-    "applied to the ODDS a/(1-a) -- at lambda_odds = 0, phi(odds) IS logit accuracy -- and to",
-    "years since mid-2020, GPT-3's release. The specification nests the linear one (lambda_odds",
-    "= 0, lambda_time = 1, no product term) but not the quadratic. The lambdas are profiled",
+    "BC columns are the DOUBLY-transformed Box-Cox family: phi(cost; lambda_cost) is linear in",
+    "phi(odds; lambda_odds), phi(time; lambda_time) and their product, with phi(x; lambda) =",
+    "(x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost, to the ODDS a/(1-a) -- at",
+    "lambda_odds = 0 phi(odds) IS logit accuracy -- and to years since mid-2020, GPT-3's release.",
+    "The family is closed under inversion, so it treats odds and cost fully symmetrically and its",
+    "accuracy-direction counterpart estimates the same surface class. It nests the single-transform",
+    "version at lambda_cost = 0 (ln cost as the response) and the linear model at (0, 0, 1). The",
+    "lambdas are profiled",
     switch(key,
-           costols = "against the residual sum of squares,",
-           costgridols = "against the grid residual sum of squares,",
-           costenvelope = "against the envelope's mean fitted height,",
-           "against the likelihood,"),
+           costols = paste("against the Gaussian profile likelihood -- the residual sum of squares on the",
+                           "transformed scale with the classical Box-Cox Jacobian term, which is what makes",
+                           "fits on different response scales comparable,"),
+           costgridols = paste("against the grid's Gaussian profile likelihood (transformed-scale residual",
+                               "sum of squares with the Box-Cox Jacobian term),"),
+           costenvelope = paste("against the envelope's mean fitted LOG COST -- the fitted index inverted node",
+                                "by node, so the objective is in log dollars for every lambda_cost,"),
+           "against the likelihood, with the Box-Cox Jacobian term for the response transform,"),
     "and are reported without standard errors; a lambda of exactly 3 or -2 sits on the edge of",
     "the search box, the flat profile having run to the wall. fm13's lambda_time is fixed at 1",
     "(its five months of data identify no time curvature).",
@@ -960,16 +967,22 @@ notes_plain <- function(key, kind) {
     "One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R),",
     "a scale on which Epoch's alpha_gpqa was not necessarily estimated.")
   bc <- paste(
-    "BC columns are a Box-Cox alternative to the quadratic: the logit is linear in phi(cost), phi(time) and",
+    "BC columns are a Box-Cox alternative to the quadratic: the index is linear in phi(cost), phi(time) and",
     "their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost per",
     "task and to years since mid-2020, GPT-3's release -- so the BC intercept is the fit at $1 per task in",
     "mid-2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in",
     "cost at every date -- the quadratic's bending back toward the data cannot happen -- while the product term",
     "still allows the cost slope one sign change over time.",
-    "lambda_cost and lambda_time are estimated per benchmark by profiling",
+    if (key %in% c("envelope", "paretologit"))
+      paste("For this model the RESPONSE side is transformed too: the index is phi(odds; lambda_odds), the",
+            "logit exactly at lambda_odds = 0, so odds and cost are treated symmetrically -- the profile is",
+            "well-posed because the objective is stated on a lambda_odds-invariant scale.")
+    else
+      "For this model the index is the logit: the response side keeps its link.",
+    "The lambdas are estimated per benchmark by profiling",
     switch(key, S = "the quasibinomial deviance,", A = , B = "the likelihood,",
-           paretologit = "the grid deviance,",
-           envelope = "the envelope's mean fitted height,"),
+           paretologit = "the probability-scale quasi-likelihood,",
+           envelope = "the envelope's mean fitted accuracy,"),
     "and are reported without standard errors: the profile provides none, and",
     if (key %in% c("envelope", "paretologit"))
       "this model reports none anywhere."
@@ -979,6 +992,9 @@ notes_plain <- function(key, kind) {
     if (key %in% c("A", "B"))
       paste("The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) --",
             "its LR row tests exactly those restrictions -- but not the quadratic.")
+    else if (key %in% c("envelope", "paretologit"))
+      paste("The BC specification nests the linear one (lambda_cost = 0, lambda_odds = 0, lambda_time = 1, no",
+            "product term) but not the quadratic.")
     else
       "The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) but not the quadratic.",
     "fm13's five months of data sit 5.7-6.1 years from the origin, over which every lambda_time fits alike, so",

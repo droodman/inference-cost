@@ -95,9 +95,9 @@ SPEC_NOTE <- c(
   quad = paste("ln cost is a full quadratic in logit accuracy and date",
                "(zeros excluded); where the surface bends back in accuracy",
                "the curve stops rather than fold."),
-  bc = paste("Box-Cox: ln cost is linear in phi(odds), phi(years since",
-             "mid-2020) and their product (zeros excluded), transform",
-             "parameters profiled against this model's own objective."))
+  bc = paste("Box-Cox both sides: phi(cost) is linear in phi(odds), phi(years",
+             "since mid-2020) and their product (zeros excluded), all three",
+             "transform parameters profiled on lambda-invariant objectives."))
 ISO_SPEC_NOTE <- c(
   lin = paste("The linear surface cannot bend, so its parallel contours miss",
               "the records' sharp rise toward each date's best-achieved",
@@ -106,10 +106,11 @@ ISO_SPEC_NOTE <- c(
   quad = paste("Full quadratic in logit accuracy and date. Curvature helps",
                "the fit, but a cliff whose location rides the advancing",
                "ceiling still cannot be tracked by one fixed surface."),
-  bc = paste("Box-Cox: ln cost linear in phi(odds), phi(years since",
-             "mid-2020) and their product, transform parameters profiled; a",
-             "lambda on the search-box edge means the profile ran to the",
-             "wall."))
+  bc = paste("Box-Cox both sides: phi(cost) linear in phi(odds), phi(years",
+             "since mid-2020) and their product, all three lambdas profiled;",
+             "a lambda on the search-box edge means the profile ran to the",
+             "wall, and contours blank where the fitted index leaves phi's",
+             "range."))
 
 for (key in names(MODELS)) {
   m <- MODELS[[key]]
@@ -178,10 +179,11 @@ for (key in names(MODELS)) {
       cat("\n")
     }
     if (tt == "bc") {
-      cat(sprintf("  %-12s BC lambdas (odds, time):", key))
+      cat(sprintf("  %-12s BC lambdas (cost, odds, time):", key))
       for (b in benches) {
         lam <- attr(fits[[b]], "bc_lambda")
-        cat(sprintf("  %s (%.2f, %.2f)", b, lam[[1]], lam[[2]]))
+        cat(sprintf("  %s (%.2f, %.2f, %.2f)", b, lam[["lambda_cost"]],
+                    lam[["lambda_odds"]], lam[["lambda_time"]]))
       }
       cat("\n")
     }

@@ -91,9 +91,60 @@ bc_grid_augment <- function(lc, lt, off) {
   }
 }
 
+# The Bernoulli quasi-log-likelihood on the PROBABILITY scale, the objective
+# both Pareto-grid variants below share. Not -deviance/2: the two differ by
+# the saturated log-likelihood, which is constant in the lambdas, but only
+# this form is computed identically by the glm path and the parametric-link
+# path, so profiles that mix them stay comparable. mu is clamped away from
+# 0/1 so a clamped link (bc_mu outside phi's range) cannot emit -Inf.
+bc_qll <- function(y, mu) {
+  mu <- pmin(pmax(mu, 1e-12), 1 - 1e-12)
+  sum(y * log(mu) + (1 - y) * log(1 - mu))
+}
+
+# The Pareto-grid fit with a PARAMETRIC LINK: the doubly-transformed family's
+# response side, mu = bc_mu(eta; lambda_odds), which is the fractional logit
+# exactly at lambda_odds = 0 (where the plain glm path is used instead --
+# same estimate, cheaper and more robust). Fitted by BFGS on the quasi-ll
+# with the analytic score sum (y - mu) x / (1 + lo*eta), started from the
+# logistic fit. Returns an object est_se() and the curve builders treat like
+# fit_pareto_logit()'s: class "pareto_grid_logit", named coefficients, the
+# n_grid / n_corners attributes, plus $qll for the profile.
+fit_pareto_bclink <- function(s, off, lc, lt, lo) {
+  gr <- pareto_grid_response(s)
+  y <- gr$acc
+  phic <- bc_tf(exp(gr$lncost), lc)
+  phit <- bc_tf(gr$tc + off, lt)
+  X <- cbind("(Intercept)" = 1, phic = phic, phit = phit,
+             phixt = phic * phit)
+  b0 <- unname(coef(glm.fit(X, y, family = quasibinomial(link = "logit"))))
+  negll <- function(b) -bc_qll(y, bc_mu(drop(X %*% b), lo))
+  grad <- function(b) {
+    eta <- drop(X %*% b)
+    mu <- bc_mu(eta, lo)
+    w <- if (abs(lo) < 1e-8) rep(1, length(eta)) else {
+      base <- 1 + lo * eta
+      ifelse(base > 0, 1 / base, 0)
+    }
+    -drop(crossprod(X, (y - mu) * w))
+  }
+  o <- optim(b0, negll, grad, method = "BFGS",
+             control = list(maxit = 500, reltol = 1e-10))
+  fit <- structure(list(coefficients = setNames(o$par, colnames(X)),
+                        qll = -o$value),
+                   class = "pareto_grid_logit")
+  attr(fit, "n_grid")    <- nrow(gr)
+  attr(fit, "n_corners") <- length(pareto_binding(s$lncost, s$tc, s$acc))
+  fit
+}
+
 # One fit at fixed lambdas. Returns list(fit, obj) with obj oriented so that
 # LARGER is better for every family, whatever its native objective's sense.
-bc_fit_at <- function(key, s, off, lc, lt, start = NULL) {
+# `lo` is the doubly-transformed family's response-side lambda; only the two
+# frontier-per-se keys act on it (their objectives are already stated on
+# lambda_odds-invariant scales -- probability for both), while S/A/B keep the
+# logit link, the bounded-response asymmetry documented in cost_frontier.R.
+bc_fit_at <- function(key, s, off, lc, lt, lo = 0, start = NULL) {
   sa <- bc_augment_runs(s, lc, lt)
   if (key == "S") {
     f <- glm(BC_FORM, data = sa, family = quasibinomial(link = "logit"))
@@ -104,11 +155,18 @@ bc_fit_at <- function(key, s, off, lc, lt, start = NULL) {
                             fixed = "delta_(Intercept)", start = start)
     list(fit = f, obj = as.numeric(logLik(f)))
   } else if (key == "envelope") {
-    f <- fit_envelope(sa, BC_FORM, grid_augment = bc_grid_augment(lc, lt, off))
+    f <- fit_envelope(sa, BC_FORM, grid_augment = bc_grid_augment(lc, lt, off),
+                      lambda_odds = lo)
     list(fit = f, obj = -f$value)   # the lowest-sitting surface, now over lambda too
   } else {
-    f <- fit_pareto_logit(sa, BC_FORM, grid_augment = bc_grid_augment(lc, lt, off))
-    list(fit = f, obj = -deviance(f) / 2)
+    if (abs(lo) < 1e-8) {
+      f <- fit_pareto_logit(sa, BC_FORM,
+                            grid_augment = bc_grid_augment(lc, lt, off))
+      list(fit = f, obj = bc_qll(f$y, fitted(f)))
+    } else {
+      f <- fit_pareto_bclink(s, off, lc, lt, lo)
+      list(fit = f, obj = f$qll)
+    }
   }
 }
 
@@ -300,22 +358,55 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
   lt_free <- bc_lt_free(s$year - BC_T0)
   ws <- new.env(parent = emptyenv())
 
-  # The frontier-per-se models take their dedicated gradient-based searches
-  # (bc_lambda_* above); a failure there falls through to the generic profile
-  # below rather than aborting -- the slow path is always a correct path.
-  lam <- if (key %in% c("paretologit", "envelope")) {
-    tryCatch(
+  # The frontier-per-se models get the DOUBLY-transformed family: the
+  # response side is phi(odds; lambda_odds) as well, the logit being its
+  # lambda_odds = 0 member, so the specification treats odds and cost
+  # symmetrically. Their objectives are already stated on lambda_odds-
+  # invariant scales -- mean accuracy for the envelope, the probability-scale
+  # quasi-ll for the grid fit -- so the three-lambda profile is well-posed
+  # without Jacobian machinery. The dedicated 2-lambda gradient searches
+  # above survive as the SEED: they locate (lambda_cost, lambda_time) fast at
+  # lambda_odds = 0 (the nested logit-response model), and a Nelder-Mead then
+  # explores the full triple from there. S/A/B keep the logit link: a
+  # parametric link inside the panel-SFA kernel is heavier machinery with
+  # notoriously weak identification, a bounded-response asymmetry accepted
+  # and documented rather than papered over.
+  if (key %in% c("paretologit", "envelope")) {
+    seed <- tryCatch(
       if (key == "paretologit")
-        bc_lambda_paretologit(s, off, lt_free, lambda_start)
-      else bc_lambda_envelope(s, off, lt_free, lambda_start),
+        bc_lambda_paretologit(s, off, lt_free, lambda_start[1:2])
+      else bc_lambda_envelope(s, off, lt_free, lambda_start[1:2]),
       error = function(e) {
-        message("bc_lambda_", key, " failed (", conditionMessage(e),
-                "); falling back to the Nelder-Mead profile")
-        NULL
+        message("bc_lambda_", key, " seed failed (", conditionMessage(e),
+                "); seeding the profile from lambda_start")
+        c(lambda_start[1], if (lt_free) lambda_start[2] else 1)
       })
-  } else NULL
+    neg3 <- function(l) {
+      lc <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
+      if (lc < BC_BOX_C[1] || lc > BC_BOX_C[2] ||
+          lo < BC_BOX_C[1] || lo > BC_BOX_C[2] ||
+          lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
+      r <- tryCatch(bc_fit_at(key, s, off, lc, lt, lo),
+                    error = function(e) NULL)
+      if (is.null(r) || !is.finite(r$obj)) return(1e6)
+      -r$obj
+    }
+    opt <- optim(c(seed[1], 0, if (lt_free) seed[2]), neg3,
+                 method = "Nelder-Mead",
+                 control = list(reltol = 1e-6, maxit = 300))
+    lam <- c(opt$par[1], if (lt_free) opt$par[3] else 1)
+    lo  <- opt$par[2]
+    r <- bc_fit_at(key, s, off, lam[1], lam[2], lo)
+    fit <- r$fit
+    attr(fit, "bc_lambda") <- c(lambda_cost = lam[1], lambda_time = lam[2],
+                                lambda_odds = lo)
+    attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE,
+                                     lambda_time = lt_free,
+                                     lambda_odds = TRUE)
+    return(fit)
+  }
 
-  if (is.null(lam)) {
+  {
     # Warm starts: consecutive outer evaluations sit at nearby lambdas, so the
     # previous coefficient vector is close to the next optimum and cuts the SFA
     # fits from dozens of BFGS iterations to a few. A failed inner fit scores

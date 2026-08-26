@@ -210,9 +210,10 @@ for (k in names(SPECS)) {
 # Monotonicity is imposed in the transformed coordinates, which is monotonicity
 # in cost and date because phi is increasing; the contours have one branch, so
 # ISO_BRANCH_NOTE does not apply.
-NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
-                  "mid-2020) and their product, with the transform parameters",
-                  "profiled against the envelope's own objective.")
+NOTES_BC <- paste("Box-Cox both sides: phi(odds) -- the logit at lambda_odds",
+                  "= 0 -- is linear in phi(cost), phi(years since mid-2020)",
+                  "and their product, all three lambdas profiled against the",
+                  "envelope's mean fitted accuracy.")
 fits_bc <- fit_bc_by("envelope", d)
 
 curves <- frontier_curves(fits_bc, d, dates, bench_tbar(d))
