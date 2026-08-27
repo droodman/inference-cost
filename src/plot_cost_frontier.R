@@ -28,12 +28,12 @@
 #                 strict envelope's dual
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("cost_frontier.R")
+src_source("fit_store.R")   # fits come from the shared store
 
 LEVELS <- seq(0.10, 0.90, by = 0.20)
 
 d <- load_runs()
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 tbar    <- bench_tbar(d)
 dates   <- bench_dates(d)
 
@@ -50,36 +50,33 @@ iso_ranges <- do.call(rbind, lapply(benches, function(b) {
 }))
 
 # One caption line saying what kind of surface each model's is; the rest of
-# each caption is shared. The SFA line states the cloud-versus-record caveat
+# each caption is shared. The fitting recipes live in fit_cost_model
+# (cost_frontier.R) and the fits come from the shared store, so the tables use
+# the same objects. The SFA line states the cloud-versus-record caveat
 # documented at length in cost_frontier.R -- on this data its time slope
 # tracks the dense cheap edge of the model-effort cells, which grows dearer
 # as reasoning configurations arrive, so read it against the dashed record.
 MODELS <- list(
   costols = list(
-    fit = function(s, form) lm(form, data = iso_runs(s)),
     note = paste("Least squares of log cost over all positive-accuracy runs:",
                  "the TYPICAL cost of a run scoring a -- model S's reverse",
                  "regression, not a frontier.")),
   costsfa = list(
-    fit = function(s, form) fit_cost_sfa(s, form),
     note = paste("Stochastic cost frontier (half-normal inefficiency per",
                  "model x effort). Its time slope follows the dense cheap",
                  "edge of the cells, which grows DEARER as reasoning models",
                  "arrive -- not the record; compare the dashed staircase.")),
   costsfab = list(
-    fit = function(s, form) fit_cost_sfa(s, form, formula_sigma = ~ tc),
     note = paste("Stochastic cost frontier with log sigma_u linear in date.",
                  "Like the constant-scale variant, its time slope follows",
                  "the dense cheap edge of the model-effort cells, not the",
                  "record; compare the dashed staircase.")),
   costgridols = list(
-    fit = function(s, form) fit_lncost_grid(s, form),
     note = paste("Least squares to the record cost ln C_a(t) sampled on a",
                  "uniform (logit accuracy, date) grid. Grid nodes are not",
                  "observations, so no standard errors -- point estimates",
                  "only, as for the Pareto-grid logit.")),
   costenvelope = list(
-    fit = function(s, form) fit_cost_envelope(s, form),
     note = paste("The highest surface in (logit accuracy, date) lying at or",
                  "below every run's log cost, monotone by constraint --",
                  "pinned by a few extreme runs, like its accuracy-direction",
@@ -115,10 +112,7 @@ ISO_SPEC_NOTE <- c(
 for (key in names(MODELS)) {
   m <- MODELS[[key]]
   for (tt in c("lin", "quad", "bc")) {
-    fits <- setNames(lapply(benches, function(b) {
-      s <- d[d$benchmark == b, ]
-      if (tt == "bc") fit_cost_bc(key, s) else m$fit(s, COST_FORMS[[tt]])
-    }), benches)
+    fits <- if (tt == "bc") store_cost_bc(key) else store_cost(key)[[tt]]
 
     # frontier view: the surface swept along accuracy at each drawn date
     curves <- cost_frontier_curves(fits, d, dates, tbar)
@@ -132,7 +126,7 @@ for (key in names(MODELS)) {
         PARETO_STEP_NOTE, SPEC_NOTE[[tt]], m$note)) +
       pareto_step_layer(steps)
     f <- sprintf("%s_%s.png", key, tt)
-    ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
+    ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
            device = ragg::agg_png)
     cat("wrote", f, "\n")
 
@@ -146,13 +140,15 @@ for (key in names(MODELS)) {
               "off the fitted cost surface -- the native view of a model of",
               "ln cost; no inversion is involved."),
         ISO_PARETO_NOTE,
-        paste("Cut at the observed cost range and above each level's dashed",
-              "record, so a level never achieved by any run shows no contour",
-              "at all."),
+        paste("Cut at the observed cost range; blanked only where both",
+              "earlier than a level's first record and dearer than its",
+              "dearest, so each contour reaches its record's start or cost",
+              "ceiling, whichever is more generous. Never-achieved levels",
+              "show no contour."),
         ISO_SPEC_NOTE[[tt]], m$note)) +
       iso_pareto_layer(iso_steps)
     fi <- sprintf("isoaccuracy_%s_%s.png", key, tt)
-    ggsave(out_path(fi), p_iso, width = 10, height = 7.5, dpi = 200,
+    ggsave(out_path(fi), p_iso, width = 10, height = fig_height(length(benches)), dpi = 200,
            device = ragg::agg_png)
     cat("wrote", fi, "\n")
 
@@ -194,7 +190,7 @@ for (key in names(MODELS)) {
 
 cat("\nstochastic cost frontier (constant scale, linear): robust summaries\n")
 for (b in benches) {
-  f <- fit_cost_sfa(d[d$benchmark == b, ])
+  f <- store_cost("costsfa")$lin[[b]]
   cat(sprintf("\n== %s: code %d, logLik %.2f, %d groups, %d obs, sigma_u %.2f, sigma_v %.2f\n",
               b, f$code, as.numeric(logLik(f)), attr(f, "n_groups"),
               attr(f, "n_obs"), sigma_u_hat(f), exp(coef(f)[["logsig_v"]])))

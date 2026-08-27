@@ -63,7 +63,8 @@ fit_cluster <- function(n_tasks = FIT_WORKERS) {
     parallel::clusterCall(cl, function(root) {
       Sys.setenv(FIT_WORKERS = "1")
       setwd(root)
-      source("src/boxcox_frontier.R")   # sources the entire fitting stack
+      source("src/boxcox_frontier.R")   # the accuracy-direction fitting stack
+      source("src/cost_frontier.R")     # and the cost-direction one
       invisible(NULL)
     }, PROJ_ROOT)
     .fit_cluster_env$cl <- cl

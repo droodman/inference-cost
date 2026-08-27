@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Logistic, Pareto points -- Box-Cox specification</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Logistic, Pareto points -- Box-Cox specification</h1>
+<p class="sub">Point estimates only; see the notes for why no standard errors.</p>
+<table><thead><tr><th></th>
+<th colspan="1"><div class="hd">AIME (OTIS Mock)</div></th>
+<th colspan="1" class="grp"><div class="hd">Chess Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
+<th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
+<th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
+<th colspan="1" class="grp"><div class="hd">MATH, level 5</div></th>
+<th colspan="1" class="grp"><div class="hd">SimpleQA Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">SWE-Bench Verified</div></th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>-5.108</td>
+<td class="grp">-2.783</td>
+<td class="grp">-144.203</td>
+<td class="grp">-2.387</td>
+<td class="grp">-0.791</td>
+<td class="grp">-59.836</td>
+<td class="grp">-0.641</td>
+<td class="grp">-540.270</td>
+<td class="grp">-2.311</td>
+<td class="grp">-105.661</td>
+<td class="grp">-90.328</td>
+</tr>
+<tr><td>BC cost</td>
+<td>-0.094</td>
+<td class="grp">0.038</td>
+<td class="grp">-6.863</td>
+<td class="grp">0.014</td>
+<td class="grp">-0.022</td>
+<td class="grp">-2.951</td>
+<td class="grp">-0.012</td>
+<td class="grp">32.499</td>
+<td class="grp">0.027</td>
+<td class="grp">0.849</td>
+<td class="grp">1.778</td>
+</tr>
+<tr><td>BC time</td>
+<td>0.180</td>
+<td class="grp">0.311</td>
+<td class="grp">298.501</td>
+<td class="grp">0.124</td>
+<td class="grp">0.005</td>
+<td class="grp">122.455</td>
+<td class="grp">0.001</td>
+<td class="grp">1111.582</td>
+<td class="grp">0.111</td>
+<td class="grp">212.913</td>
+<td class="grp">188.184</td>
+</tr>
+<tr><td>BC cost &times; BC time</td>
+<td>0.011</td>
+<td class="grp">0.000</td>
+<td class="grp">14.769</td>
+<td class="grp">0.006</td>
+<td class="grp">0.001</td>
+<td class="grp">6.348</td>
+<td class="grp">0.000</td>
+<td class="grp">-65.446</td>
+<td class="grp">-0.000</td>
+<td class="grp">-1.617</td>
+<td class="grp">-3.508</td>
+</tr>
+<tr><td>&lambda;<sub>cost</sub></td>
+<td>-0.107</td>
+<td class="grp">-0.376</td>
+<td class="grp">-0.197</td>
+<td class="grp">-0.104</td>
+<td class="grp">0.242</td>
+<td class="grp">-0.278</td>
+<td class="grp">0.595</td>
+<td class="grp">-0.773</td>
+<td class="grp">-0.483</td>
+<td class="grp">-0.428</td>
+<td class="grp">-1.000</td>
+</tr>
+<tr><td>&lambda;<sub>odds</sub></td>
+<td>0.176</td>
+<td class="grp">0.338</td>
+<td class="grp">0.012</td>
+<td class="grp">0.463</td>
+<td class="grp">1.332</td>
+<td class="grp">0.352</td>
+<td class="grp">1.609</td>
+<td class="grp">-0.441</td>
+<td class="grp">0.227</td>
+<td class="grp">0.376</td>
+<td class="grp">-0.320</td>
+</tr>
+<tr><td>&lambda;<sub>time</sub></td>
+<td>2.999</td>
+<td class="grp">1.486</td>
+<td class="grp">-2.000</td>
+<td class="grp">2.863</td>
+<td class="grp">2.802</td>
+<td class="grp">-2.000</td>
+<td class="grp">2.997</td>
+<td class="grp">-2.000</td>
+<td class="grp">3.000</td>
+<td class="grp">-1.912</td>
+<td class="grp">-1.999</td>
+</tr>
+<tr class="gap"><td>N</td>
+<td>3369</td>
+<td class="grp">3423</td>
+<td class="grp">3122</td>
+<td class="grp">3302</td>
+<td class="grp">3870</td>
+<td class="grp">3472</td>
+<td class="grp">3564</td>
+<td class="grp">3630</td>
+<td class="grp">3039</td>
+<td class="grp">3439</td>
+<td class="grp">3820</td>
+</tr>
+</tbody><tfoot><tr><td colspan="12">No standard errors: the response is the empirical Pareto frontier P_t(c) sampled at the nodes of the envelope's fixed cost-date grid, and grid nodes are not observations. N is the nodes at which the frontier is defined; they resample a few dozen staircase corners, so N measures resolution, not information. BC columns are a Box-Cox alternative to the quadratic: the index is linear in phi(cost), phi(time) and their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost per task and to years since mid-2020, GPT-3's release -- so the BC intercept is the fit at $1 per task in mid-2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in cost at every date -- the quadratic's bending back toward the data cannot happen -- while the product term still allows the cost slope one sign change over time. For this model the RESPONSE side is transformed too: the index is phi(odds; lambda_odds), the logit exactly at lambda_odds = 0, so odds and cost are treated symmetrically -- the profile is well-posed because the objective is stated on a lambda_odds-invariant scale. The lambdas are estimated per benchmark by profiling the probability-scale quasi-likelihood, and are reported without standard errors: the profile provides none, and this model reports none anywhere. The BC specification nests the linear one (lambda_cost = 0, lambda_odds = 0, lambda_time = 1, no product term) but not the quadratic. fm13's five months of data sit 5.7-6.1 years from the origin, over which every lambda_time fits alike, so lambda_time is fixed at 1 there rather than estimated; elsewhere it is weakly identified and best read as a shape the data tolerates rather than demands -- a lambda_time of exactly 3 or -2 sits on the edge of the search box, the flat profile having run to the wall. This table has no pooled column: per-benchmark lambdas put the BC slopes on different transforms, leaving no common scale for the alpha-weighted average to land on.</td></tr></tfoot></table>
+</body></html>

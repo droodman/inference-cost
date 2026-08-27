@@ -2,12 +2,12 @@ cd "D:\OneDrive\Documents\Work\Clients & prospects\EpochAI\inference-cost"
 
 set scheme plottig
 cwf default
-import delimited "data/caisi_curves_all.csv", clear  // all benchmark results; sent by Luke in Slack
+import delimited "data/cost_truncated_curves.csv", clear  // all benchmark results; sent by Luke in Slack; https://raw.githubusercontent.com/epoch-research/benchmarks/refs/heads/feature/bench-tok-budget-side/exports/cost_truncated_curves.csv
 
-gen task = cond(benchmark=="aime", "OTIS Mock AIME 2024-2025", ///
-           cond(benchmark=="chess", "Chess Puzzles",           ///
-           cond(benchmark=="fm13", "FrontierMath-Tiers-1-3-v2-Private", ///
-           cond(benchmark=="gpqa", "GPQA diamond", ""))))
+// gen task = cond(benchmark=="aime", "OTIS Mock AIME 2024-2025", ///
+//            cond(benchmark=="chess", "Chess Puzzles",           ///
+//            cond(benchmark=="fm13", "FrontierMath-Tiers-1-3-v2-Private", ///
+//            cond(benchmark=="gpqa", "GPQA diamond", ""))))
 replace model = regexcapturenamed("stub") if regexmatch(model, "(?<stub>.*)-maas")  // remove any -maas suffixes
 replace model = regexcapturenamed("stub") if regexmatch(model, "(?<stub>.*)-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]")  // remove any release date suffixes
 

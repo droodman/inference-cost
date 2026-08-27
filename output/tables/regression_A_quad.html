@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Stochastic frontier -- full quadratic specification</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Stochastic frontier -- full quadratic specification</h1>
+<p class="sub">Standard errors in parentheses.</p>
+<table><thead><tr><th></th>
+<th colspan="1"><div class="hd">AIME (OTIS Mock)</div></th>
+<th colspan="1" class="grp"><div class="hd">Chess Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
+<th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
+<th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
+<th colspan="1" class="grp"><div class="hd">MATH, level 5</div></th>
+<th colspan="1" class="grp"><div class="hd">SimpleQA Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">SWE-Bench Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">Pooled, primary (ECI pts)</div></th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>4.908</td>
+<td class="grp">-1.399</td>
+<td class="grp">-0.538</td>
+<td class="grp">6.959</td>
+<td class="grp">-1.698</td>
+<td class="grp">-1.039</td>
+<td class="grp">-2.559</td>
+<td class="grp">-2.095</td>
+<td class="grp">10.592</td>
+<td class="grp">0.458</td>
+<td class="grp">-0.773</td>
+<td class="grp">10.229</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.485)</td>
+<td class="grp">(0.238)</td>
+<td class="grp">(0.191)</td>
+<td class="grp">(1.188)</td>
+<td class="grp">(0.286)</td>
+<td class="grp">(0.152)</td>
+<td class="grp">(0.134)</td>
+<td class="grp">(0.290)</td>
+<td class="grp">(2.126)</td>
+<td class="grp">(1.483)</td>
+<td class="grp">(0.178)</td>
+<td class="grp">(1.405)</td>
+</tr>
+<tr><td>ln cost</td>
+<td>1.256</td>
+<td class="grp">0.278</td>
+<td class="grp">0.263</td>
+<td class="grp">1.682</td>
+<td class="grp">0.199</td>
+<td class="grp">0.297</td>
+<td class="grp">0.808</td>
+<td class="grp">0.704</td>
+<td class="grp">2.100</td>
+<td class="grp">-0.015</td>
+<td class="grp">-0.604</td>
+<td class="grp">4.384</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.164)</td>
+<td class="grp">(0.137)</td>
+<td class="grp">(0.075)</td>
+<td class="grp">(0.237)</td>
+<td class="grp">(0.131)</td>
+<td class="grp">(0.143)</td>
+<td class="grp">(0.158)</td>
+<td class="grp">(0.086)</td>
+<td class="grp">(0.409)</td>
+<td class="grp">(0.586)</td>
+<td class="grp">(0.320)</td>
+<td class="grp">(0.409)</td>
+</tr>
+<tr><td>time</td>
+<td>1.928</td>
+<td class="grp">0.095</td>
+<td class="grp">1.359</td>
+<td class="grp">2.130</td>
+<td class="grp">0.029</td>
+<td class="grp">1.020</td>
+<td class="grp">0.577</td>
+<td class="grp">3.041</td>
+<td class="grp">4.402</td>
+<td class="grp">0.884</td>
+<td class="grp">1.336</td>
+<td class="grp">6.888</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.434)</td>
+<td class="grp">(0.329)</td>
+<td class="grp">(0.379)</td>
+<td class="grp">(0.582)</td>
+<td class="grp">(0.334)</td>
+<td class="grp">(0.235)</td>
+<td class="grp">(0.386)</td>
+<td class="grp">(0.699)</td>
+<td class="grp">(1.928)</td>
+<td class="grp">(1.662)</td>
+<td class="grp">(0.603)</td>
+<td class="grp">(1.122)</td>
+</tr>
+<tr><td>ln cost<sup>2</sup></td>
+<td>0.024</td>
+<td class="grp">-0.030</td>
+<td class="grp">-0.065</td>
+<td class="grp">0.069</td>
+<td class="grp">0.018</td>
+<td class="grp">-0.105</td>
+<td class="grp">-0.021</td>
+<td class="grp">-0.070</td>
+<td class="grp">0.083</td>
+<td class="grp">-0.054</td>
+<td class="grp">-0.323</td>
+<td class="grp">0.016</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.023)</td>
+<td class="grp">(0.019)</td>
+<td class="grp">(0.021)</td>
+<td class="grp">(0.031)</td>
+<td class="grp">(0.013)</td>
+<td class="grp">(0.033)</td>
+<td class="grp">(0.071)</td>
+<td class="grp">(0.034)</td>
+<td class="grp">(0.037)</td>
+<td class="grp">(0.060)</td>
+<td class="grp">(0.071)</td>
+<td class="grp">(0.059)</td>
+</tr>
+<tr><td>time<sup>2</sup></td>
+<td>-0.447</td>
+<td class="grp">0.163</td>
+<td class="grp">-0.355</td>
+<td class="grp">-0.120</td>
+<td class="grp">0.041</td>
+<td class="grp">-1.438</td>
+<td class="grp">-2.212</td>
+<td class="grp">2.182</td>
+<td class="grp">-0.500</td>
+<td class="grp">-0.476</td>
+<td class="grp">-0.263</td>
+<td class="grp">-1.092</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.267)</td>
+<td class="grp">(0.185)</td>
+<td class="grp">(0.309)</td>
+<td class="grp">(0.175)</td>
+<td class="grp">(0.158)</td>
+<td class="grp">(0.426)</td>
+<td class="grp">(0.849)</td>
+<td class="grp">(1.412)</td>
+<td class="grp">(1.030)</td>
+<td class="grp">(0.868)</td>
+<td class="grp">(0.969)</td>
+<td class="grp">(0.659)</td>
+</tr>
+<tr><td>ln cost &times; time</td>
+<td>0.379</td>
+<td class="grp">-0.117</td>
+<td class="grp">0.405</td>
+<td class="grp">0.285</td>
+<td class="grp">-0.033</td>
+<td class="grp">0.668</td>
+<td class="grp">1.034</td>
+<td class="grp">0.116</td>
+<td class="grp">0.589</td>
+<td class="grp">0.146</td>
+<td class="grp">0.284</td>
+<td class="grp">1.239</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.085)</td>
+<td class="grp">(0.094)</td>
+<td class="grp">(0.123)</td>
+<td class="grp">(0.099)</td>
+<td class="grp">(0.074)</td>
+<td class="grp">(0.155)</td>
+<td class="grp">(0.306)</td>
+<td class="grp">(0.291)</td>
+<td class="grp">(0.202)</td>
+<td class="grp">(0.315)</td>
+<td class="grp">(0.281)</td>
+<td class="grp">(0.258)</td>
+</tr>
+<tr><td>log &sigma;<sub>u</sub></td>
+<td>0.412</td>
+<td class="grp">-4.149</td>
+<td class="grp">-2.699</td>
+<td class="grp">0.638</td>
+<td class="grp">-5.165</td>
+<td class="grp">-4.692</td>
+<td class="grp">-5.023</td>
+<td class="grp">-3.107</td>
+<td class="grp">0.981</td>
+<td class="grp">-4.228</td>
+<td class="grp">-3.427</td>
+<td class="grp">-0.122</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.437)</td>
+<td class="grp">(0.034)</td>
+<td class="grp">(0.826)</td>
+<td class="grp">(1.188)</td>
+<td class="grp">(0.055)</td>
+<td class="grp">(0.056)</td>
+<td class="grp">(0.068)</td>
+<td class="grp">(0.763)</td>
+<td class="grp">(0.495)</td>
+<td class="grp">(0.380)</td>
+<td class="grp">(0.504)</td>
+<td class="grp">(0.269)</td>
+</tr>
+<tr class="gap"><td>N</td>
+<td>1308</td>
+<td class="grp">1132</td>
+<td class="grp">555</td>
+<td class="grp">1235</td>
+<td class="grp">290</td>
+<td class="grp">513</td>
+<td class="grp">403</td>
+<td class="grp">431</td>
+<td class="grp">231</td>
+<td class="grp">357</td>
+<td class="grp">364</td>
+<td class="grp">4520</td>
+</tr>
+<tr><td>quadratic vs linear, LR (df 3), &chi;&sup2;</td>
+<td>14.26</td>
+<td class="grp">1.51</td>
+<td class="grp">8.49</td>
+<td class="grp">10.98</td>
+<td class="grp">0.12</td>
+<td class="grp">4.79</td>
+<td class="grp">0.95</td>
+<td class="grp">3.12</td>
+<td class="grp">6.71</td>
+<td class="grp">1.18</td>
+<td class="grp">7.81</td>
+<td class="grp"></td>
+</tr><tr class="se"><td>p</td>
+<td>0.0026</td>
+<td class="grp">0.6797</td>
+<td class="grp">0.0370</td>
+<td class="grp">0.0118</td>
+<td class="grp">0.9889</td>
+<td class="grp">0.1875</td>
+<td class="grp">0.8126</td>
+<td class="grp">0.3735</td>
+<td class="grp">0.0819</td>
+<td class="grp">0.7576</td>
+<td class="grp">0.0502</td>
+<td class="grp"></td>
+</tr>
+</tbody><tfoot><tr><td colspan="13">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. Robust (sandwich) standard errors, as the SFA objective is a quasi-likelihood in the Papke-Wooldridge sense. Quadratic adds ln cost<sup>2</sup>, time<sup>2</sup> and ln cost x time; the test is a likelihood ratio test of all three jointly. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery), mapping them onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average, sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are aime 0.223, chess 0.120, fm13 0.169, gpqa 0.120, mystery 0.168, so one logit is worth 4.5-8.4 ECI points and pooled slopes read several times larger than the logit-scale columns beside them.  The pooled intercept averages capability net of difficulty at each benchmark's own reference date, so unlike the slopes it carries no clean interpretation, and pooled N sums the primary benchmark columns. log sigma_u, the log of a logit-scale spread, converts as log sigma_u - log alpha_b before averaging; its time slope is scale-free and pools directly. Fits are independent across benchmarks, so pooled standard errors sum the per-benchmark covariance pieces. One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R), a scale on which Epoch's alpha_gpqa was not necessarily estimated.</td></tr></tfoot></table>
+</body></html>

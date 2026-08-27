@@ -1,6 +1,6 @@
 # Build the analysis dataset from source CSVs. 
 #
-#   caisi_curves_all.csv        one row per model x benchmark x effort x budget run
+#   cost_truncated_curves.csv        one row per model x benchmark x effort x budget run
 #   Model versions-Grid view.csv  release dates, matched by id prefix
 #
 # Steps, in the .do file's order (order matters: the duplicate drop keeps the
@@ -28,10 +28,31 @@ suppressMessages(library(dplyr))
 
 STATA_EPOCH_OFFSET <- 3653   # days from 1960-01-01 (Stata) to 1970-01-01 (R)
 
-TASK_LABEL <- c(aime  = "OTIS Mock AIME 2024-2025",
-                chess = "Chess Puzzles",
-                fm13  = "FrontierMath-Tiers-1-3-v2-Private",
-                gpqa  = "GPQA diamond")
+# The PRIMARY benchmarks: first in every figure, table and console report,
+# and the only ones entering the ECI pooling. The rest are reported alongside
+# but pooled nowhere. fm13 is fm_tiers1_3_v2's legacy key (see build_runs).
+PRIMARY_BENCHES <- c("aime", "chess", "fm13", "gpqa", "mystery")
+
+# Canonical benchmark order: primaries first (in PRIMARY_BENCHES order), the
+# rest alphabetical. Every script's `benches` vector and loop runs through
+# this, so results ordering cannot drift between outputs.
+bench_levels <- function(x) {
+  u <- unique(x)
+  c(intersect(PRIMARY_BENCHES, u), sort(setdiff(u, PRIMARY_BENCHES)))
+}
+
+TASK_LABEL <- c(
+  aime                     = "OTIS Mock AIME 2024-2025",
+  chess                    = "Chess Puzzles",
+  fm13                     = "FrontierMath-Tiers-1-3-v2-Private",
+  fm_2025_02_private       = "FrontierMath-2025-02-28-Private",
+  fm_tier4_2025_07_private = "FrontierMath-Tier-4-2025-07-01-Private",
+  fm_tier4_v2              = "FrontierMath-Tier-4-v2-Private",
+  gpqa                     = "GPQA diamond",
+  math_lvl5                = "MATH level 5",
+  mystery                  = "Mystery Game Puzzles",
+  simpleqa                 = "SimpleQA Verified",
+  swe_bench_verified       = "SWE-Bench verified")
 
 # Greedy .* so the LAST occurrence wins, matching Stata's regexcapturenamed on
 # "(?<stub>.*)-maas": the captured stub is everything before the final marker.
@@ -40,7 +61,7 @@ clean_model_name <- function(m) {
   sub("^(.*)-[0-9]{4}-[0-9]{2}-[0-9]{2}.*$", "\\1", m)
 }
 
-build_runs <- function(curves_csv = data_path("caisi_curves_all.csv"),
+build_runs <- function(curves_csv = data_path("cost_truncated_curves.csv"),
                        models_csv = data_path("Model versions-Grid view.csv")) {
 
   x <- read.csv(curves_csv, stringsAsFactors = FALSE)
@@ -53,6 +74,16 @@ build_runs <- function(curves_csv = data_path("caisi_curves_all.csv"),
               n_samples = sum(n_samples, na.rm = TRUE),
               .groups = "drop") %>%
     as.data.frame()
+
+  # The *_public FrontierMath variants are excluded: tiny samples (their
+  # staircases have as few as 5 corners and their ECI file carries no
+  # discriminations for them), and their private counterparts are in the
+  # sample. fm_tiers1_3_v2 keeps its old fm13 key so history, labels and
+  # joins carry over, and mystery_agent shortens to mystery -- the key
+  # PRIMARY_BENCHES, TASK_LABEL and LABELS all use.
+  agg$benchmark[agg$benchmark == "fm_tiers1_3_v2"] <- "fm13"
+  agg$benchmark[agg$benchmark == "mystery_agent"]  <- "mystery"
+  agg <- agg[!grepl("_public$", agg$benchmark), , drop = FALSE]
 
   # release date: earliest registry entry whose id starts with the model name
   mv <- read.csv(models_csv, stringsAsFactors = FALSE)

@@ -144,15 +144,22 @@ fit_pareto_bclink <- function(s, off, lc, lt, lo) {
 # frontier-per-se keys act on it (their objectives are already stated on
 # lambda_odds-invariant scales -- probability for both), while S/A/B keep the
 # logit link, the bounded-response asymmetry documented in cost_frontier.R.
-bc_fit_at <- function(key, s, off, lc, lt, lo = 0, start = NULL) {
+bc_fit_at <- function(key, s, off, lc, lt, lo = 0, start = NULL,
+                      final = TRUE) {
   sa <- bc_augment_runs(s, lc, lt)
   if (key == "S") {
     f <- glm(BC_FORM, data = sa, family = quasibinomial(link = "logit"))
     list(fit = f, obj = -deviance(f) / 2)
   } else if (key %in% c("A", "B")) {
+    # `final = FALSE` inside the lambda profile: maxLik's finite-difference
+    # Hessian at each inner optimum costs more than the warm-started
+    # optimisation itself, and the profile reads only the objective. The
+    # optimiser's path is untouched, so the profiled lambdas are identical;
+    # only the refit at the optimum pays for the Hessian the tables need.
     f <- fit_panel_frontier(BC_FORM, ~ 1, data = sa, u_group = U_GROUP,
                             formula_sigma = SIGMA_FORM[[key]], dedup = FALSE,
-                            fixed = "delta_(Intercept)", start = start)
+                            fixed = "delta_(Intercept)", start = start,
+                            finalHessian = final)
     list(fit = f, obj = as.numeric(logLik(f)))
   } else if (key == "envelope") {
     f <- fit_envelope(sa, BC_FORM, grid_augment = bc_grid_augment(lc, lt, off),
@@ -416,7 +423,8 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
       lc <- l[1]; lt <- if (lt_free) l[2] else 1
       if (lc < BC_BOX_C[1] || lc > BC_BOX_C[2] ||
           lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
-      r <- tryCatch(bc_fit_at(key, s, off, lc, lt, start = ws$start),
+      r <- tryCatch(bc_fit_at(key, s, off, lc, lt, start = ws$start,
+                              final = FALSE),
                     error = function(e) NULL)
       if (is.null(r) || !is.finite(r$obj)) return(1e6)
       if (key %in% c("A", "B")) ws$start <- coef(r$fit)
@@ -454,7 +462,7 @@ fit_bc_by <- function(key, data, lambda_starts = list()) {
   # caller pass an environment (regression_tables.R's seed cache) directly.
   force(key)
   lambda_starts <- as.list(lambda_starts)
-  bs <- sort(unique(data$benchmark))
+  bs <- bench_levels(data$benchmark)
   one <- function(b) fit_bc(key, data[data$benchmark == b, ],
                             lambda_start = lambda_starts[[b]] %||% c(0, 1))
   cl <- fit_cluster(length(bs))

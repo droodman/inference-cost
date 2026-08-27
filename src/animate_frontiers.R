@@ -11,17 +11,20 @@
 # ffmpeg install is needed.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("fit_specs.R")   # the shared spec grid; brings the other files with it
+src_source("fit_store.R")   # the shared fit store; brings the other files with it
 
 FPS       <- 1      # grid dates per second
 HOLD_LAST <- 6      # extra frames on the final date, so it can be read
 WIDTH     <- 1600
-HEIGHT    <- 1200
 
 d <- load_runs()
+# frame height follows the benchmark count, like the static figures'
+# fig_height() (frontier_viz.R): 160 px/in at the ggsave density below,
+# rounded to an even pixel count because yuv420 encoding requires one
+HEIGHT <- 2 * round(80 * fig_height(length(unique(d$benchmark))))
 tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
 dates <- bench_dates(d)
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 
 # Which specifications to animate. A_lin and A_quad are the pair worth watching
 # side by side: they differ only in the quadratic time term and the lncost:tc
@@ -54,7 +57,7 @@ EMPTY_CURVES <- data.frame(cost = numeric(0), value = numeric(0),
 # believed at the time"), which is worth doing but is not what this shows. Here
 # the fitted frontier is fixed and the animation walks along its time axis.
 
-specs <- fit_all_specs(d)
+specs <- store_specs()
 
 ## ---- frame rendering ------------------------------------------------------------------
 

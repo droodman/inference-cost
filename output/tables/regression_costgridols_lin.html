@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Least squares on log cost, Pareto grid -- linear specification</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Least squares on log cost, Pareto grid -- linear specification</h1>
+<p class="sub">Point estimates only; see the notes for why no standard errors.</p>
+<table><thead><tr><th></th>
+<th colspan="1"><div class="hd">AIME (OTIS Mock)</div></th>
+<th colspan="1" class="grp"><div class="hd">Chess Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
+<th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
+<th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
+<th colspan="1" class="grp"><div class="hd">MATH, level 5</div></th>
+<th colspan="1" class="grp"><div class="hd">SimpleQA Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">SWE-Bench Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">Pooled, primary (log $)</div></th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>-5.604</td>
+<td class="grp">-3.844</td>
+<td class="grp">-1.024</td>
+<td class="grp">-6.321</td>
+<td class="grp">1.595</td>
+<td class="grp">-0.530</td>
+<td class="grp">4.606</td>
+<td class="grp">1.406</td>
+<td class="grp">-6.962</td>
+<td class="grp">-6.592</td>
+<td class="grp">-2.326</td>
+<td class="grp"></td>
+</tr>
+<tr><td>logit accuracy</td>
+<td>0.599</td>
+<td class="grp">0.909</td>
+<td class="grp">1.224</td>
+<td class="grp">0.786</td>
+<td class="grp">3.414</td>
+<td class="grp">0.910</td>
+<td class="grp">2.100</td>
+<td class="grp">1.178</td>
+<td class="grp">0.352</td>
+<td class="grp">0.376</td>
+<td class="grp">0.549</td>
+<td class="grp"></td>
+</tr>
+<tr><td>time</td>
+<td>-1.963</td>
+<td class="grp">-1.400</td>
+<td class="grp">-2.582</td>
+<td class="grp">-1.963</td>
+<td class="grp">-0.352</td>
+<td class="grp">-2.570</td>
+<td class="grp">-0.920</td>
+<td class="grp">-2.459</td>
+<td class="grp">-2.688</td>
+<td class="grp">-2.398</td>
+<td class="grp">-1.038</td>
+<td class="grp">-1.652</td>
+</tr>
+<tr class="gap"><td>cost drop, %/qtr</td>
+<td>38.8</td>
+<td class="grp">29.5</td>
+<td class="grp">47.6</td>
+<td class="grp">38.8</td>
+<td class="grp">8.4</td>
+<td class="grp">47.4</td>
+<td class="grp">20.5</td>
+<td class="grp">45.9</td>
+<td class="grp">48.9</td>
+<td class="grp">45.1</td>
+<td class="grp">22.9</td>
+<td class="grp">33.8</td>
+</tr>
+<tr><td>N</td>
+<td>2599</td>
+<td class="grp">2898</td>
+<td class="grp">1821</td>
+<td class="grp">2974</td>
+<td class="grp">3199</td>
+<td class="grp">2838</td>
+<td class="grp">2231</td>
+<td class="grp">1789</td>
+<td class="grp">3193</td>
+<td class="grp">3690</td>
+<td class="grp">3650</td>
+<td class="grp">13491</td>
+</tr>
+</tbody><tfoot><tr><td colspan="13">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero are excluded -- logit 0 is unusable as a coordinate -- and runs scoring n/n are clipped by their own sample size. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: the response is the record cost ln C_a(t) sampled on a uniform (logit accuracy, date) grid -- the mirror of the accuracy-direction fits' (cost, date) grid -- and grid nodes are not observations. N is the nodes at which a level is defined; they resample a few dozen staircase corners, so N measures resolution, not information.  cost drop, %/qtr is 100*(1 - exp(b_time / 4)): the time coefficient transformed directly -- the estimand is a single coefficient here, not the ratio of two as in the accuracy-direction tables. Standard error by the delta method on the transform, where a covariance exists. Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope moves with accuracy and date, so no single rate describes those columns. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery). The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is needed. It is pooled by inverse-variance weights where every benchmark carries a covariance, and by an unweighted mean otherwise (a mechanical average, as for the accuracy tables' envelope and Pareto-grid columns). The other coefficients are in each benchmark's own logit units and are not pooled. Pooled N sums the primary benchmark columns. The pooled pair covers the linear specification only.</td></tr></tfoot></table>
+</body></html>

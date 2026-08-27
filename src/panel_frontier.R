@@ -193,7 +193,9 @@ fit_panel_frontier_by <- function(formula_beta, formula_mu, data, u_group, by, .
   force(formula_mu)
   force(u_group)
   split_var <- data[[by]]
-  levels <- sort(unique(split_var[!is.na(split_var)]))
+  # bench_levels, not sort: primaries first when `by` is benchmark, plain
+  # alphabetical otherwise, so fit lists share the canonical ordering
+  levels <- bench_levels(split_var[!is.na(split_var)])
   dots <- list(...)
   one <- function(lev) do.call(fit_panel_frontier, c(
     list(formula_beta, formula_mu, data[split_var == lev, , drop = FALSE],

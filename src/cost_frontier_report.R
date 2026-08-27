@@ -28,7 +28,7 @@
 # movement. See cost_frontier.R's fit_cost_sfa block.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("cost_frontier.R")
+src_source("fit_store.R")   # every fit comes from the shared store
 
 d <- load_runs()
 
@@ -43,28 +43,27 @@ cat("(positive = cheaper; frontier columns first, then the run-cloud pair)\n")
 cat(sprintf("%-6s %10s %9s %9s | %9s %9s | %10s %8s\n",
             "bench", "staircase", "grid OLS", "cost env",
             "SFA cost", "OLS runs", "par.logit", "acc env"))
-for (b in sort(unique(d$benchmark))) {
+for (b in bench_levels(d$benchmark)) {
   s <- d[d$benchmark == b, ]
   np <- pareto_decline_qtr(s)
   cat(sprintf("%-6s %10s %8.1f%% %8.1f%% | %8.1f%% %8.1f%% | %9.1f%% %7.1f%%\n",
               b,
               if (is.null(np)) "" else sprintf("%.1f%%", np$pct_qtr),
-              cost_decline_qtr(fit_lncost_grid(s)),
-              cost_decline_qtr(fit_cost_envelope(s)),
-              cost_decline_qtr(fit_cost_sfa(s)),
-              cost_decline_qtr(lm(lncost ~ la + tc, data = iso_runs(s))),
-              rate_acc(fit_pareto_logit(s)),
-              rate_acc(fit_envelope(s))))
+              cost_decline_qtr(store_cost("costgridols")$lin[[b]]),
+              cost_decline_qtr(store_cost("costenvelope")$lin[[b]]),
+              cost_decline_qtr(store_cost("costsfa")$lin[[b]]),
+              cost_decline_qtr(store_cost("costols")$lin[[b]]),
+              rate_acc(store_grid("paretologit")$lin[[b]]),
+              rate_acc(store_grid("envelope")$lin[[b]])))
 }
 
 cat("\ncost-direction fit details\n")
 cat(sprintf("%-6s %28s %28s\n", "", "grid OLS", "cost envelope"))
 cat(sprintf("%-6s %9s %8s %9s %9s %8s %9s\n", "bench",
             "$/logit", "tc", "nodes", "$/logit", "tc", "touch"))
-for (b in sort(unique(d$benchmark))) {
-  s <- d[d$benchmark == b, ]
-  fo <- fit_lncost_grid(s)
-  fe <- fit_cost_envelope(s)
+for (b in bench_levels(d$benchmark)) {
+  fo <- store_cost("costgridols")$lin[[b]]
+  fe <- store_cost("costenvelope")$lin[[b]]
   cat(sprintf("%-6s %9.3f %8.3f %9d %9.3f %8.3f %9.4f\n", b,
               coef(fo)[["la"]], coef(fo)[["tc"]], attr(fo, "n_grid"),
               coef(fe)[["la"]], coef(fe)[["tc"]], fe$slack_envelope))

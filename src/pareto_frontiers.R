@@ -17,6 +17,7 @@ src_source("envelope_frontier.R")   # pareto_decline_qtr(), for the rate check b
 
 d <- load_runs()
 dates <- bench_dates(d)
+benches <- bench_levels(d$benchmark)
 
 ## ---- the frontier ---------------------------------------------------------------------
 
@@ -36,14 +37,14 @@ p <- frontier_plot(
     paste("A running maximum, so one lucky run fixes the frontier permanently;",
           "read closely-spaced late steps with that in mind.")))
 
-ggsave(out_path("pareto_frontier.png"), p, width = 10, height = 7.5, dpi = 200,
+ggsave(out_path("pareto_frontier.png"), p, width = 10, height = fig_height(length(benches)), dpi = 200,
        device = ragg::agg_png)
 cat("wrote pareto_frontier.png\n")
 
 ## ---- how much of the frontier rests on a single run? -------------------------------------
 
 cat("\nsteps in the final Pareto frontier, and the best accuracy reached\n")
-for (b in sort(unique(d$benchmark))) {
+for (b in bench_levels(d$benchmark)) {
   sub <- d[d$benchmark == b, ]
   st <- pareto_steps(sub, max(sub$releasedate))
   cat(sprintf("%-6s %3d steps over %5d runs   best acc %.3f at $%.4f\n",
@@ -81,7 +82,7 @@ ceiling_events <- function(sub) {
 }
 
 rec_curves <- list(); rec_births <- list()
-for (b in sort(unique(d$benchmark))) {
+for (b in bench_levels(d$benchmark)) {
   sub <- d[d$benchmark == b, ]
   ev <- ceiling_events(sub)
   for (i in seq_len(nrow(ev))) {
@@ -97,7 +98,7 @@ for (b in sort(unique(d$benchmark))) {
 rec_curves <- do.call(rbind, rec_curves)
 rec_births <- do.call(rbind, rec_births)
 
-iso_ranges <- do.call(rbind, lapply(sort(unique(d$benchmark)), function(b) {
+iso_ranges <- do.call(rbind, lapply(bench_levels(d$benchmark), function(b) {
   s <- d[d$benchmark == b, ]
   data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
 }))
@@ -128,7 +129,7 @@ p_rec <- iso_acc_plot(
   geom_point(data = rb, aes(date, cost, colour = acc), size = 1.6,
              inherit.aes = FALSE)
 
-ggsave(out_path("isoaccuracy_records.png"), p_rec, width = 10, height = 7.5,
+ggsave(out_path("isoaccuracy_records.png"), p_rec, width = 10, height = fig_height(length(benches)),
        dpi = 200, device = ragg::agg_png)
 cat("wrote isoaccuracy_records.png\n")
 
@@ -157,7 +158,7 @@ for (i in seq_len(nrow(rec_births))) {
 cat("\ncost decline at fixed frontier performance, from the staircase alone",
     "\n(measured over a year, expressed as a compound quarterly rate)\n")
 cat(sprintf("%-6s %8s %8s %7s\n", "bench", "%/qtr", "moved", "nodes"))
-for (b in sort(unique(d$benchmark))) {
+for (b in bench_levels(d$benchmark)) {
   r <- pareto_decline_qtr(d[d$benchmark == b, ])
   if (is.null(r)) next
   cat(sprintf("%-6s %7.1f%% %7.1f%% %7d\n",

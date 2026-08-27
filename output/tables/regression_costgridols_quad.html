@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Least squares on log cost, Pareto grid -- full quadratic specification</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Least squares on log cost, Pareto grid -- full quadratic specification</h1>
+<p class="sub">Point estimates only; see the notes for why no standard errors.</p>
+<table><thead><tr><th></th>
+<th colspan="1"><div class="hd">AIME (OTIS Mock)</div></th>
+<th colspan="1" class="grp"><div class="hd">Chess Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
+<th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
+<th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
+<th colspan="1" class="grp"><div class="hd">MATH, level 5</div></th>
+<th colspan="1" class="grp"><div class="hd">SimpleQA Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">SWE-Bench Verified</div></th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>-6.163</td>
+<td class="grp">-1.208</td>
+<td class="grp">-0.809</td>
+<td class="grp">-6.763</td>
+<td class="grp">11.061</td>
+<td class="grp">1.395</td>
+<td class="grp">4.018</td>
+<td class="grp">2.049</td>
+<td class="grp">-6.595</td>
+<td class="grp">-6.672</td>
+<td class="grp">-2.476</td>
+</tr>
+<tr><td>logit accuracy</td>
+<td>1.158</td>
+<td class="grp">3.236</td>
+<td class="grp">2.136</td>
+<td class="grp">1.695</td>
+<td class="grp">12.967</td>
+<td class="grp">2.521</td>
+<td class="grp">1.366</td>
+<td class="grp">1.548</td>
+<td class="grp">0.988</td>
+<td class="grp">0.640</td>
+<td class="grp">0.762</td>
+</tr>
+<tr><td>time</td>
+<td>-2.338</td>
+<td class="grp">-1.888</td>
+<td class="grp">-1.681</td>
+<td class="grp">-1.888</td>
+<td class="grp">-1.103</td>
+<td class="grp">-4.033</td>
+<td class="grp">-2.608</td>
+<td class="grp">-5.321</td>
+<td class="grp">-2.592</td>
+<td class="grp">-2.309</td>
+<td class="grp">-0.825</td>
+</tr>
+<tr><td>logit accuracy<sup>2</sup></td>
+<td>0.113</td>
+<td class="grp">0.392</td>
+<td class="grp">0.184</td>
+<td class="grp">0.243</td>
+<td class="grp">2.145</td>
+<td class="grp">0.210</td>
+<td class="grp">-0.166</td>
+<td class="grp">0.056</td>
+<td class="grp">0.079</td>
+<td class="grp">0.044</td>
+<td class="grp">0.033</td>
+</tr>
+<tr><td>time<sup>2</sup></td>
+<td>0.966</td>
+<td class="grp">-0.178</td>
+<td class="grp">0.528</td>
+<td class="grp">0.920</td>
+<td class="grp">-0.151</td>
+<td class="grp">2.744</td>
+<td class="grp">-0.026</td>
+<td class="grp">-0.142</td>
+<td class="grp">0.647</td>
+<td class="grp">1.695</td>
+<td class="grp">2.101</td>
+</tr>
+<tr><td>logit accuracy &times; time</td>
+<td>-0.381</td>
+<td class="grp">-0.019</td>
+<td class="grp">0.104</td>
+<td class="grp">-0.410</td>
+<td class="grp">-0.193</td>
+<td class="grp">-0.478</td>
+<td class="grp">-0.541</td>
+<td class="grp">-1.006</td>
+<td class="grp">-0.080</td>
+<td class="grp">-0.117</td>
+<td class="grp">0.006</td>
+</tr>
+<tr class="gap"><td>N</td>
+<td>2599</td>
+<td class="grp">2898</td>
+<td class="grp">1821</td>
+<td class="grp">2974</td>
+<td class="grp">3199</td>
+<td class="grp">2838</td>
+<td class="grp">2231</td>
+<td class="grp">1789</td>
+<td class="grp">3193</td>
+<td class="grp">3690</td>
+<td class="grp">3650</td>
+</tr>
+</tbody><tfoot><tr><td colspan="12">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero are excluded -- logit 0 is unusable as a coordinate -- and runs scoring n/n are clipped by their own sample size. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: the response is the record cost ln C_a(t) sampled on a uniform (logit accuracy, date) grid -- the mirror of the accuracy-direction fits' (cost, date) grid -- and grid nodes are not observations. N is the nodes at which a level is defined; they resample a few dozen staircase corners, so N measures resolution, not information.  No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling distribution to appeal to.</td></tr></tfoot></table>
+</body></html>

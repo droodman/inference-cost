@@ -48,8 +48,29 @@ if (DARK) {
   SURFACE     <- "#fcfcfb"
 }
 
-LABELS <- c(aime = "AIME (OTIS Mock)", chess = "Chess Puzzles",
-            fm13 = "FrontierMath, tiers 1-3", gpqa = "GPQA Diamond")
+# Display names, in the panels' order: the PRIMARY benchmarks first
+# (PRIMARY_BENCHES, prepare_data.R), the rest alphabetical -- matching
+# bench_levels(), which orders every script's loops the same way. Keys follow
+# the benchmark ids in the analysis data (fm13 is fm_tiers1_3_v2's legacy
+# key, prepare_data.R).
+LABELS <- c(
+  aime                     = "AIME (OTIS Mock)",
+  chess                    = "Chess Puzzles",
+  fm13                     = "FrontierMath, tiers 1-3",
+  gpqa                     = "GPQA Diamond",
+  mystery                  = "Mystery Game Puzzles",
+  fm_2025_02_private       = "FrontierMath 2025-02",
+  fm_tier4_2025_07_private = "FrontierMath, tier 4 (2025-07)",
+  fm_tier4_v2              = "FrontierMath, tier 4 v2",
+  math_lvl5                = "MATH, level 5",
+  simpleqa                 = "SimpleQA Verified",
+  swe_bench_verified       = "SWE-Bench Verified")
+
+# Benchmark facets are laid out two across, however many benchmarks the data
+# carries; figure height follows the row count. 3 inches per row plus 1.5 for
+# legend and caption reproduces the historical 10 x 7.5 quartet exactly at
+# n = 4.
+fig_height <- function(n_bench) 1.5 + 3 * ceiling(n_bench / 2)
 
 EPOCH <- as.Date("2023-01-01")          # t = 0
 as_t  <- function(date) as.numeric(as.Date(date) - EPOCH) / 365.25
@@ -291,7 +312,7 @@ frontier_plot <- function(curves, pts, title = NULL, subtitle = NULL, ylab,
     geom_point(data = pts, aes(cost, acc, colour = year), size = 0.35, alpha = 0.3,
                inherit.aes = FALSE) +
     geom_curve_layer +
-    facet_wrap(~benchmark, scales = "free_x", nrow = 2, drop = FALSE) +
+    facet_wrap(~benchmark, scales = "free_x", ncol = 2, drop = FALSE) +
     scale_x_log10(breaks = 10^(-5:1), labels = dollar_log) +
     scale_y_continuous(limits = c(0, 1),
                        labels = scales::percent_format(accuracy = 1)) +
@@ -589,28 +610,38 @@ iso_acc_curves <- function(fitset, data, tbar,
         # continuous.
       }
     }
-    # Per-row upper clip in log cost: the benchmark maximum by default, the
-    # level's own empirical record where cost_cap supplies one. -Inf for a level
-    # cost_cap covers the benchmark for but omits -- never achieved, so every
-    # point of its contour would be extrapolation past the record.
-    umax <- rep(urng[2], nrow(g))
+    # Per-row admissibility, beyond the benchmark's observed cost range.
+    # Where cost_cap supplies a level's record staircase, a contour point is
+    # blanked only where it is BOTH earlier than that level's first record
+    # AND dearer than its dearest record -- so each contour extends back to
+    # its record's start or up to its cost ceiling, whichever is the more
+    # generous, rather than being cut by the ceiling alone. A level cost_cap
+    # covers the benchmark for but omits was never achieved by any run:
+    # no contour at all.
+    cap_u <- rep(Inf, nrow(g))
+    birth <- rep(-Inf, nrow(g))
     if (!is.null(cost_cap)) {
       cb <- cost_cap[cost_cap$benchmark == b, ]
       lv <- unique(cb$acc)
-      caps <- vapply(lv, function(a) max(cb$cost[cb$acc == a]), numeric(1))
       # match on the shared `levels` values, exact because both data frames
       # descend from the same numeric vector -- no character round trip, which
       # would corrupt values like seq()'s 0.45000000000000007
-      cap_u <- log(caps)[match(g$acc, lv)]
-      umax <- ifelse(is.na(cap_u), -Inf, pmin(umax, cap_u))
+      i <- match(g$acc, lv)
+      cap_u <- log(vapply(lv, function(a) max(cb$cost[cb$acc == a]),
+                          numeric(1)))[i]
+      birth <- vapply(lv, function(a) as.numeric(min(cb$date[cb$acc == a])),
+                      numeric(1))[i]
+      cap_u[is.na(cap_u)] <- -Inf   # never achieved
+      birth[is.na(birth)] <- Inf
     }
 
     both <- do.call(rbind, lapply(names(roots), function(br) {
       u <- roots[[br]]
-      # "to the extent they are in the range of actual data": the observed cost
-      # range -- tightened per level by cost_cap -- is the only clip either
-      # branch gets.
-      u[is.finite(u) & (u < urng[1] | u > umax)] <- NA_real_
+      # the observed cost range, then the union rule above, are the only
+      # clips either branch gets
+      u[is.finite(u) &
+          (u < urng[1] | u > urng[2] |
+             !(u <= cap_u | as.numeric(g$date) >= birth))] <- NA_real_
       h <- g
       h$cost <- exp(u)
       h$branch <- br
@@ -712,7 +743,7 @@ iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
     # top row already drops its x labels, and the horizontal space goes to the
     # panels. The price is that each panel spans the union of the cost ranges
     # rather than its own -- on a log scale spanning five decades anyway, cheap.
-    facet_wrap(~benchmark, nrow = 2, drop = FALSE) +
+    facet_wrap(~benchmark, ncol = 2, drop = FALSE) +
     scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
     # The panel stops exactly at the floor: zero expansion below, so the axis
     # corner sits on a labelled round break rather than leaving dead margin
@@ -779,7 +810,7 @@ bench_tbar <- function(d) {
 # because all four end within days of each other. A benchmark ending much earlier
 # would have its fitted curve extrapolated forward -- cap it here if that arises.
 bench_dates <- function(d) {
-  benches <- sort(unique(d$benchmark))
+  benches <- bench_levels(d$benchmark)
   grid <- grid_dates(min(d$releasedate), max(d$releasedate))
   setNames(lapply(benches, function(b) {
     grid[grid >= min(d$releasedate[d$benchmark == b])]

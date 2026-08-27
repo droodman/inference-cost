@@ -4,7 +4,7 @@ using CSV, DataFrames, Statistics, StatsFuns, Dates, GLM, GLMakie, CairoMakie, F
 
 date2year(t) = (Dates.value(t) - Dates.value(Date(2020,1,1))) / 365.25 + 2020
 
-df = CSV.read("data/caisi_curves_all.csv", DataFrame)
+df = CSV.read("data/cost_truncated_curves.csv", DataFrame)
 rename!(df, :cost_per_task_usd=>:cost)
 
 map!(x -> match(r"(.*?)(-maas)?$"                                      , x)[1], df.model, df.model)  # remove any -maas suffixes

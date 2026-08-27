@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Logistic, all tests -- linear specification</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Logistic, all tests -- linear specification</h1>
+<p class="sub">Standard errors in parentheses.</p>
+<table><thead><tr><th></th>
+<th colspan="1"><div class="hd">AIME (OTIS Mock)</div></th>
+<th colspan="1" class="grp"><div class="hd">Chess Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
+<th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
+<th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
+<th colspan="1" class="grp"><div class="hd">MATH, level 5</div></th>
+<th colspan="1" class="grp"><div class="hd">SimpleQA Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">SWE-Bench Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">Pooled, primary (ECI pts)</div></th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>2.180</td>
+<td class="grp">-1.174</td>
+<td class="grp">-0.581</td>
+<td class="grp">2.051</td>
+<td class="grp">-1.925</td>
+<td class="grp">-1.041</td>
+<td class="grp">-2.634</td>
+<td class="grp">-2.111</td>
+<td class="grp">2.428</td>
+<td class="grp">1.871</td>
+<td class="grp">0.422</td>
+<td class="grp">1.246</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.116)</td>
+<td class="grp">(0.098)</td>
+<td class="grp">(0.065)</td>
+<td class="grp">(0.127)</td>
+<td class="grp">(0.084)</td>
+<td class="grp">(0.050)</td>
+<td class="grp">(0.058)</td>
+<td class="grp">(0.076)</td>
+<td class="grp">(0.311)</td>
+<td class="grp">(0.262)</td>
+<td class="grp">(0.147)</td>
+<td class="grp">(0.273)</td>
+</tr>
+<tr><td>ln cost</td>
+<td>0.797</td>
+<td class="grp">0.465</td>
+<td class="grp">0.521</td>
+<td class="grp">0.618</td>
+<td class="grp">0.058</td>
+<td class="grp">0.669</td>
+<td class="grp">0.845</td>
+<td class="grp">0.719</td>
+<td class="grp">0.555</td>
+<td class="grp">0.569</td>
+<td class="grp">0.853</td>
+<td class="grp">2.999</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.030)</td>
+<td class="grp">(0.027)</td>
+<td class="grp">(0.022)</td>
+<td class="grp">(0.029)</td>
+<td class="grp">(0.018)</td>
+<td class="grp">(0.027)</td>
+<td class="grp">(0.049)</td>
+<td class="grp">(0.038)</td>
+<td class="grp">(0.063)</td>
+<td class="grp">(0.054)</td>
+<td class="grp">(0.051)</td>
+<td class="grp">(0.071)</td>
+</tr>
+<tr><td>time</td>
+<td>0.776</td>
+<td class="grp">0.325</td>
+<td class="grp">0.722</td>
+<td class="grp">0.731</td>
+<td class="grp">0.120</td>
+<td class="grp">0.363</td>
+<td class="grp">0.067</td>
+<td class="grp">3.027</td>
+<td class="grp">1.107</td>
+<td class="grp">0.297</td>
+<td class="grp">0.993</td>
+<td class="grp">3.268</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.090)</td>
+<td class="grp">(0.106)</td>
+<td class="grp">(0.092)</td>
+<td class="grp">(0.081)</td>
+<td class="grp">(0.061)</td>
+<td class="grp">(0.102)</td>
+<td class="grp">(0.188)</td>
+<td class="grp">(0.356)</td>
+<td class="grp">(0.153)</td>
+<td class="grp">(0.140)</td>
+<td class="grp">(0.165)</td>
+<td class="grp">(0.235)</td>
+</tr>
+<tr class="gap"><td>cost drop, %/qtr</td>
+<td>21.6</td>
+<td class="grp">16.0</td>
+<td class="grp">29.2</td>
+<td class="grp">25.6</td>
+<td class="grp">40.2</td>
+<td class="grp">12.7</td>
+<td class="grp">2.0</td>
+<td class="grp">65.1</td>
+<td class="grp">39.3</td>
+<td class="grp">12.2</td>
+<td class="grp">25.3</td>
+<td class="grp">23.8</td>
+</tr>
+<tr class="se"><td></td>
+<td>(2.2)</td>
+<td class="grp">(5.1)</td>
+<td class="grp">(3.3)</td>
+<td class="grp">(2.5)</td>
+<td class="grp">(20.9)</td>
+<td class="grp">(3.5)</td>
+<td class="grp">(5.5)</td>
+<td class="grp">(3.8)</td>
+<td class="grp">(4.2)</td>
+<td class="grp">(5.2)</td>
+<td class="grp">(3.7)</td>
+<td class="grp">(1.6)</td>
+</tr>
+<tr><td>N</td>
+<td>1308</td>
+<td class="grp">1132</td>
+<td class="grp">555</td>
+<td class="grp">1235</td>
+<td class="grp">290</td>
+<td class="grp">513</td>
+<td class="grp">403</td>
+<td class="grp">431</td>
+<td class="grp">231</td>
+<td class="grp">357</td>
+<td class="grp">364</td>
+<td class="grp">4520</td>
+</tr>
+</tbody><tfoot><tr><td colspan="13">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column. Standard error by the delta method on the same robust covariance, taken on the transformed quantity. Being symmetric it can reach past 100% where the estimated drop is near total. Robust (HC1) standard errors: the quasibinomial objective is a quasi-likelihood, so inverse-Hessian errors would be wrong. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery), mapping them onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average, sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are aime 0.223, chess 0.120, fm13 0.169, gpqa 0.120, mystery 0.168, so one logit is worth 4.5-8.4 ECI points and pooled slopes read several times larger than the logit-scale columns beside them. The pooled cost drop is the same transform of the pooled slopes, -sum(alpha b_time) / sum(alpha b_ln cost) inside it. The pooled intercept averages capability net of difficulty at each benchmark's own reference date, so unlike the slopes it carries no clean interpretation, and pooled N sums the primary benchmark columns. Fits are independent across benchmarks, so pooled standard errors sum the per-benchmark covariance pieces. One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R), a scale on which Epoch's alpha_gpqa was not necessarily estimated.</td></tr></tfoot></table>
+</body></html>

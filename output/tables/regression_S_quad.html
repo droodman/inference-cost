@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Logistic, all tests -- full quadratic specification</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.86em}
+th,td{padding:4px 10px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th[colspan]{text-align:center;padding-bottom:3px}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tr.se td{color:#5e5e5e;padding-top:0}
+tr.gap td{border-top:1px solid #d9d9d5}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Logistic, all tests -- full quadratic specification</h1>
+<p class="sub">Standard errors in parentheses.</p>
+<table><thead><tr><th></th>
+<th colspan="1"><div class="hd">AIME (OTIS Mock)</div></th>
+<th colspan="1" class="grp"><div class="hd">Chess Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
+<th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
+<th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
+<th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
+<th colspan="1" class="grp"><div class="hd">MATH, level 5</div></th>
+<th colspan="1" class="grp"><div class="hd">SimpleQA Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">SWE-Bench Verified</div></th>
+<th colspan="1" class="grp"><div class="hd">Pooled, primary (ECI pts)</div></th>
+</tr></thead><tbody>
+<tr><td>Intercept</td>
+<td>1.962</td>
+<td class="grp">-1.410</td>
+<td class="grp">-0.592</td>
+<td class="grp">1.988</td>
+<td class="grp">-1.701</td>
+<td class="grp">-1.046</td>
+<td class="grp">-2.565</td>
+<td class="grp">-2.129</td>
+<td class="grp">2.475</td>
+<td class="grp">0.465</td>
+<td class="grp">-0.799</td>
+<td class="grp">0.887</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.201)</td>
+<td class="grp">(0.143)</td>
+<td class="grp">(0.077)</td>
+<td class="grp">(0.260)</td>
+<td class="grp">(0.143)</td>
+<td class="grp">(0.072)</td>
+<td class="grp">(0.064)</td>
+<td class="grp">(0.130)</td>
+<td class="grp">(0.554)</td>
+<td class="grp">(0.664)</td>
+<td class="grp">(0.360)</td>
+<td class="grp">(0.469)</td>
+</tr>
+<tr><td>ln cost</td>
+<td>0.599</td>
+<td class="grp">0.279</td>
+<td class="grp">0.262</td>
+<td class="grp">0.583</td>
+<td class="grp">0.200</td>
+<td class="grp">0.297</td>
+<td class="grp">0.808</td>
+<td class="grp">0.704</td>
+<td class="grp">0.476</td>
+<td class="grp">-0.008</td>
+<td class="grp">-0.605</td>
+<td class="grp">2.328</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.113)</td>
+<td class="grp">(0.085)</td>
+<td class="grp">(0.041)</td>
+<td class="grp">(0.124)</td>
+<td class="grp">(0.067)</td>
+<td class="grp">(0.080)</td>
+<td class="grp">(0.084)</td>
+<td class="grp">(0.047)</td>
+<td class="grp">(0.232)</td>
+<td class="grp">(0.267)</td>
+<td class="grp">(0.354)</td>
+<td class="grp">(0.249)</td>
+</tr>
+<tr><td>time</td>
+<td>1.655</td>
+<td class="grp">0.092</td>
+<td class="grp">1.359</td>
+<td class="grp">1.455</td>
+<td class="grp">0.029</td>
+<td class="grp">1.020</td>
+<td class="grp">0.579</td>
+<td class="grp">3.039</td>
+<td class="grp">2.268</td>
+<td class="grp">0.881</td>
+<td class="grp">1.335</td>
+<td class="grp">5.836</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.199)</td>
+<td class="grp">(0.210)</td>
+<td class="grp">(0.170)</td>
+<td class="grp">(0.232)</td>
+<td class="grp">(0.201)</td>
+<td class="grp">(0.152)</td>
+<td class="grp">(0.207)</td>
+<td class="grp">(0.347)</td>
+<td class="grp">(0.522)</td>
+<td class="grp">(0.680)</td>
+<td class="grp">(0.363)</td>
+<td class="grp">(0.541)</td>
+</tr>
+<tr><td>ln cost<sup>2</sup></td>
+<td>-0.027</td>
+<td class="grp">-0.030</td>
+<td class="grp">-0.065</td>
+<td class="grp">-0.004</td>
+<td class="grp">0.018</td>
+<td class="grp">-0.105</td>
+<td class="grp">-0.021</td>
+<td class="grp">-0.070</td>
+<td class="grp">-0.007</td>
+<td class="grp">-0.053</td>
+<td class="grp">-0.323</td>
+<td class="grp">-0.133</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.015)</td>
+<td class="grp">(0.012)</td>
+<td class="grp">(0.010)</td>
+<td class="grp">(0.014)</td>
+<td class="grp">(0.007)</td>
+<td class="grp">(0.019)</td>
+<td class="grp">(0.030)</td>
+<td class="grp">(0.019)</td>
+<td class="grp">(0.023)</td>
+<td class="grp">(0.027)</td>
+<td class="grp">(0.075)</td>
+<td class="grp">(0.033)</td>
+</tr>
+<tr><td>time<sup>2</sup></td>
+<td>-0.161</td>
+<td class="grp">0.162</td>
+<td class="grp">-0.354</td>
+<td class="grp">0.042</td>
+<td class="grp">0.041</td>
+<td class="grp">-1.438</td>
+<td class="grp">-2.209</td>
+<td class="grp">2.172</td>
+<td class="grp">-0.534</td>
+<td class="grp">-0.477</td>
+<td class="grp">-0.264</td>
+<td class="grp">-0.477</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.089)</td>
+<td class="grp">(0.122)</td>
+<td class="grp">(0.117)</td>
+<td class="grp">(0.083)</td>
+<td class="grp">(0.100)</td>
+<td class="grp">(0.222)</td>
+<td class="grp">(0.461)</td>
+<td class="grp">(0.665)</td>
+<td class="grp">(0.278)</td>
+<td class="grp">(0.402)</td>
+<td class="grp">(0.446)</td>
+<td class="grp">(0.276)</td>
+</tr>
+<tr><td>ln cost &times; time</td>
+<td>0.296</td>
+<td class="grp">-0.118</td>
+<td class="grp">0.404</td>
+<td class="grp">0.165</td>
+<td class="grp">-0.033</td>
+<td class="grp">0.669</td>
+<td class="grp">1.035</td>
+<td class="grp">0.117</td>
+<td class="grp">0.301</td>
+<td class="grp">0.146</td>
+<td class="grp">0.284</td>
+<td class="grp">0.995</td>
+</tr>
+<tr class="se"><td></td>
+<td>(0.043)</td>
+<td class="grp">(0.057)</td>
+<td class="grp">(0.057)</td>
+<td class="grp">(0.044)</td>
+<td class="grp">(0.045)</td>
+<td class="grp">(0.086)</td>
+<td class="grp">(0.150)</td>
+<td class="grp">(0.153)</td>
+<td class="grp">(0.091)</td>
+<td class="grp">(0.130)</td>
+<td class="grp">(0.157)</td>
+<td class="grp">(0.132)</td>
+</tr>
+<tr class="gap"><td>N</td>
+<td>1308</td>
+<td class="grp">1132</td>
+<td class="grp">555</td>
+<td class="grp">1235</td>
+<td class="grp">290</td>
+<td class="grp">513</td>
+<td class="grp">403</td>
+<td class="grp">431</td>
+<td class="grp">231</td>
+<td class="grp">357</td>
+<td class="grp">364</td>
+<td class="grp">4520</td>
+</tr>
+<tr><td>quadratic vs linear, Wald (df 3), &chi;&sup2;</td>
+<td>59.48</td>
+<td class="grp">10.00</td>
+<td class="grp">76.91</td>
+<td class="grp">14.20</td>
+<td class="grp">7.09</td>
+<td class="grp">69.31</td>
+<td class="grp">69.43</td>
+<td class="grp">31.77</td>
+<td class="grp">16.46</td>
+<td class="grp">10.27</td>
+<td class="grp">21.73</td>
+<td class="grp"></td>
+</tr><tr class="se"><td>p</td>
+<td>&lt;0.0001</td>
+<td class="grp">0.0185</td>
+<td class="grp">&lt;0.0001</td>
+<td class="grp">0.0026</td>
+<td class="grp">0.0690</td>
+<td class="grp">&lt;0.0001</td>
+<td class="grp">&lt;0.0001</td>
+<td class="grp">&lt;0.0001</td>
+<td class="grp">0.0009</td>
+<td class="grp">0.0164</td>
+<td class="grp">&lt;0.0001</td>
+<td class="grp"></td>
+</tr>
+</tbody><tfoot><tr><td colspan="13">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. Robust (HC1) standard errors: the quasibinomial objective is a quasi-likelihood, so inverse-Hessian errors would be wrong. Quadratic adds ln cost<sup>2</sup>, time<sup>2</sup> and ln cost x time. Quasibinomial glms report no logLik, so the joint test of the three is a Wald test on the robust covariance, not a likelihood ratio test. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery), mapping them onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average, sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are aime 0.223, chess 0.120, fm13 0.169, gpqa 0.120, mystery 0.168, so one logit is worth 4.5-8.4 ECI points and pooled slopes read several times larger than the logit-scale columns beside them.  The pooled intercept averages capability net of difficulty at each benchmark's own reference date, so unlike the slopes it carries no clean interpretation, and pooled N sums the primary benchmark columns. Fits are independent across benchmarks, so pooled standard errors sum the per-benchmark covariance pieces. One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R), a scale on which Epoch's alpha_gpqa was not necessarily estimated.</td></tr></tfoot></table>
+</body></html>

@@ -148,6 +148,16 @@
           <label><input type="radio" name="model" value="A"/> <span data-acc="Stochastic frontier" data-cost="Stochastic cost frontier">Stochastic frontier</span></label>
           <label><input type="radio" name="model" value="B" /> <span data-acc="Stochastic frontier (time-dependent inefficiency spread)" data-cost="Stochastic cost frontier (time-dependent inefficiency spread)">Stochastic frontier (time-dependent inefficiency spread)</span></label>
         </div>
+
+        <!-- One table per specification (regression_<key>_<order>.html): a
+             combined table stopped fitting the page once the benchmark count
+             grew. Same options as the plot viewer's Order group. -->
+        <div class="control-group">
+          <div class="group-label">Order</div>
+          <label><input type="radio" name="order" value="lin" checked /> Linear</label>
+          <label><input type="radio" name="order" value="quad" /> Quadratic</label>
+          <label><input type="radio" name="order" value="bc" /> Box-Cox</label>
+        </div>
       </div>
 
       <div class="table-container">
@@ -175,7 +185,7 @@
       function buildFilename() {
         const model = getRadioValue("model");
         const key = getRadioValue("direction") === "cost" ? COST_KEY[model] : model;
-        return `regression_${key}.html`;
+        return `regression_${key}_${getRadioValue("order")}.html`;
       }
 
       // Rename each model radio to its dual when the cost direction is chosen,

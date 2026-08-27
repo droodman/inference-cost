@@ -1,10 +1,11 @@
-# Regression tables: one per statistical model, in RTF and HTML.
+# Regression tables: one per statistical model PER SPECIFICATION (linear,
+# full quadratic, Box-Cox), in RTF and HTML -- regression_<key>_<spec>.*.
 #
-# Columns are benchmark x specification (AIME linear, AIME quadratic, AIME
-# Box-Cox, Chess linear, ...), estimates with standard errors in parentheses
-# beneath, plus a final Pooled pair combining the benchmarks on the ECI
-# capability scale (see the pooling section below; the Box-Cox specification is
-# excluded from pooling -- its per-benchmark transforms leave no common scale).
+# Columns are one per benchmark, estimates with standard errors in
+# parentheses beneath, plus a final Pooled pair combining the benchmarks on
+# the ECI capability scale in the linear and quadratic tables (see the
+# pooling section below; the Box-Cox specification is excluded from pooling
+# -- its per-benchmark transforms leave no common scale).
 # Model order and naming follow the plot viewer, which is the version of these
 # names that has actually been read by a human:
 #
@@ -38,13 +39,10 @@
 #     N there measures the sampling resolution, not independent information.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("fit_specs.R")
-src_source("envelope_frontier.R")
-src_source("boxcox_frontier.R")
-src_source("cost_frontier.R")     # the cost-direction duals' tables
+src_source("fit_store.R")   # every fit comes from the shared store
 
 d <- load_runs()
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 
 ## ---- benchmark discriminations for pooling --------------------------------------
 #
@@ -60,7 +58,10 @@ benches <- sort(unique(d$benchmark))
 ECI <- read.csv(data_path("edi_scores.csv"), stringsAsFactors = FALSE)
 ALPHA <- setNames(ECI$estimated_slope_scaled[match(TASK_LABEL, ECI$benchmark_name)],
                   names(TASK_LABEL))
-stopifnot(!anyNA(ALPHA[benches]))
+# Only the PRIMARY benchmarks are pooled, so only they must carry an ECI
+# discrimination; a new secondary benchmark missing from the ECI file is
+# reported unpooled rather than halting the build.
+stopifnot(!anyNA(ALPHA[intersect(PRIMARY_BENCHES, benches)]))
 
 ## ---- row layout ---------------------------------------------------------------
 
@@ -102,8 +103,7 @@ MODELS <- list(
   list(key = "paretologit", label = "Logistic, Pareto points"),
   list(key = "envelope",    label = "Strict logistic envelope"),
   # the cost-direction duals (cost_frontier.R), in the same order as their
-  # accuracy-direction counterparts above; linear specification only, so one
-  # column per benchmark and no quadratic or Box-Cox tests
+  # accuracy-direction counterparts above
   list(key = "costols",      label = "Least squares on log cost, all tests"),
   list(key = "costsfa",      label = "Stochastic cost frontier"),
   list(key = "costsfab",     label = "Stochastic cost frontier (time-dependent inefficiency spread)"),
@@ -113,35 +113,15 @@ MODELS <- list(
 
 COST_KEYS <- c("costols", "costsfa", "costsfab", "costgridols", "costenvelope")
 
-# One fitted dual for one benchmark's rows -- same fitters the figures use
-# (plot_cost_frontier.R), so table and figure cannot drift apart.
-fit_cost_model <- function(key, s, form = COST_FORMS$lin) {
-  switch(key,
-    costols      = lm(form, data = iso_runs(s)),
-    costsfa      = fit_cost_sfa(s, form),
-    costsfab     = fit_cost_sfa(s, form, formula_sigma = ~ tc),
-    costgridols  = fit_lncost_grid(s, form),
-    costenvelope = fit_cost_envelope(s, form))
-}
-
 ## ---- fitting and extraction ---------------------------------------------------
 
-# One fit per specification x benchmark, fitted UP FRONT: fit_family() fits
-# every benchmark in a single call, so for the likelihood families the loop is
-# over specifications only. The predecessor (fit_one) called fit_family() once
-# per benchmark-spec cell and kept [[b]], recomputing each SFA fit four times
-# for one use of it. The envelope and the frontier logit fit one benchmark at a
-# time, so they gain nothing but lose nothing either.
+# One fit per specification x benchmark, from the shared store (fit_store.R):
+# under run_all.R these are the very objects the figure scripts drew, so table
+# and figure cannot drift apart and nothing heavy is fitted twice.
 fit_grid <- function(key) {
-  lapply(TIME_FORMS, function(form) {
-    if (key == "envelope")
-      setNames(lapply(benches, function(b)
-        fit_envelope(d[d$benchmark == b, ], formula = form)), benches)
-    else if (key == "paretologit")
-      setNames(lapply(benches, function(b)
-        fit_pareto_logit(d[d$benchmark == b, ], formula = form)), benches)
-    else fit_family(key, form, d)
-  })
+  if (key %in% c("envelope", "paretologit")) return(store_grid(key))
+  lapply(setNames(nm = names(TIME_FORMS)), function(tt)
+    store_specs()[[paste0(key, "_", tt)]]$fits)
 }
 
 # estimate/SE table with one row per term. maxLik keeps a beta_/logsig_ prefix;
@@ -163,8 +143,19 @@ est_se <- function(fit) {
     return(data.frame(term = rownames(m), est = m[, 1], se = m[, 2],
                       stringsAsFactors = FALSE))
   }
-  m <- summary_robust(fit)
-  data.frame(term = sub("^beta_", "", rownames(m)), est = m[, 1], se = m[, 2],
+  # A thin benchmark can leave a maxLik fit with a flat direction (e.g. the
+  # time-varying inefficiency scale where the dates barely vary): the Hessian
+  # is then singular and the sandwich cannot be built. Report the point
+  # estimates with EMPTY standard-error cells rather than crash or invent.
+  m <- tryCatch(summary_robust(fit), error = function(e) NULL)
+  if (is.null(m)) {
+    cf <- coef(fit)[activePar(fit)]
+    return(data.frame(term = sub("^beta_", "", names(cf)), est = unname(cf),
+                      se = NA_real_, stringsAsFactors = FALSE))
+  }
+  se <- m[, 2]
+  se[!is.finite(se)] <- NA_real_   # near-singular: negative variances
+  data.frame(term = sub("^beta_", "", rownames(m)), est = m[, 1], se = se,
              stringsAsFactors = FALSE)
 }
 
@@ -219,7 +210,8 @@ coef_vcov <- function(fit) {
     return(list(b = b, V = NULL))
   V <- if (inherits(fit, "glm") || inherits(fit, "lm"))
     sandwich::vcovHC(fit, type = "HC1") else
-    vcov_robust(fit)
+    tryCatch(vcov_robust(fit), error = function(e) NULL)   # singular Hessian
+  if (is.null(V)) return(list(b = b, V = NULL))
   if (is.null(rownames(V))) dimnames(V) <- list(names(coef(fit)), names(coef(fit)))
   dimnames(V) <- list(sub("^beta_", "", rownames(V)),
                       sub("^beta_", "", colnames(V)))
@@ -354,6 +346,9 @@ fmt_p <- function(p) {
 # likelihood -- so their pooled figures are mechanical averages, point estimates
 # like the rest of those tables.
 pooled_col <- function(key, tt, fitlist) {
+  # PRIMARY benchmarks only (PRIMARY_BENCHES, prepare_data.R): the newer
+  # benchmarks are reported in their own columns but kept out of the pool
+  fitlist <- fitlist[intersect(PRIMARY_BENCHES, names(fitlist))]
   cv <- lapply(fitlist, coef_vcov)
   bs <- names(fitlist)
   disp <- vapply(TERMS, function(x) x$t, character(1))
@@ -391,7 +386,8 @@ pooled_col <- function(key, tt, fitlist) {
     decline <- decline_from(b2, V2)
   }
 
-  list(bench = "pooled", spec = tt, head = "Pooled (ECI pts)", es = es,
+  list(bench = "pooled", spec = tt, head = "Pooled, primary (ECI pts)",
+       es = es,
        n = as.integer(sum(vapply(bs, function(b)
          n_obs(key, b, fitlist[[b]]), numeric(1)))),
        decline = decline, test = NULL)
@@ -411,6 +407,8 @@ pooled_col <- function(key, tt, fitlist) {
 # but the estimand this table exists for is the time slope), and the intercept
 # has no common meaning.
 pooled_col_cost <- function(fitlist) {
+  # PRIMARY benchmarks only, as in pooled_col()
+  fitlist <- fitlist[intersect(PRIMARY_BENCHES, names(fitlist))]
   cv <- lapply(fitlist, coef_vcov)
   gts <- vapply(cv, function(x) x$b[["tc"]], numeric(1))
   ses <- vapply(cv, function(x) {
@@ -425,7 +423,7 @@ pooled_col_cost <- function(fitlist) {
     est <- mean(gts)
     se <- NA_real_
   }
-  list(bench = "pooled", spec = "lin", head = "Pooled (log $)",
+  list(bench = "pooled", spec = "lin", head = "Pooled, primary (log $)",
        es = data.frame(term = "tc", est = est, se = se,
                        stringsAsFactors = FALSE),
        n = NA_integer_, decline = decline_dual_from(est, se), test = NULL)
@@ -466,78 +464,75 @@ cost_bc_test <- function(key, fit_lin, fit_bc) {
        p = pchisq(max(stat, 0), df, lower.tail = FALSE), row = "bc")
 }
 
+# The cost-direction mirror of build_model(): one table per specification.
+# The pooled column exists for the LINEAR table only -- with curvature or
+# transforms the time slope moves with (accuracy, date), so no single-number
+# pooling is honest.
 build_model_cost <- function(key) {
-  fits <- list()
-  for (tt in names(COST_FORMS))
-    fits[[tt]] <- setNames(lapply(benches, function(b)
-      fit_cost_model(key, d[d$benchmark == b, ], COST_FORMS[[tt]])), benches)
-  fits$bc <- setNames(lapply(benches, function(b)
-    fit_cost_bc(key, d[d$benchmark == b, ])), benches)
+  fits <- store_cost(key)
+  fits$bc <- store_cost_bc(key)
 
-  cols <- list()
-  for (b in benches) {
-    # the grid fit's "sample" is defined grid nodes, resampling a few dozen
-    # staircase corners; everything else fits the positive-accuracy runs
-    # (zeros carry no logit coordinate)
-    n_runs <- nrow(iso_runs(d[d$benchmark == b, ]))
-    tsts <- list(quad = cost_quad_test(key, fits$lin[[b]], fits$quad[[b]]),
-                 bc   = cost_bc_test(key, fits$lin[[b]], fits$bc[[b]]))
-    for (tt in c(names(COST_FORMS), "bc")) {
+  out <- list()
+  for (tt in c(names(COST_FORMS), "bc")) {
+    cols <- lapply(benches, function(b) {
       f <- fits[[tt]][[b]]
-      cols[[length(cols) + 1]] <- list(
-        bench = b, spec = tt, head = LABELS[[b]],
-        es = if (tt == "bc") est_se_bc(f) else est_se(f),
-        n = if (key == "costgridols") attr(f, "n_grid") else n_runs,
-        decline = if (tt == "lin") cost_decline_dual(f) else NULL,
-        test = tsts[[tt]])
+      tst <- if (tt == "quad")
+        cost_quad_test(key, fits$lin[[b]], f)
+      else if (tt == "bc") cost_bc_test(key, fits$lin[[b]], f)
+      else NULL
+      # the grid fit's "sample" is defined grid nodes, resampling a few
+      # dozen staircase corners; everything else fits the positive-accuracy
+      # runs (zeros carry no logit coordinate)
+      list(bench = b, spec = tt, head = LABELS[[b]],
+           es = if (tt == "bc") est_se_bc(f) else est_se(f),
+           n = if (key == "costgridols") attr(f, "n_grid") else
+             nrow(iso_runs(d[d$benchmark == b, ])),
+           decline = if (tt == "lin") cost_decline_dual(f) else NULL,
+           test = tst)
+    })
+    if (tt == "lin") {
+      pooled <- pooled_col_cost(fits$lin)
+      pooled$n <- sum(vapply(
+        Filter(function(cl) cl$bench %in% PRIMARY_BENCHES, cols),
+        function(cl) as.integer(cl$n), integer(1)))
+      cols <- c(cols, list(pooled))
     }
+    out[[tt]] <- cols
   }
-  pooled <- pooled_col_cost(fits$lin)
-  pooled$n <- sum(vapply(benches, function(b)
-    as.integer(if (key == "costgridols")
-      attr(fits$lin[[b]], "n_grid") else
-      nrow(iso_runs(d[d$benchmark == b, ]))), integer(1)))
-  c(cols, list(pooled))
+  out
 }
 
-# The S family's profiled lambdas, cached per benchmark as the starting point
-# for the slower families' profiles (S runs first in MODELS, and its glm inner
-# loop makes its profile the cheap one). A start, not a constraint: each family
-# still profiles its own lambdas.
-BC_LSTART <- new.env(parent = emptyenv())
-
-# Build the whole grid for one model: a list of columns, each carrying its
-# estimates, N and (for quad and bc) the test; the pooled pair comes last.
+# Build the columns for one model, one table PER SPECIFICATION: with eleven
+# benchmarks a combined linear/quadratic/Box-Cox table no longer fits any
+# page, so each specification gets its own table of one column per benchmark
+# -- the quadratic table's columns carrying the quadratic-vs-linear test, the
+# BC table's the BC-vs-linear test -- plus a pooled column for the linear and
+# quadratic tables (the BC transforms leave no common scale to pool on).
+# Returns a LIST keyed lin/quad/bc, each element a column list the renderers
+# consume.
 build_model <- function(key) {
   if (key %in% COST_KEYS) return(build_model_cost(key))
-  cols <- list()
   grid <- fit_grid(key)
-  bc_fits <- fit_bc_by(key, d, as.list(BC_LSTART))
-  if (key == "S")
-    for (b in benches)
-      BC_LSTART[[b]] <- unname(attr(bc_fits[[b]], "bc_lambda"))
-  for (b in benches) {
-    fits <- lapply(grid, `[[`, b)
-    fits$bc <- bc_fits[[b]]
-    tsts <- list(quad = quad_test(key, b, fits$lin, fits$quad),
-                 bc   = bc_test(key, fits$lin, fits$bc))
-    for (tt in c(names(TIME_FORMS), "bc")) {
-      cols[[length(cols) + 1]] <- list(
-        bench = b, spec = tt,
-        # the benchmark name only; the specifications are not labelled per column
-        # but read off the pattern -- within each trio the quadratic is the one
-        # carrying the second-order rows, the Box-Cox the one carrying the BC
-        # rows, and the order is always linear, quadratic, Box-Cox
-        head = LABELS[[b]],
-        es = if (tt == "bc") est_se_bc(fits$bc) else est_se(fits[[tt]]),
-        n = n_obs(key, b, fits[[tt]]),
-        decline = if (tt == "lin") cost_decline(fits[[tt]]) else NULL,
-        test = tsts[[tt]])
-    }
+  # store_bc seeds every slower family's profile from S's lambdas, the same
+  # seeding this script used to do locally with its BC_LSTART cache
+  bc_fits <- store_bc(key)
+  out <- list()
+  for (tt in c(names(TIME_FORMS), "bc")) {
+    cols <- lapply(benches, function(b) {
+      f <- if (tt == "bc") bc_fits[[b]] else grid[[tt]][[b]]
+      tst <- if (tt == "quad") quad_test(key, b, grid$lin[[b]], f)
+        else if (tt == "bc") bc_test(key, grid$lin[[b]], f)
+        else NULL
+      list(bench = b, spec = tt, head = LABELS[[b]],
+           es = if (tt == "bc") est_se_bc(f) else est_se(f),
+           n = n_obs(key, b, f),
+           decline = if (tt == "lin") cost_decline(f) else NULL,
+           test = tst)
+    })
+    if (tt != "bc") cols <- c(cols, list(pooled_col(key, tt, grid[[tt]])))
+    out[[tt]] <- cols
   }
-  for (tt in names(TIME_FORMS))
-    cols[[length(cols) + 1]] <- pooled_col(key, tt, grid[[tt]])
-  cols
+  out
 }
 
 # Which term rows actually appear anywhere in this model
@@ -604,7 +599,7 @@ html_escape <- function(x) {
   gsub("<", "&lt;", x, fixed = TRUE)
 }
 
-html_table <- function(key, label, cols) {
+html_table <- function(key, label, cols, tt) {
   trm <- active_terms(cols)
   kind <- unique(unlist(lapply(cols, function(cl) cl$test$kind)))
   # the envelope has no standard errors, so it gets no (empty) SE rows either
@@ -624,6 +619,11 @@ html_table <- function(key, label, cols) {
          'th:first-child,td:first-child{text-align:left}',
          'thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}',
          'thead th[colspan]{text-align:center;padding-bottom:3px}',
+         # headers wrap inside a width-capped block, so a long benchmark name
+         # no longer sets its column's width -- the data cells do; max-width
+         # on the th itself is unreliable under auto table layout, a block
+         # inside the cell is not
+         'thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:6.5em;margin:0 auto}',
          # the pairing is carried by these separators now that the columns are
          # not individually labelled linear / quadratic
          'th.grp,td.grp{border-left:1px solid #e6e6e2}',
@@ -643,7 +643,8 @@ html_table <- function(key, label, cols) {
   # takes the table down to a readable width.
   grp <- col_groups(cols)
   for (i in seq_len(nrow(grp)))
-    o <- c(o, sprintf('<th colspan="%d"%s>%s</th>', grp$span[i],
+    o <- c(o, sprintf('<th colspan="%d"%s><div class="hd">%s</div></th>',
+                      grp$span[i],
                       if (i > 1) ' class="grp"' else '',
                       html_escape(grp$head[i])))
   o <- c(o, '</tr></thead><tbody>')
@@ -703,7 +704,7 @@ html_table <- function(key, label, cols) {
   }
 
   o <- c(o, sprintf('</tbody><tfoot><tr><td colspan="%d">%s</td></tr></tfoot></table>',
-                    length(cols) + 1, notes_html(key, kind)),
+                    length(cols) + 1, notes_html(key, kind, tt)),
          '</body></html>')
   o
 }
@@ -756,7 +757,7 @@ rtf_row <- function(cells, widths, bold = FALSE, top = FALSE, bottom = FALSE,
   c(defn, paste0(body, collapse = ""), "\\row")
 }
 
-rtf_table <- function(key, label, cols) {
+rtf_table <- function(key, label, cols, tt) {
   trm <- active_terms(cols)
   kind <- unique(unlist(lapply(cols, function(cl) cl$test$kind)))
   has_se <- any(!is.na(unlist(lapply(cols, function(cl) cl$es$se))))
@@ -827,7 +828,7 @@ rtf_table <- function(key, label, cols) {
   # \pard closes the table: without it the notes paragraph is still inside table
   # context and Word treats the whole run as a malformed table.
   o <- c(o, "\\pard\\ql\\par",
-         sprintf("\\pard\\ql{\\fs16 %s}\\par", rtf_escape(notes_plain(key, kind))),
+         sprintf("\\pard\\ql{\\fs16 %s}\\par", rtf_escape(notes_plain(key, kind, tt))),
          "}")
   o
 }
@@ -836,7 +837,7 @@ rtf_table <- function(key, label, cols) {
 
 # Notes for the cost-direction tables. Shorter than the accuracy notes: no
 # quadratic or Box-Cox columns, and the pooling needs no ECI machinery.
-notes_cost <- function(key) {
+notes_cost <- function(key, tt) {
   dir <- paste(
     "This model fits LN COST as the response, linear in logit accuracy and time (years,",
     "centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the",
@@ -907,18 +908,24 @@ notes_cost <- function(key) {
       "The BC LR row tests the nesting restrictions, one df per free lambda plus the product term."
     else "")
   pool <- paste(
-    "Pooled: the time coefficient is d ln cost / d year at fixed accuracy -- log dollars per",
+    "Pooled covers the primary benchmarks only",
+    sprintf("(%s).", paste(intersect(PRIMARY_BENCHES, benches),
+                           collapse = ", ")),
+    "The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per",
     "year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is",
     "needed. It is pooled by inverse-variance weights where every benchmark carries a covariance,",
     "and by an unweighted mean otherwise (a mechanical average, as for the accuracy tables'",
     "envelope and Pareto-grid columns). The other coefficients are in each benchmark's own logit",
-    "units and are not pooled. Pooled N sums the benchmark columns. The pooled pair covers the",
-    "linear specification only.")
-  paste(dir, se, extra, decl, tst, bc, pool)
+    "units and are not pooled. Pooled N sums the primary benchmark columns. The pooled pair covers",
+    "the linear specification only.")
+  switch(tt,
+         lin  = paste(dir, se, extra, decl, pool),
+         quad = paste(dir, se, extra, tst),
+         bc   = paste(dir, se, extra, bc))
 }
 
-notes_plain <- function(key, kind) {
-  if (key %in% COST_KEYS) return(notes_cost(key))
+notes_plain <- function(key, kind, tt = "lin") {
+  if (key %in% COST_KEYS) return(notes_cost(key, tt))
   se <- switch(key,
     S = "Robust (HC1) standard errors: the quasibinomial objective is a quasi-likelihood, so inverse-Hessian errors would be wrong.",
     paretologit = paste("No standard errors: the response is the empirical Pareto frontier P_t(c) sampled at the nodes of the",
@@ -942,19 +949,24 @@ notes_plain <- function(key, kind) {
                 if (key %in% c("envelope", "paretologit")) "" else
                   paste("Standard error by the delta method on the same robust covariance, taken on the transformed",
                         "quantity. Being symmetric it can reach past 100% where the estimated drop is near total."))
+  pb <- intersect(PRIMARY_BENCHES, benches)
   pool <- paste(
-    "Pooled maps the benchmarks onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which",
+    "Pooled covers the primary benchmarks only",
+    sprintf("(%s), mapping them", paste(pb, collapse = ", ")),
+    "onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which",
     "logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same",
     "capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average,",
     "sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled",
     sprintf("in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are %s,",
-            paste(sprintf("%s %.3f", benches, ALPHA[benches]), collapse = ", ")),
+            paste(sprintf("%s %.3f", pb, ALPHA[pb]), collapse = ", ")),
     sprintf("so one logit is worth %.1f-%.1f ECI points and pooled slopes read several times larger than the",
-            min(1 / ALPHA[benches]), max(1 / ALPHA[benches])),
+            min(1 / ALPHA[pb]), max(1 / ALPHA[pb])),
     "logit-scale columns beside them.",
-    "The pooled cost drop is the same transform of the pooled slopes, -sum(alpha b_time) / sum(alpha b_ln cost)",
-    "inside it. The pooled intercept averages capability net of difficulty at each benchmark's own reference",
-    "date, so unlike the slopes it carries no clean interpretation, and pooled N sums the benchmark columns.",
+    if (tt == "lin")
+      paste("The pooled cost drop is the same transform of the pooled slopes,",
+            "-sum(alpha b_time) / sum(alpha b_ln cost) inside it.") else "",
+    "The pooled intercept averages capability net of difficulty at each benchmark's own reference",
+    "date, so unlike the slopes it carries no clean interpretation, and pooled N sums the primary benchmark columns.",
     if (key %in% c("A", "B"))
       paste("log sigma_u, the log of a logit-scale spread, converts as log sigma_u - log alpha_b before averaging;",
             "its time slope is scale-free and pools directly. Fits are independent across benchmarks, so pooled",
@@ -1000,15 +1012,20 @@ notes_plain <- function(key, kind) {
     "fm13's five months of data sit 5.7-6.1 years from the origin, over which every lambda_time fits alike, so",
     "lambda_time is fixed at 1 there rather than estimated; elsewhere it is weakly identified and best read as",
     "a shape the data tolerates rather than demands -- a lambda_time of exactly 3 or -2 sits on the edge of the",
-    "search box, the flat profile having run to the wall. The pooled pair covers the linear and quadratic",
-    "specifications only: per-benchmark lambdas put the BC slopes on different transforms of cost and time,",
-    "leaving no common scale for the alpha-weighted average to land on.")
-  paste("Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own",
-        "reference date (the BC columns instead use uncentered years since mid-2020).", decl, se, tst, bc, pool)
+    "search box, the flat profile having run to the wall. This table has no pooled column: per-benchmark",
+    "lambdas put the BC slopes on different transforms, leaving no common scale for the alpha-weighted",
+    "average to land on.")
+  intro <- paste("Time is measured in years and centered within benchmark, so the intercept is the",
+                 "frontier at each benchmark's own reference date.")
+  # one table per specification now, so each carries only its own paragraphs
+  switch(tt,
+         lin  = paste(intro, decl, se, pool),
+         quad = paste(intro, se, tst, pool),
+         bc   = paste(se, bc))
 }
 
-notes_html <- function(key, kind) {
-  x <- notes_plain(key, kind)
+notes_html <- function(key, kind, tt) {
+  x <- notes_plain(key, kind, tt)
   x <- html_escape(x)
   x <- gsub("ln cost^2", "ln cost<sup>2</sup>", x, fixed = TRUE)
   x <- gsub("logit accuracy^2", "logit accuracy<sup>2</sup>", x, fixed = TRUE)
@@ -1018,11 +1035,17 @@ notes_html <- function(key, kind) {
 ## ---- emit ----------------------------------------------------------------------
 
 dir.create(out_path("tables"), showWarnings = FALSE, recursive = TRUE)
+SPEC_TITLE <- c(lin = "linear", quad = "full quadratic", bc = "Box-Cox")
 for (m in MODELS) {
-  cols <- build_model(m$key)
-  writeLines(html_table(m$key, m$label, cols),
-             out_path("tables", sprintf("regression_%s.html", m$key)))
-  writeLines(rtf_table(m$key, m$label, cols),
-             out_path("tables", sprintf("regression_%s.rtf", m$key)))
-  cat("wrote regression_", m$key, ".html / .rtf\n", sep = "")
+  colsets <- build_model(m$key)
+  # the pre-split combined tables, if still present, are stale now
+  unlink(out_path("tables", sprintf("regression_%s.%s", m$key, c("html", "rtf"))))
+  for (tt in names(colsets)) {
+    lab <- sprintf("%s -- %s specification", m$label, SPEC_TITLE[[tt]])
+    writeLines(html_table(m$key, lab, colsets[[tt]], tt),
+               out_path("tables", sprintf("regression_%s_%s.html", m$key, tt)))
+    writeLines(rtf_table(m$key, lab, colsets[[tt]], tt),
+               out_path("tables", sprintf("regression_%s_%s.rtf", m$key, tt)))
+    cat("wrote regression_", m$key, "_", tt, ".html / .rtf\n", sep = "")
+  }
 }

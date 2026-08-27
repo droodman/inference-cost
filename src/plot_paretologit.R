@@ -28,16 +28,14 @@
 #     cloud of runs beneath it.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("fit_specs.R")          # TIME_FORMS, TIME_LABEL, viz
-src_source("envelope_frontier.R")  # fit_pareto_logit(), pareto_binding()
-src_source("boxcox_frontier.R")    # fit_bc(), for the Box-Cox figures
+src_source("fit_store.R")          # brings the whole fitting stack with it
 
 LEVELS <- seq(0.10, 0.90, by = 0.20)
 
 d <- load_runs()
 tbar    <- bench_tbar(d)
 dates   <- bench_dates(d)
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 
 ## ---- the staircase being sampled ------------------------------------------------
 
@@ -51,11 +49,7 @@ frontier_rows <- function(s) s[pareto_binding(s$lncost, s$tc, s$acc), , drop = F
 cat("staircase corners, and the grid that resamples them\n")
 cat(sprintf("%-6s %8s %9s %9s %10s\n", "bench", "all runs", "corners",
             "envelope", "grid nodes"))
-fits_by_spec <- list()
-for (tt in names(TIME_FORMS))
-  fits_by_spec[[tt]] <- setNames(lapply(benches, function(b) {
-    fit_pareto_logit(d[d$benchmark == b, ], TIME_FORMS[[tt]])
-  }), benches)
+fits_by_spec <- store_grid("paretologit")
 
 for (b in benches) {
   s <- d[d$benchmark == b, ]
@@ -94,8 +88,10 @@ NOTES_ISO <- c(
   ISO_PARETO_NOTE,
   paste("Read off a logit fitted to the empirical Pareto frontier sampled on a",
         "uniform (cost, date) grid -- the frontier, not the full sample."),
-  paste("Cut at the observed cost range and above each level's dashed record,",
-        "so a level never achieved by any run shows no contour at all."),
+  paste("Cut at the observed cost range; blanked only where both earlier than",
+        "a level's first record and dearer than its dearest, so each contour",
+        "reaches its record's start or cost ceiling, whichever is more",
+        "generous. Never-achieved levels show no contour."),
   paste("Free disposal is not imposed, so a contour also blanks out at dates where",
         "the fitted cost slope is too flat to invert."),
   ISO_BRANCH_NOTE)
@@ -129,7 +125,7 @@ for (tt in names(TIME_FORMS)) {
     pareto_step_layer(steps)
 
   f <- sprintf("paretologit_%s.png", tt)
-  ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
+  ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", f, "\n")
 
@@ -140,7 +136,7 @@ for (tt in names(TIME_FORMS)) {
     iso_pareto_layer(iso_steps)
 
   fi <- sprintf("isoaccuracy_paretologit_%s.png", tt)
-  ggsave(out_path(fi), pi, width = 10, height = 7.5, dpi = 200,
+  ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fi, "\n")
 }
@@ -154,7 +150,7 @@ NOTES_BC <- paste("Box-Cox both sides: phi(odds) -- the logit at lambda_odds",
                   "= 0 -- is linear in phi(cost), phi(years since mid-2020)",
                   "and their product, all three lambdas profiled against the",
                   "probability-scale quasi-likelihood.")
-fits_bc <- fit_bc_by("paretologit", d)
+fits_bc <- store_bc("paretologit")
 
 curves <- frontier_curves(fits_bc, d, dates, tbar)
 p <- frontier_plot(
@@ -162,7 +158,7 @@ p <- frontier_plot(
   ylab = "Fitted frontier accuracy",
   notes = c(NOTES_FRONTIER, NOTES_BC)) +
   pareto_step_layer(steps)
-ggsave(out_path("paretologit_bc.png"), p, width = 10, height = 7.5, dpi = 200,
+ggsave(out_path("paretologit_bc.png"), p, width = 10, height = fig_height(length(benches)), dpi = 200,
        device = ragg::agg_png)
 cat("wrote paretologit_bc.png\n")
 
@@ -171,7 +167,7 @@ pi <- iso_acc_plot(
   iso, d, ranges = iso_ranges,
   notes = c(head(NOTES_ISO, -1), NOTES_BC)) +
   iso_pareto_layer(iso_steps)
-ggsave(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = 7.5,
+ggsave(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = fig_height(length(benches)),
        dpi = 200, device = ragg::agg_png)
 cat("wrote isoaccuracy_paretologit_bc.png\n")
 
@@ -183,7 +179,7 @@ cat("wrote isoaccuracy_paretologit_bc.png\n")
 cat("\ncoefficients: all runs (S) vs Pareto frontier on the grid, linear in time\n")
 cat(sprintf("%-6s %9s %9s %9s %9s\n", "bench", "b_x all", "b_x front",
             "b_t all", "b_t front"))
-all_fits <- fit_family("S", TIME_FORMS$lin, d)
+all_fits <- store_specs()$S_lin$fits
 for (b in benches) {
   ca <- frontier_coefs(all_fits[[b]])
   cf <- frontier_coefs(fits_by_spec$lin[[b]])

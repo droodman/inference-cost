@@ -16,8 +16,9 @@
 # This script absorbed plot_isoaccuracy.R (Aug 2026). The two views always used
 # identical fits, and each script refitted them -- tolerable at seconds per SFA
 # fit, not at the ~10 minutes the profiled Box-Cox specification added per
-# script. Everything is fitted ONCE, up front, and the fitted objects are passed
-# to the two figure builders.
+# script. Everything is fitted ONCE, via the shared store (fit_store.R), and
+# the fitted objects are passed to the two figure builders; under run_all.R
+# the same objects also serve the regression tables.
 #
 # On the iso view's reading: each contour holds ACCURACY fixed and lets cost
 # vary, so these are isoquants, not isocosts (they were called isocost figures
@@ -31,32 +32,21 @@
 # and cannot handle a raw maxLik fit -- but the prediction is one line.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("fit_specs.R")   # brings panel_frontier.R and frontier_viz.R with it
-src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox fits
+src_source("fit_store.R")   # brings the whole fitting stack with it
 
 d <- load_runs()
 tbar  <- bench_tbar(d)     # from t - tc, so it matches whatever the fit used
 dates <- bench_dates(d)
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 
 LEVELS <- seq(0.10, 0.90, by = 0.20)   # iso-accuracy contour targets
 
-## ---- every fit, once ----------------------------------------------------------------
+## ---- every fit, once -- from the shared store -----------------------------------------
+# fit_store.R computes each of these on first request; under run_all.R the
+# table script then reuses the same objects instead of refitting.
 
-specs <- fit_all_specs(d)
-
-# The Box-Cox fits, profiled per benchmark and family -- across the shared
-# worker cluster, one benchmark per worker. S is profiled first -- its glm
-# inner loop is cheap -- and its lambdas seed the slower SFA profiles (a
-# starting point, not a constraint).
-bc_lam <- list()
-bc_fits <- list()
-for (fam in c("S", "A", "B")) {
-  bc_fits[[fam]] <- fit_bc_by(fam, d, bc_lam)
-  if (fam == "S")
-    for (b in benches)
-      bc_lam[[b]] <- unname(attr(bc_fits[[fam]][[b]], "bc_lambda"))
-}
+specs <- store_specs()
+bc_fits <- list(S = store_bc("S"), A = store_bc("A"), B = store_bc("B"))
 
 ## ---- semiannual frontier figures ------------------------------------------------------
 
@@ -81,7 +71,7 @@ frontier_fig <- function(fits, fam, fname, extra_notes) {
     curves, d,
     ylab = if (fam == "S") "Fitted accuracy" else "Frontier accuracy",
     notes = c(NOTES_BASE, extra_notes))
-  ggsave(out_path(fname), p, width = 10, height = 7.5, dpi = 200,
+  ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fname, "\n")
 }
@@ -121,7 +111,7 @@ iso_fig <- function(fits, fname, extra_notes) {
   curves <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
   p <- iso_acc_plot(curves, d, notes = c(ISO_NOTES_BASE, extra_notes),
                     ranges = iso_ranges)
-  ggsave(out_path(fname), p, width = 10, height = 7.5, dpi = 200,
+  ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fname, "\n")
 }

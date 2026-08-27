@@ -11,20 +11,15 @@
 # form is doing the work rather than the data.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("envelope_frontier.R")
-src_source("boxcox_frontier.R")   # fit_bc(), for the Box-Cox figures
+src_source("fit_store.R")   # brings the whole fitting stack with it
 
 d <- load_runs()
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 
 # The same two forms every other model uses (TIME_FORMS in fit_specs.R): `quad`
-# is the full second-order surface, not the cost-only quadratic it used to be
-# here. The envelope now bends in time and lets its cost slope drift with date,
-# which is what makes it comparable with the SFA and logit fits at last.
-SPECS <- list(
-  lin  = list(form = acc ~ lncost + tc),
-  quad = list(form = acc ~ lncost * tc + I(lncost^2) + I(tc^2))
-)
+# is the full second-order surface. All fits come from the shared store, so
+# under run_all.R the 3-D pages and the tables reuse these same objects.
+fits_by_spec <- store_grid("envelope")
 
 # The same semiannual grid as every other figure, via bench_dates(), so the
 # envelope can be compared with the SFA and Pareto panels curve for curve.
@@ -45,13 +40,12 @@ axis_ranges <- do.call(rbind, lapply(benches, function(b) {
   data.frame(benchmark = b, cost = range(s$cost), value = c(0, 1))
 }))
 
-for (k in names(SPECS)) {
-  sp <- SPECS[[k]]
-  curves <- list(); fits <- list()
+for (k in names(fits_by_spec)) {
+  fits <- fits_by_spec[[k]]
+  curves <- list()
   for (b in benches) {
     s <- d[d$benchmark == b, ]
-    f <- fit_envelope(s, formula = sp$form)
-    fits[[b]] <- f
+    f <- fits[[b]]
     co <- frontier_coefs_envelope(f)
     dts <- dates[[b]]
     cost <- exp(seq(min(s$lncost), max(s$lncost), length.out = 200))
@@ -86,7 +80,7 @@ for (k in names(SPECS)) {
     pareto_step_layer(steps)
 
   f <- sprintf("envelope_%s.png", k)
-  ggsave(out_path(f), p, width = 10, height = 7.5, dpi = 200,
+  ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", f, "\n")
 
@@ -107,15 +101,16 @@ for (k in names(SPECS)) {
             "deterministic envelope; a falling contour means the same",
             "performance costs less over time."),
       ISO_PARETO_NOTE,
-      paste("Cut at the observed cost range and above each level's dashed",
-            "record, so a level never achieved by any run shows no contour at",
-            "all."),
+      paste("Cut at the observed cost range; blanked only where both earlier",
+            "than a level's first record and dearer than its dearest, so each",
+            "contour reaches its record's start or cost ceiling, whichever is",
+            "more generous. Never-achieved levels show no contour."),
       paste("The envelope must clear every run, so these are upper bounds on",
             "what frontier performance costs, not central estimates."),
       ISO_BRANCH_NOTE)) +
     iso_pareto_layer(iso_steps)
   fi <- sprintf("isoaccuracy_envelope_%s.png", k)
-  ggsave(out_path(fi), pi, width = 10, height = 7.5, dpi = 200,
+  ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fi, "\n")
 
@@ -214,7 +209,7 @@ NOTES_BC <- paste("Box-Cox both sides: phi(odds) -- the logit at lambda_odds",
                   "= 0 -- is linear in phi(cost), phi(years since mid-2020)",
                   "and their product, all three lambdas profiled against the",
                   "envelope's mean fitted accuracy.")
-fits_bc <- fit_bc_by("envelope", d)
+fits_bc <- store_bc("envelope")
 
 curves <- frontier_curves(fits_bc, d, dates, bench_tbar(d))
 p <- frontier_plot(
@@ -229,7 +224,7 @@ p <- frontier_plot(
           "slope backwards in either."),
     NOTES_BC)) +
   pareto_step_layer(steps)
-ggsave(out_path("envelope_bc.png"), p, width = 10, height = 7.5, dpi = 200,
+ggsave(out_path("envelope_bc.png"), p, width = 10, height = fig_height(length(benches)), dpi = 200,
        device = ragg::agg_png)
 cat("wrote envelope_bc.png\n")
 
@@ -246,12 +241,13 @@ pi <- iso_acc_plot(
           "deterministic envelope; a falling contour means the same",
           "performance costs less over time."),
     ISO_PARETO_NOTE,
-    paste("Cut at the observed cost range and above each level's dashed",
-          "record, so a level never achieved by any run shows no contour at",
-          "all."),
+    paste("Cut at the observed cost range; blanked only where both earlier",
+          "than a level's first record and dearer than its dearest, so each",
+          "contour reaches its record's start or cost ceiling, whichever is",
+          "more generous. Never-achieved levels show no contour."),
     NOTES_BC)) +
   iso_pareto_layer(iso_steps)
-ggsave(out_path("isoaccuracy_envelope_bc.png"), pi, width = 10, height = 7.5,
+ggsave(out_path("isoaccuracy_envelope_bc.png"), pi, width = 10, height = fig_height(length(benches)),
        dpi = 200, device = ragg::agg_png)
 cat("wrote isoaccuracy_envelope_bc.png\n")
 

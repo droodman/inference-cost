@@ -64,7 +64,7 @@ SIGMA_FORM <- list(A = ~ 1, B = ~ tc)
 U_GROUP <- c("model", "effort")
 
 fit_family <- function(family, form, d) {
-  benches <- sort(unique(d$benchmark))
+  benches <- bench_levels(d$benchmark)
   if (family == "S") {
     setNames(lapply(benches, function(b) {
       glm(form, data = d[d$benchmark == b, ], family = quasibinomial(link = "logit"))

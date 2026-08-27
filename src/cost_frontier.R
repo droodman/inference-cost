@@ -592,18 +592,27 @@ cost_iso_curves <- function(fitset, data, tbar,
     g <- expand.grid(date = dts, acc = levels)
     u <- srf$f(qlogis(g$acc), as_t(g$date) - tbar[[b]])
 
-    # per-level upper clip, same matching rule as iso_acc_curves(): exact on
-    # the shared `levels` values, -Inf (no contour) for a level the cap data
-    # never covers
-    umax <- rep(urng[2], nrow(g))
+    # per-level admissibility, same union rule and matching as
+    # iso_acc_curves(): a point is blanked only where it is BOTH earlier than
+    # the level's first record AND dearer than its dearest record, so the
+    # contour reaches the record's start or its cost ceiling, whichever is
+    # more generous; a level the cap data never covers gets no contour
+    cap_u <- rep(Inf, nrow(g))
+    birth <- rep(-Inf, nrow(g))
     if (!is.null(cost_cap)) {
       cb <- cost_cap[cost_cap$benchmark == b, ]
       lv <- unique(cb$acc)
-      caps <- vapply(lv, function(a) max(cb$cost[cb$acc == a]), numeric(1))
-      cap_u <- log(caps)[match(g$acc, lv)]
-      umax <- ifelse(is.na(cap_u), -Inf, pmin(umax, cap_u))
+      i <- match(g$acc, lv)
+      cap_u <- log(vapply(lv, function(a) max(cb$cost[cb$acc == a]),
+                          numeric(1)))[i]
+      birth <- vapply(lv, function(a) as.numeric(min(cb$date[cb$acc == a])),
+                      numeric(1))[i]
+      cap_u[is.na(cap_u)] <- -Inf   # never achieved
+      birth[is.na(birth)] <- Inf
     }
-    u[u < urng[1] | u > umax] <- NA_real_
+    bad <- !is.na(u) & (u < urng[1] | u > urng[2] |
+                          !(u <= cap_u | as.numeric(g$date) >= birth))
+    u[bad] <- NA_real_
 
     g$cost <- exp(u)
     g$branch <- "rising"        # single-valued: monotone in accuracy
@@ -769,4 +778,29 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
   attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE, lambda_odds = TRUE,
                                    lambda_time = lt_free)
   fit
+}
+
+# One fitted dual for one benchmark's rows -- THE recipe for each cost key,
+# used by the figures and the tables alike so they cannot drift apart.
+fit_cost_model <- function(key, s, form = COST_FORMS$lin) {
+  switch(key,
+    costols      = lm(form, data = iso_runs(s)),
+    costsfa      = fit_cost_sfa(s, form),
+    costsfab     = fit_cost_sfa(s, form, formula_sigma = ~ tc),
+    costgridols  = fit_lncost_grid(s, form),
+    costenvelope = fit_cost_envelope(s, form))
+}
+
+# All benchmarks of one cost key's Box-Cox profile, on the shared worker
+# cluster when one is available -- the mirror of fit_bc_by (boxcox_frontier.R).
+# The profiles are independent across benchmarks, so the wall clock is the
+# slowest one rather than the sum, which run serially was the largest single
+# block in the whole pipeline.
+fit_cost_bc_by <- function(key, data) {
+  force(key)
+  bs <- bench_levels(data$benchmark)
+  one <- function(b) fit_cost_bc(key, data[data$benchmark == b, ])
+  cl <- fit_cluster(length(bs))
+  fits <- if (is.null(cl)) lapply(bs, one) else parallel::parLapply(cl, bs, one)
+  setNames(fits, bs)
 }

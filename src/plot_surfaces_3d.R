@@ -29,37 +29,27 @@
 # committed once (~4 MB) and each page is small.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-src_source("cost_frontier.R")   # pulls the whole fitting stack
+src_source("fit_store.R")   # pulls the whole fitting stack
 suppressMessages(library(plotly))
 
 N_X <- 100   # lattice density along the non-time axis, matching the fits' grids
 N_T <- 40
 
 d <- load_runs()
-benches <- sort(unique(d$benchmark))
+benches <- bench_levels(d$benchmark)
 tbar <- bench_tbar(d)
 
 ## ---- fits: both frontier-per-se pairs, three specifications each ------------------
 
 ACC_KEYS <- c("paretologit", "envelope")   # which keys are accuracy-direction
 
-fit_one <- function(key, b, spec) {
-  s <- d[d$benchmark == b, ]
-  switch(key,
-    paretologit  = fit_pareto_logit(s, TIME_FORMS[[spec]]),
-    envelope     = fit_envelope(s, TIME_FORMS[[spec]]),
-    costgridols  = fit_lncost_grid(s, COST_FORMS[[spec]]),
-    costenvelope = fit_cost_envelope(s, COST_FORMS[[spec]]))
-}
-
+# All from the shared store (fit_store.R): under run_all.R these are the same
+# objects the 2-D figure scripts and the tables already fitted.
 fits <- list()
 for (key in c(ACC_KEYS, "costgridols", "costenvelope")) {
-  for (spec in c("lin", "quad"))
-    fits[[key]][[spec]] <- setNames(lapply(benches, function(b)
-      fit_one(key, b, spec)), benches)
-  fits[[key]]$bc <- if (key %in% ACC_KEYS) fit_bc_by(key, d) else
-    setNames(lapply(benches, function(b)
-      fit_cost_bc(key, d[d$benchmark == b, ])), benches)
+  grid <- if (key %in% ACC_KEYS) store_grid(key) else store_cost(key)
+  fits[[key]] <- c(grid, list(
+    bc = if (key %in% ACC_KEYS) store_bc(key) else store_cost_bc(key)))
 }
 
 ## ---- per-benchmark lattices and empirical surfaces --------------------------------
@@ -233,12 +223,20 @@ CAMERA <- list(eye = list(x = -1.2, y = -1.2, z = 0.7))
 # so the fitted shape is legible without occluding the data surface behind it.
 # Ink-colored, not black -- black segments would vanish on the dark backdrop.
 page <- function(zs_emp, zs_fit, xs, view) {
-  # Full-bleed quadrants: scenes carry generous internal padding of their
-  # own, so explicit gutters between the domains only compound the dead
-  # space; the benchmark titles sit on the seam.
-  doms <- list(list(x = c(0, .5), y = c(.5, 1)), list(x = c(.5, 1), y = c(.5, 1)),
-               list(x = c(0, .5), y = c(0, .5)), list(x = c(.5, 1), y = c(0, .5)))
-  p <- plot_ly()
+  # Full-bleed cells, two across and however many rows the benchmark count
+  # needs (mirroring the 2-D figures' N x 2 facets): scenes carry generous
+  # internal padding of their own, so explicit gutters between the domains
+  # only compound the dead space; the benchmark titles sit on the seams. The
+  # page's pixel height scales with the row count so each scene keeps a
+  # usable size, and the viewer's iframe scrolls.
+  n_rows <- ceiling(length(benches) / 2)
+  doms <- lapply(seq_along(benches), function(i) {
+    r <- ceiling(i / 2)
+    c0 <- (i - 1) %% 2
+    list(x = c(0.5 * c0, 0.5 * c0 + 0.5),
+         y = c((n_rows - r) / n_rows, (n_rows - r + 1) / n_rows))
+  })
+  p <- plot_ly(height = 420 * n_rows + 30)
   lay <- list(paper_bgcolor = SURFACE, font = list(color = INK),
               showlegend = FALSE, margin = list(l = 0, r = 0, t = 22, b = 0))
   ann <- list()
