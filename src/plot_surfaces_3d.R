@@ -196,6 +196,15 @@ zcost_inverted <- function(fit, bl) {
 ## ---- assembly ----------------------------------------------------------------------
 
 SURFACE  <- "#101014"; INK <- "#f2f1ec"; MUTED <- "#8f8e88"; GRID <- "#26262c"
+
+# The 2-D figures' own ramp (PALETTE, frontier_viz.R -- plasma with the
+# darkest 20% clipped off under the dark theme), rebuilt as a plotly
+# colorscale so the 3-D surfaces cannot drift from the 2-D figures, clip
+# included. viridisLite returns 8-digit hex (trailing alpha), which plotly's
+# WebGL parser does not accept -- strip to 6.
+COLORSCALE <- Map(function(p, col) list(p, substr(col, 1, 7)),
+                  seq(0, 1, length.out = length(PALETTE)), PALETTE)
+
 ax <- function(title) list(title = title, backgroundcolor = SURFACE,
                            gridcolor = GRID, color = MUTED, showbackground = TRUE)
 
@@ -212,8 +221,11 @@ ax_cost <- function(rng) {
 # date and LOWEST cost -- the eye sits in the (min x, min y) quadrant, so the
 # frontier view leads with cheap-and-early and the iso view with the low end
 # of the level axis at the earliest date (cost is vertical there, so its
-# minimum is the bottom face by construction).
-CAMERA <- list(eye = list(x = -1.5, y = -1.5, z = 0.9))
+# minimum is the bottom face by construction). The eye's DISTANCE sets how
+# large the cube renders inside its quadrant (closer = larger); this norm
+# (~1.8, vs plotly's default ~2.2) is the zoom that fills the cell without
+# clipping axis labels.
+CAMERA <- list(eye = list(x = -1.2, y = -1.2, z = 0.7))
 
 # One page: four scenes (2 x 2 benchmark quadrants), each with the empirical
 # surface (filled, plasma ramp) and the fitted one as a SEE-THROUGH WIREFRAME:
@@ -221,18 +233,21 @@ CAMERA <- list(eye = list(x = -1.5, y = -1.5, z = 0.9))
 # so the fitted shape is legible without occluding the data surface behind it.
 # Ink-colored, not black -- black segments would vanish on the dark backdrop.
 page <- function(zs_emp, zs_fit, xs, view) {
-  doms <- list(list(x = c(0, .48), y = c(.55, 1)), list(x = c(.52, 1), y = c(.55, 1)),
-               list(x = c(0, .48), y = c(0, .45)), list(x = c(.52, 1), y = c(0, .45)))
+  # Full-bleed quadrants: scenes carry generous internal padding of their
+  # own, so explicit gutters between the domains only compound the dead
+  # space; the benchmark titles sit on the seam.
+  doms <- list(list(x = c(0, .5), y = c(.5, 1)), list(x = c(.5, 1), y = c(.5, 1)),
+               list(x = c(0, .5), y = c(0, .5)), list(x = c(.5, 1), y = c(0, .5)))
   p <- plot_ly()
   lay <- list(paper_bgcolor = SURFACE, font = list(color = INK),
-              showlegend = FALSE, margin = list(l = 0, r = 0, t = 30, b = 0))
+              showlegend = FALSE, margin = list(l = 0, r = 0, t = 22, b = 0))
   ann <- list()
   for (i in seq_along(benches)) {
     b <- benches[i]
     bl <- bundles[[b]]
     sc <- if (i == 1) "scene" else paste0("scene", i)
     p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_emp[[b]],
-                     scene = sc, colorscale = "Plasma", showscale = FALSE,
+                     scene = sc, colorscale = COLORSCALE, showscale = FALSE,
                      name = "empirical")
     xr <- range(xs[[b]]); yr <- range(bl$year)
     mesh <- function(rng, n = 14) list(show = TRUE, color = INK,
@@ -250,8 +265,14 @@ page <- function(zs_emp, zs_fit, xs, view) {
            zaxis = c(ax_cost(bl$zrng_cost), list(range = bl$zrng_cost)))
     lay[[sc]] <- c(list(domain = doms[[i]], yaxis = ax("year"),
                         aspectmode = "cube", camera = CAMERA), zx)
-    ann[[i]] <- list(text = LABELS[[b]], x = mean(doms[[i]]$x),
-                     y = doms[[i]]$y[2], xref = "paper", yref = "paper",
+    # In each quadrant's UPPER-LEFT corner, hanging below the top edge --
+    # centred titles straddled the 0.5 seam onto the upper scenes, and even
+    # anchored ones read as captions of the plot above; the corner is where
+    # the neighbouring scene's centred cube leaves the most clearance, and it
+    # matches the 2-D facet labels (left-aligned, frontier_theme).
+    ann[[i]] <- list(text = LABELS[[b]], x = doms[[i]]$x[1] + 0.01,
+                     y = doms[[i]]$y[2] - 0.01, xanchor = "left",
+                     yanchor = "top", xref = "paper", yref = "paper",
                      showarrow = FALSE, font = list(color = INK, size = 14))
   }
   lay$annotations <- ann
