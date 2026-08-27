@@ -4,9 +4,14 @@
 (Claude has put long notes under the tables, which I need to clean up.)
 
 ## Models
-Given a set of time, cost, accuracy triples $\left(t_i, c_i, a_i\right)$, define the Pareto frontier by
+Given a set of time, cost, accuracy triples $\left(t_i, c_i, a_i\right)$, define the Pareto accuracy frontier by
 
 $$P_t(c) = \max\limits_{i | c_i \le c, t_i \le t} a_i$$
+<br>
+and the Pareto cost frontier by
+
+$$C_t(a) = \min\limits_{i | a_i \ge a, t_i \le t} c_i$$
+
 <br>
 
 * The "Logistic, Pareto points" model fits a logistic to these points, with controls based on time and cost.
