@@ -84,10 +84,10 @@ TERMS <- list(
   # time, their product, and the profiled transform parameters themselves
   list(t = "phic",             p = "BC cost",            h = "BC cost"),
   # the cost-direction BC terms (fit_cost_bc): transformed odds a/(1-a)
-  list(t = "phia",             p = "BC odds",            h = "BC odds"),
+  list(t = "phia",             p = "BC accuracy odds",            h = "BC accuracy odds"),
   list(t = "phit",             p = "BC time",            h = "BC time"),
   list(t = "phixt",            p = "BC cost x BC time",  h = "BC cost &times; BC time"),
-  list(t = "phiat",            p = "BC odds x BC time",  h = "BC odds &times; BC time"),
+  list(t = "phiat",            p = "BC accuracy odds x BC time",  h = "BC accuracy odds &times; BC time"),
   list(t = "lambda_cost",      p = "lambda_cost",        h = "&lambda;<sub>cost</sub>"),
   list(t = "lambda_odds",      p = "lambda_odds",        h = "&lambda;<sub>accuracy</sub>"),
   list(t = "lambda_time",      p = "lambda_time",        h = "&lambda;<sub>time</sub>"),

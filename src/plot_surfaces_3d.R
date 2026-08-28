@@ -23,6 +23,11 @@
 # where the surface bends back or the transform has no preimage -- holes, not
 # folds, exactly as the 2-D figures blank.
 #
+# A third view, surface3d_<key>_<spec>_decline.html (12 more files), plots the
+# INSTANTANEOUS RATE OF COST DECLINE at fixed accuracy -- d ln C / dt read off
+# each fitted surface, as a quarterly percentage -- over (accuracy, date); see
+# the decline section at the end of this file.
+#
 # The widgets are static HTML + client-side WebGL (htmlwidgets/plotly): no
 # server, so they serve from the repo or GitHub Pages as-is. Written with
 # selfcontained = FALSE and a SHARED output/lib directory, so plotly.js is
@@ -208,6 +213,15 @@ ax_cost <- function(rng) {
                               ticktext = dollar_log(10^k[keep])))
 }
 
+# An accuracy axis: internally logit accuracy (the lattice the fits live on),
+# labelled in PERCENT, the same trick ax_cost plays with dollars.
+ax_acc <- function(rng) {
+  a <- c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99)
+  keep <- qlogis(a) >= rng[1] & qlogis(a) <= rng[2]
+  c(ax("accuracy"), list(tickvals = qlogis(a[keep]),
+                         ticktext = sprintf("%g%%", 100 * a[keep])))
+}
+
 # Initial viewpoint: the box's near lower corner is the one with the LOWEST
 # date and LOWEST cost -- the eye sits in the (min x, min y) quadrant, so the
 # frontier view leads with cheap-and-early and the iso view with the low end
@@ -223,6 +237,8 @@ CAMERA <- list(eye = list(x = -1.2, y = -1.2, z = 0.7))
 # hidesurface drops the fill entirely and the x/y contour lines draw the mesh,
 # so the fitted shape is legible without occluding the data surface behind it.
 # Ink-colored, not black -- black segments would vanish on the dark backdrop.
+# The "decline" view has no empirical counterpart (pass zs_emp = NULL): the
+# fitted rate surface is drawn filled, over (accuracy, year).
 page <- function(zs_emp, zs_fit, xs, view) {
   # Full-bleed cells, two across and however many rows the benchmark count
   # needs (mirroring the 2-D figures' N x 2 facets): scenes carry generous
@@ -245,23 +261,32 @@ page <- function(zs_emp, zs_fit, xs, view) {
     b <- benches[i]
     bl <- bundles[[b]]
     sc <- if (i == 1) "scene" else paste0("scene", i)
-    p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_emp[[b]],
-                     scene = sc, colorscale = COLORSCALE, showscale = FALSE,
-                     name = "empirical")
-    xr <- range(xs[[b]]); yr <- range(bl$year)
-    mesh <- function(rng, n = 14) list(show = TRUE, color = INK,
-                                       width = 2, start = rng[1],
-                                       end = rng[2], size = diff(rng) / n)
-    p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_fit[[b]],
-                     scene = sc, hidesurface = TRUE, showscale = FALSE,
-                     contours = list(x = mesh(xr), y = mesh(yr)),
-                     name = "fitted")
+    if (is.null(zs_emp)) {
+      p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_fit[[b]],
+                       scene = sc, colorscale = COLORSCALE, showscale = FALSE,
+                       name = "fitted")
+    } else {
+      p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_emp[[b]],
+                       scene = sc, colorscale = COLORSCALE, showscale = FALSE,
+                       name = "empirical")
+      xr <- range(xs[[b]]); yr <- range(bl$year)
+      mesh <- function(rng, n = 14) list(show = TRUE, color = INK,
+                                         width = 2, start = rng[1],
+                                         end = rng[2], size = diff(rng) / n)
+      p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_fit[[b]],
+                       scene = sc, hidesurface = TRUE, showscale = FALSE,
+                       contours = list(x = mesh(xr), y = mesh(yr)),
+                       name = "fitted")
+    }
     zx <- if (view == "frontier")
       list(xaxis = ax_cost(range(xs[[b]])),
            zaxis = c(ax("accuracy"), list(range = c(0, 1))))
-    else
+    else if (view == "isoaccuracy")
       list(xaxis = ax("logit accuracy"),
            zaxis = c(ax_cost(bl$zrng_cost), list(range = bl$zrng_cost)))
+    else
+      list(xaxis = ax_acc(range(xs[[b]])),
+           zaxis = ax("cost drop, %/qtr"))
     lay[[sc]] <- c(list(domain = doms[[i]], yaxis = ax("year"),
                         aspectmode = "cube", camera = CAMERA), zx)
     # In each quadrant's UPPER-LEFT corner, hanging below the top edge --
@@ -303,5 +328,97 @@ for (spec in c("lin", "quad", "bc")) {
                               libdir = "lib", title = f)
       cat("wrote", f, "\n")
     }
+  }
+}
+
+## ---- rate-of-decline surfaces --------------------------------------------------------
+#
+# The estimand every "cost drop, %/qtr" cell summarises, un-collapsed: the
+# instantaneous rate of cost decline at fixed accuracy, over (accuracy, date).
+# For the linear specification this surface is flat at the tables' single
+# number; for the quadratic and Box-Cox specifications it is not, and its
+# shape is the answer to "declining faster at the frontier's top or bottom,
+# early or late".
+#
+# Accuracy-direction fits: holding the index z fixed,
+#   d ln c / dt = -(dz/dt) / (dz/d ln c),
+# evaluated ALONG the surface -- ln c pinned by inverting the fit at each
+# (accuracy, date) node (zacc_inverted's rising branch). Cost-direction fits
+# model ln C(la, t) directly, so the rate is just d lnC/dt at the node.
+# Everything is reported as the tables' transform 100*(1 - exp(rate/4)):
+# percent cheaper per quarter, positive = falling.
+#
+# Blanked, not extrapolated: where the inversion has no admissible root, and
+# where the fitted cost leaves the OBSERVED cost range -- the same clip the
+# 2-D iso-accuracy contours apply, because out there the "decline" is the
+# functional form talking to itself. For the accuracy direction the near-fold
+# region (cost slope under 0.05 logits per log dollar) blanks too, mirroring
+# zacc_inverted's own guard: the ratio explodes exactly where the surface
+# stops being invertible.
+
+# Both return a [N_T, N_X] matrix of quarterly percentage declines on the
+# bundle's (la, tc) lattice, NA where blanked.
+decline_acc <- function(fit, bl) {
+  u <- zacc_inverted(fit, bl)               # ln cost over (la, tc)
+  urng <- range(bl$s$lncost)
+  u[u < urng[1] | u > urng[2]] <- NA_real_
+  tcm <- matrix(bl$tc, N_T, N_X)
+  if (is_bc_fit(fit)) {
+    # dz/d ln c = (bx + bxt*phit) * lc-transform slope * c = (...) * c^lc;
+    # dz/dt     = (bt + bxt*phic) * tau^(lt - 1)
+    p <- bc_pieces(fit)
+    cost <- exp(u)
+    tau <- tcm + bl$off
+    den <- (p$bx + p$bxt * bc_tf(tau, p$lt)) * cost^p$lc
+    num <- (p$bt + p$bxt * bc_tf(cost, p$lc)) * tau^(p$lt - 1)
+    g <- -num / ifelse(den > 0, den, NA_real_)
+  } else {
+    co <- frontier_coefs(fit)
+    den <- frontier_dcost(co, u, tcm)
+    g <- -frontier_dtime(co, u, tcm) / ifelse(den > 0.05, den, NA_real_)
+  }
+  100 * (1 - exp(g / 4))
+}
+
+decline_cost <- function(fit, bl) {
+  g <- grid_lt(bl$la, bl$tc)
+  urng <- range(bl$s$lncost)
+  if (is_cost_bc(fit)) {
+    # d lnC/dt = (gt + gat*phia) * tau^(lt - 1) / C^lC  (the index derivative
+    # over d phi(C)/d lnC)
+    cf <- coef(fit)
+    names(cf) <- sub("^beta_", "", names(cf))
+    lam <- attr(fit, "bc_lambda")
+    tau <- g$t + bl$off
+    phia <- bc_tf(exp(g$x), lam[["lambda_odds"]])
+    phit <- bc_tf(tau, lam[["lambda_time"]])
+    eta <- cf[["(Intercept)"]] + cf[["phia"]] * phia + cf[["phit"]] * phit +
+      cf[["phiat"]] * phia * phit
+    lnC <- ln_bc_inv(eta, lam[["lambda_cost"]])
+    rate <- (cf[["phit"]] + cf[["phiat"]] * phia) * tau^(lam[["lambda_time"]] - 1) /
+      exp(lam[["lambda_cost"]] * lnC)
+  } else {
+    co <- cost_coefs(fit)
+    lnC <- cost_index(co, g$x, g$t)
+    rate <- cost_dtime(co, g$x, g$t)
+  }
+  rate[is.na(lnC) | lnC < urng[1] | lnC > urng[2]] <- NA_real_
+  as_z(100 * (1 - exp(rate / 4)))
+}
+
+for (spec in c("lin", "quad", "bc")) {
+  for (key in names(fits)) {
+    fset <- fits[[key]][[spec]]
+    zs <- setNames(lapply(benches, function(b) {
+      bl <- bundles[[b]]
+      if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl)
+      else decline_cost(fset[[b]], bl)
+    }), benches)
+    xs <- lapply(bundles, function(bl) bl$la)
+    w <- page(NULL, zs, xs, "decline")
+    f <- sprintf("surface3d_%s_%s_decline.html", key, spec)
+    htmlwidgets::saveWidget(w, out_path(f), selfcontained = FALSE,
+                            libdir = "lib", title = f)
+    cat("wrote", f, "\n")
   }
 }

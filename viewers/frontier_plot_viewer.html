@@ -155,11 +155,15 @@
              PLOTS as the outcome. Accuracy plots frontier curves (accuracy
              against cost by date); Cost plots iso-accuracy contours (cost
              against date by accuracy level). Either modeled variable can be
-             shown either way -- native in one, inverted in the other. -->
+             shown either way -- native in one, inverted in the other. The
+             third option plots the rate of cost decline at fixed accuracy
+             read off the fitted surface, over (accuracy, date) -- 3-D only,
+             Pareto-grid models only (plot_surfaces_3d.R). -->
         <div class="control-group">
           <div class="group-label">Plotted variable</div>
           <label><input type="radio" name="plotType" value="frontier" checked /> Accuracy (isochrone curves)</label>
-          <label><input type="radio" name="plotType" value="isoaccuracy" /> Cost (iso-accuracy cruves)</label>
+          <label><input type="radio" name="plotType" value="isoaccuracy" /> Cost (iso-accuracy curves)</label>
+          <label><input type="radio" name="plotType" value="decline" /> Cost decline rate (%/qtr)</label>
         </div>
 
         <div class="control-group">
@@ -260,6 +264,18 @@
         const frame = document.getElementById("plot3d");
         const label = document.getElementById("filename");
         const model = getRadioValue("model");
+
+        // Decline-rate surfaces exist only as 3-D pages: the quantity is a
+        // whole surface over (accuracy, date), and the 2-D figure set has no
+        // counterpart for it.
+        if (getRadioValue("plotType") === "decline" &&
+            getRadioValue("rendering") !== "3d") {
+          img.style.display = "none";
+          frame.style.display = "none";
+          label.innerHTML =
+            '<span class="missing">Cost-decline surfaces are 3-D only; switch Rendering to 3-D.</span>';
+          return;
+        }
 
         if (getRadioValue("rendering") === "3d") {
           img.style.display = "none";
