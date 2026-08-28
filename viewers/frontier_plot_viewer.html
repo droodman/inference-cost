@@ -158,14 +158,14 @@
              shown either way -- native in one, inverted in the other. -->
         <div class="control-group">
           <div class="group-label">Plotted variable</div>
-          <label><input type="radio" name="plotType" value="frontier" checked /> Accuracy (frontier curves)</label>
-          <label><input type="radio" name="plotType" value="isoaccuracy" /> Cost (iso-accuracy)</label>
+          <label><input type="radio" name="plotType" value="frontier" checked /> Accuracy (isochrone curves)</label>
+          <label><input type="radio" name="plotType" value="isoaccuracy" /> Cost (iso-accuracy cruves)</label>
         </div>
 
         <div class="control-group">
           <div class="group-label">Model</div>
           <label><input type="radio" name="model" value="paretologit" checked autocomplete="off"/> <span data-acc="Logistic, Pareto points" data-cost="Least squares, Pareto grid">Logistic, Pareto points</span></label>
-          <label><input type="radio" name="model" value="envelope" /> <span data-acc="Strict logistic envelope" data-cost="Strict cost envelope">Strict logistic envelope</span></label>
+          <label><input type="radio" name="model" value="paretologitenv" /> <span data-acc="Logistic, Pareto points, envelope-constrained" data-cost="Least squares, Pareto grid, envelope-constrained">Logistic, Pareto points, envelope-constrained</span></label>
           <label><input type="radio" name="model" value="S" /> <span data-acc="Logistic, all points" data-cost="Least squares, all points">Logistic, all points</span></label>
           <label><input type="radio" name="model" value="A"/> <span data-acc="Stochastic frontier" data-cost="Stochastic cost frontier">Stochastic frontier</span></label>
           <label><input type="radio" name="model" value="B" /> <span data-acc="Stochastic frontier (time-dependent inefficiency spread)" data-cost="Stochastic cost frontier (time-dependent inefficiency spread)">Stochastic frontier (time-dependent inefficiency spread)</span></label>
@@ -180,7 +180,8 @@
 
         <!-- 3-D: interactive WebGL surfaces (plot_surfaces_3d.R) -- the
              empirical staircase/record surface with the fitted surface
-             overlaid. Built for the Pareto-grid model only, in both
+             overlaid. Built for the frontier-per-se models only: the
+             Pareto-grid logit and its envelope-constrained variant, in both
              directions and all three orders. -->
         <div class="control-group">
           <div class="group-label">Rendering</div>
@@ -208,7 +209,7 @@
       // paretologit in the accuracy direction.
       const COST_KEY = {
         paretologit: "costgridols",
-        envelope: "costenvelope",
+        paretologitenv: "costgridolsenv",
         S: "costols",
         A: "costsfa",
         B: "costsfab",
@@ -226,10 +227,11 @@
             : `isoaccuracy_${key}_${order}.png`;
         }
 
-        // Models with their own fitting script (envelope, Pareto-point logit)
-        // are named <model>_<order>.png rather than following the SFA grid's
+        // Models with their own fitting script (the Pareto-point logit and
+        // its envelope-constrained variant) are named <model>_<order>.png
+        // rather than following the SFA grid's
         // frontier_progression_<family>_<order>.png pattern.
-        if (model === "envelope" || model === "paretologit") {
+        if (["paretologit", "paretologitenv"].includes(model)) {
           if (plotType === "frontier") {
             return `${model}_${order}.png`;
           }
@@ -257,17 +259,16 @@
         const img = document.getElementById("plot");
         const frame = document.getElementById("plot3d");
         const label = document.getElementById("filename");
+        const model = getRadioValue("model");
 
         if (getRadioValue("rendering") === "3d") {
           img.style.display = "none";
-          const model = getRadioValue("model");
-          // 3-D surfaces exist for the frontier-per-se models (Pareto grid
-          // and envelope, both directions, all orders) -- see
-          // plot_surfaces_3d.R
-          if (model !== "paretologit" && model !== "envelope") {
+          // 3-D surfaces exist for the frontier-per-se models (the Pareto-grid
+          // pair, both directions) -- see plot_surfaces_3d.R
+          if (!["paretologit", "paretologitenv"].includes(model)) {
             frame.style.display = "none";
             label.innerHTML =
-              '<span class="missing">3-D renderings are built for the Pareto-grid and envelope models only.</span>';
+              '<span class="missing">3-D renderings are built for the Pareto-grid models only.</span>';
             return;
           }
           const key = getRadioValue("direction") === "cost" ? COST_KEY[model] : model;

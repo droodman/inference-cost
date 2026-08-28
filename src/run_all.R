@@ -31,8 +31,8 @@
 SCRIPTS <- c(
   "pareto_frontiers.R",    # nonparametric staircase figure
   "plot_frontiers.R",      # SFA + S figures, both views, + fit diagnostics
-  "plot_envelope.R",       # envelope figures, both views, + touch diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
+  "plot_paretologitenv.R", # envelope-constrained variant, both views
   "plot_cost_frontier.R",  # cost-direction dual figures, both views
   "plot_surfaces_3d.R",    # interactive 3-D surfaces for the Pareto-grid pair
   "cost_frontier_report.R",# cost-direction dual fits: rate comparison (console)

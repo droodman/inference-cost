@@ -16,16 +16,16 @@
 # accuracy-direction counterparts so the viewer can flip between directions
 # panel for panel:
 #
-#   costols       lm of ln cost on the accuracy terms and date over all
-#                 positive-accuracy runs -- the reverse regression of model
-#                 S: the TYPICAL cost of a run scoring a, not a frontier
-#   costsfa       stochastic cost frontier, constant inefficiency scale
-#                 (family A's dual)
-#   costsfab      the same with log sigma_u linear in date (B's dual)
-#   costgridols   least squares to the record cost ln C_a(t) on the fixed
-#                 (logit accuracy, date) grid -- the Pareto-grid logit's dual
-#   costenvelope  the highest surface under every run's log cost -- the
-#                 strict envelope's dual
+#   costols         lm of ln cost on the accuracy terms and date over all
+#                   positive-accuracy runs -- the reverse regression of model
+#                   S: the TYPICAL cost of a run scoring a, not a frontier
+#   costsfa         stochastic cost frontier, constant inefficiency scale
+#                   (family A's dual)
+#   costsfab        the same with log sigma_u linear in date (B's dual)
+#   costgridols     least squares to the record cost ln C_a(t) on the fixed
+#                   (logit accuracy, date) grid -- the Pareto-grid logit's dual
+#   costgridolsenv  the grid OLS objective under the cost envelope's
+#                   constraints -- the envelope-constrained logit's dual
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_store.R")   # fits come from the shared store
@@ -76,11 +76,11 @@ MODELS <- list(
                  "uniform (logit accuracy, date) grid. Grid nodes are not",
                  "observations, so no standard errors -- point estimates",
                  "only, as for the Pareto-grid logit.")),
-  costenvelope = list(
-    note = paste("The highest surface in (logit accuracy, date) lying at or",
-                 "below every run's log cost, monotone by constraint --",
-                 "pinned by a few extreme runs, like its accuracy-direction",
-                 "dual, and reporting no standard errors.")))
+  costgridolsenv = list(
+    note = paste("Least squares to the record cost ln C_a(t) on the grid,",
+                 "constrained to lie at or below every run's log cost and",
+                 "stay monotone -- the cost envelope's feasible set with the",
+                 "grid OLS's loss; no standard errors.")))
 
 # Specification lines, one per caption. The frontier-view line also covers
 # the zero-exclusion and (for the curved specs) the rising-branch blanking;

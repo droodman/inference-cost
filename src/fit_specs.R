@@ -165,7 +165,8 @@ report_scale_lr <- function(specs, d) {
 #
 # So the status column speaks only to free disposal, and the time column is left
 # as a number to read. Only the ENVELOPE imposes both, because only it claims to
-# be a frontier; see plot_envelope.R, which checks that its constraints held.
+# be a frontier; see plot_paretologitenv.R, whose binding report shows where
+# its constraints hold and bind.
 report_quadratic_pathologies <- function(specs, d) {
   cat("\nslopes of the fitted surface over the observed (cost, date) rectangle\n")
   cat("  dz/dlnc < 0 breaks free disposal; dz/dtc < 0 at low spend is expected\n")

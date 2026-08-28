@@ -9,11 +9,13 @@
 # Model order and naming follow the plot viewer, which is the version of these
 # names that has actually been read by a human:
 #
-#   S            Logistic, all tests
-#   A            Stochastic frontier
-#   B            Stochastic frontier (time-dependent inefficiency spread)
-#   paretologit  Logistic, Pareto points
-#   envelope     Strict logistic envelope
+#   S               Logistic, all tests
+#   A               Stochastic frontier
+#   B               Stochastic frontier (time-dependent inefficiency spread)
+#   paretologit     Logistic, Pareto points
+#   paretologitenv  Logistic, Pareto points, envelope-constrained
+#                   (fit_pareto_logit_env: the frontier logit's objective under
+#                   the envelope's constraints)
 #
 # Three things differ across models and the tables must not paper over them:
 #
@@ -87,7 +89,7 @@ TERMS <- list(
   list(t = "phixt",            p = "BC cost x BC time",  h = "BC cost &times; BC time"),
   list(t = "phiat",            p = "BC odds x BC time",  h = "BC odds &times; BC time"),
   list(t = "lambda_cost",      p = "lambda_cost",        h = "&lambda;<sub>cost</sub>"),
-  list(t = "lambda_odds",      p = "lambda_odds",        h = "&lambda;<sub>odds</sub>"),
+  list(t = "lambda_odds",      p = "lambda_odds",        h = "&lambda;<sub>accuracy</sub>"),
   list(t = "lambda_time",      p = "lambda_time",        h = "&lambda;<sub>time</sub>"),
   # the cost-direction SFA's noise scale; the u rows below are shared with the
   # accuracy-direction SFA tables
@@ -101,17 +103,20 @@ MODELS <- list(
   list(key = "A",           label = "Stochastic frontier"),
   list(key = "B",           label = "Stochastic frontier (time-dependent inefficiency spread)"),
   list(key = "paretologit", label = "Logistic, Pareto points"),
-  list(key = "envelope",    label = "Strict logistic envelope"),
+  list(key = "paretologitenv",
+       label = "Logistic, Pareto points, envelope-constrained"),
   # the cost-direction duals (cost_frontier.R), in the same order as their
   # accuracy-direction counterparts above
   list(key = "costols",      label = "Least squares on log cost, all tests"),
   list(key = "costsfa",      label = "Stochastic cost frontier"),
   list(key = "costsfab",     label = "Stochastic cost frontier (time-dependent inefficiency spread)"),
   list(key = "costgridols",  label = "Least squares on log cost, Pareto grid"),
-  list(key = "costenvelope", label = "Strict cost envelope")
+  list(key = "costgridolsenv",
+       label = "Least squares on log cost, Pareto grid, envelope-constrained")
 )
 
-COST_KEYS <- c("costols", "costsfa", "costsfab", "costgridols", "costenvelope")
+COST_KEYS <- c("costols", "costsfa", "costsfab", "costgridols",
+               "costgridolsenv")
 
 ## ---- fitting and extraction ---------------------------------------------------
 
@@ -119,7 +124,8 @@ COST_KEYS <- c("costols", "costsfa", "costsfab", "costgridols", "costenvelope")
 # under run_all.R these are the very objects the figure scripts drew, so table
 # and figure cannot drift apart and nothing heavy is fitted twice.
 fit_grid <- function(key) {
-  if (key %in% c("envelope", "paretologit")) return(store_grid(key))
+  if (key %in% c("paretologit", "paretologitenv"))
+    return(store_grid(key))
   lapply(setNames(nm = names(TIME_FORMS)), function(tt)
     store_specs()[[paste0(key, "_", tt)]]$fits)
 }
@@ -162,7 +168,8 @@ est_se <- function(fit) {
 # For the frontier logit the "sample" is the grid nodes carrying a defined
 # frontier value, read off the fit itself; for everything else it is the runs.
 n_obs <- function(key, b, fit = NULL) {
-  if (key == "paretologit") attr(fit, "n_grid") else sum(d$benchmark == b)
+  if (key %in% c("paretologit", "paretologitenv")) attr(fit, "n_grid")
+  else sum(d$benchmark == b)
 }
 
 ## ---- rate of cost decline ------------------------------------------------------
@@ -268,9 +275,9 @@ decl_cell <- function(cl, which = "est") {
 # naming which test row of the table the result belongs to.
 quad_test <- function(key, b, fit_lin, fit_quad) {
   extra <- c("I(lncost^2)", "I(tc^2)", "lncost:tc")
-  # no test for the envelope or the frontier logit: no likelihood, and no
-  # sampling distribution for a Wald statistic built on grid nodes
-  if (key %in% c("envelope", "paretologit")) return(NULL)
+  # no test for the frontier logits: no likelihood, and no sampling
+  # distribution for a Wald statistic built on grid nodes
+  if (key %in% c("paretologit", "paretologitenv")) return(NULL)
   if (key %in% c("A", "B")) {
     df <- sum(activePar(fit_quad)) - sum(activePar(fit_lin))
     stat <- 2 * (as.numeric(logLik(fit_quad)) - as.numeric(logLik(fit_lin)))
@@ -433,7 +440,7 @@ pooled_col_cost <- function(fitlist) {
 # SFA duals), the Wald analogue on the HC1 covariance for the all-runs OLS
 # (mirroring model S), nothing for the two grid-based fits.
 cost_quad_test <- function(key, fit_lin, fit_quad) {
-  if (key %in% c("costgridols", "costenvelope")) return(NULL)
+  if (key %in% c("costgridols", "costgridolsenv")) return(NULL)
   if (key %in% c("costsfa", "costsfab")) {
     df <- sum(activePar(fit_quad)) - sum(activePar(fit_lin))
     stat <- 2 * (as.numeric(logLik(fit_quad)) - as.numeric(logLik(fit_lin)))
@@ -485,8 +492,8 @@ build_model_cost <- function(key) {
       # runs (zeros carry no logit coordinate)
       list(bench = b, spec = tt, head = LABELS[[b]],
            es = if (tt == "bc") est_se_bc(f) else est_se(f),
-           n = if (key == "costgridols") attr(f, "n_grid") else
-             nrow(iso_runs(d[d$benchmark == b, ])),
+           n = if (key %in% c("costgridols", "costgridolsenv"))
+             attr(f, "n_grid") else nrow(iso_runs(d[d$benchmark == b, ])),
            decline = if (tt == "lin") cost_decline_dual(f) else NULL,
            test = tst)
     })
@@ -860,10 +867,12 @@ notes_cost <- function(key, tt) {
       "(logit accuracy, date) grid -- the mirror of the accuracy-direction fits' (cost, date)",
       "grid -- and grid nodes are not observations. N is the nodes at which a level is defined;",
       "they resample a few dozen staircase corners, so N measures resolution, not information."),
-    costenvelope = paste(
-      "No standard errors: the envelope is the highest plane lying at or below every",
-      "positive-accuracy run's log cost -- a constrained optimisation with no likelihood behind",
-      "it, monotone by constraint and pinned by a few extreme runs. N is the runs it must clear."))
+    costgridolsenv = paste(
+      "No standard errors: this is the grid OLS's objective -- the record cost ln C_a(t) sampled",
+      "on the uniform (logit accuracy, date) grid -- minimised subject to the cost envelope's",
+      "constraints: the surface must lie at or below every positive-accuracy run's log cost, rise",
+      "with accuracy and never rise with date. Grid nodes are not observations and the constrained",
+      "fit has no likelihood, so errors would be fictions twice over. N is the defined grid nodes."))
   extra <- if (key == "costsfab") paste(
     "log sigma_u x time lets the inefficiency spread move with date; the constant-scale variant",
     "is the table before this one.") else ""
@@ -898,8 +907,9 @@ notes_cost <- function(key, tt) {
                            "fits on different response scales comparable,"),
            costgridols = paste("against the grid's Gaussian profile likelihood (transformed-scale residual",
                                "sum of squares with the Box-Cox Jacobian term),"),
-           costenvelope = paste("against the envelope's mean fitted LOG COST -- the fitted index inverted node",
-                                "by node, so the objective is in log dollars for every lambda_cost,"),
+           costgridolsenv = paste("against the grid's Gaussian profile likelihood (transformed-scale residual",
+                                  "sum of squares with the Box-Cox Jacobian term), subject to the cost",
+                                  "envelope's constraints,"),
            "against the likelihood, with the Box-Cox Jacobian term for the response transform,"),
     "and are reported without standard errors; a lambda of exactly 3 or -2 sits on the edge of",
     "the search box, the flat profile having run to the wall. fm13's lambda_time is fixed at 1",
@@ -933,8 +943,11 @@ notes_plain <- function(key, kind, tt = "lin") {
                         "frontier is defined; they resample a few dozen staircase corners, so N measures resolution, not",
                         "information."),
     A = , B = "Robust (sandwich) standard errors, as the SFA objective is a quasi-likelihood in the Papke-Wooldridge sense.",
-    envelope = paste("No standard errors: the envelope is the solution of a constrained optimisation with no likelihood behind it,",
-                     "so none are reported rather than invented. N is the runs it must clear."))
+    paretologitenv = paste("No standard errors: this is the frontier logit's objective -- the empirical Pareto frontier P_t(c)",
+                           "sampled on the fixed cost-date grid -- minimised subject to the envelope's constraints: the surface",
+                           "must lie at or above every run (perfect scores clipped by their own sample size) and be monotone in",
+                           "cost and date. Grid nodes are not observations and the constrained fit has no likelihood, so errors",
+                           "would be fictions twice over. N is the nodes at which the frontier is defined."))
   tst <- if (is.null(kind) || !length(kind)) {
     "No quadratic-versus-linear test: there is no likelihood to test and no sampling distribution to appeal to."
   } else if (kind[1] == "LR") {
@@ -946,7 +959,7 @@ notes_plain <- function(key, kind, tt = "lin") {
   decl <- paste("cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed",
                 "accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the",
                 "quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.",
-                if (key %in% c("envelope", "paretologit")) "" else
+                if (key %in% c("paretologit", "paretologitenv")) "" else
                   paste("Standard error by the delta method on the same robust covariance, taken on the transformed",
                         "quantity. Being symmetric it can reach past 100% where the estimated drop is near total."))
   pb <- intersect(PRIMARY_BENCHES, benches)
@@ -985,7 +998,7 @@ notes_plain <- function(key, kind, tt = "lin") {
     "mid-2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in",
     "cost at every date -- the quadratic's bending back toward the data cannot happen -- while the product term",
     "still allows the cost slope one sign change over time.",
-    if (key %in% c("envelope", "paretologit"))
+    if (key %in% c("paretologit", "paretologitenv"))
       paste("For this model the RESPONSE side is transformed too: the index is phi(odds; lambda_odds), the",
             "logit exactly at lambda_odds = 0, so odds and cost are treated symmetrically -- the profile is",
             "well-posed because the objective is stated on a lambda_odds-invariant scale.")
@@ -994,9 +1007,9 @@ notes_plain <- function(key, kind, tt = "lin") {
     "The lambdas are estimated per benchmark by profiling",
     switch(key, S = "the quasibinomial deviance,", A = , B = "the likelihood,",
            paretologit = "the probability-scale quasi-likelihood,",
-           envelope = "the envelope's mean fitted accuracy,"),
+           paretologitenv = "the probability-scale quasi-likelihood, subject to the envelope's constraints,"),
     "and are reported without standard errors: the profile provides none, and",
-    if (key %in% c("envelope", "paretologit"))
+    if (key %in% c("paretologit", "paretologitenv"))
       "this model reports none anywhere."
     else
       paste("the coefficient standard errors are conditional on the profiled lambdas --",
@@ -1004,7 +1017,7 @@ notes_plain <- function(key, kind, tt = "lin") {
     if (key %in% c("A", "B"))
       paste("The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) --",
             "its LR row tests exactly those restrictions -- but not the quadratic.")
-    else if (key %in% c("envelope", "paretologit"))
+    else if (key %in% c("paretologit", "paretologitenv"))
       paste("The BC specification nests the linear one (lambda_cost = 0, lambda_odds = 0, lambda_time = 1, no",
             "product term) but not the quadratic.")
     else

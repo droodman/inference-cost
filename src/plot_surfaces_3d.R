@@ -5,14 +5,14 @@
 # scene and the shelf-and-cliff geometry, and how each specification does or
 # does not follow it, is directly visible.
 #
-# The frontier-per-se models only -- the Pareto-grid pair and the envelope
-# pair -- because those are the models whose empirical reference IS the
-# staircase/record surface drawn beneath them (the run-level models' honest
-# reference would be the run cloud, a different figure). The envelope gains
-# the most from rotation: its whole claim is one-sided, so where the
-# wireframe touches the data surface and how far it floats elsewhere is the
-# visual form of its slack diagnostics. Each model is rendered in three
-# specifications and BOTH orientations:
+# The frontier-per-se models only -- the Pareto-grid fits, unconstrained and
+# envelope-constrained, in both directions -- because those are the models
+# whose empirical reference IS the staircase/record surface drawn beneath
+# them (the run-level models' honest reference would be the run cloud, a
+# different figure). The constrained fits gain the most from rotation: where
+# the wireframe touches the data surface is the visual form of their slack
+# diagnostics. Each model is rendered in three specifications and BOTH
+# orientations:
 #
 #   frontier     x = ln cost, y = year, z = accuracy      (performance surface)
 #   isoaccuracy  x = logit accuracy, y = year, z = ln cost (cost surface)
@@ -41,12 +41,13 @@ tbar <- bench_tbar(d)
 
 ## ---- fits: both frontier-per-se pairs, three specifications each ------------------
 
-ACC_KEYS <- c("paretologit", "envelope")   # which keys are accuracy-direction
+# which keys are accuracy-direction; the cost keys below are their duals
+ACC_KEYS <- c("paretologit", "paretologitenv")
 
 # All from the shared store (fit_store.R): under run_all.R these are the same
 # objects the 2-D figure scripts and the tables already fitted.
 fits <- list()
-for (key in c(ACC_KEYS, "costgridols", "costenvelope")) {
+for (key in c(ACC_KEYS, "costgridols", "costgridolsenv")) {
   grid <- if (key %in% ACC_KEYS) store_grid(key) else store_cost(key)
   fits[[key]] <- c(grid, list(
     bc = if (key %in% ACC_KEYS) store_bc(key) else store_cost_bc(key)))

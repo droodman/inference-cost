@@ -40,15 +40,16 @@ benches <- bench_levels(d$benchmark)
 ## ---- the staircase being sampled ------------------------------------------------
 
 # The frontier's jump points -- what the grid values resample. Selected on RAW
-# accuracy over ALL runs, which is P_t(c) as defined above. fit_envelope() feeds
-# pareto_binding() something slightly different (clipped logit, zero scores
-# dropped, because logit(0) = -Inf cannot be a constraint); the counts of both
-# sets are reported below rather than assumed away.
+# accuracy over ALL runs, which is P_t(c) as defined above. The
+# envelope-constrained variant feeds pareto_binding() something slightly
+# different (clipped logit, zero scores dropped, because logit(0) = -Inf
+# cannot be a constraint); the counts of both sets are reported below rather
+# than assumed away.
 frontier_rows <- function(s) s[pareto_binding(s$lncost, s$tc, s$acc), , drop = FALSE]
 
 cat("staircase corners, and the grid that resamples them\n")
-cat(sprintf("%-6s %8s %9s %9s %10s\n", "bench", "all runs", "corners",
-            "envelope", "grid nodes"))
+cat(sprintf("%-6s %8s %9s %11s %10s\n", "bench", "all runs", "corners",
+            "constraints", "grid nodes"))
 fits_by_spec <- store_grid("paretologit")
 
 for (b in benches) {
@@ -57,7 +58,7 @@ for (b in benches) {
   pos <- which(is.finite(L))
   n_env <- length(pareto_binding(s$lncost[pos], s$tc[pos], L[pos]))
   f <- fits_by_spec$lin[[b]]
-  cat(sprintf("%-6s %8d %9d %9d %10d\n", b, nrow(s),
+  cat(sprintf("%-6s %8d %9d %11d %10d\n", b, nrow(s),
               attr(f, "n_corners"), n_env, attr(f, "n_grid")))
 }
 
@@ -101,16 +102,16 @@ iso_ranges <- do.call(rbind, lapply(benches, function(b) {
   data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
 }))
 
-# Pinned the same way plot_envelope.R pins its panels, so the two figures can be
-# laid side by side and read panel for panel.
+# Pinned the same way plot_paretologitenv.R pins its panels, so the two figures
+# can be laid side by side and read panel for panel.
 axis_ranges <- do.call(rbind, lapply(benches, function(b) {
   s <- d[d$benchmark == b, ]
   data.frame(benchmark = b, cost = range(s$cost), value = c(0, 1))
 }))
 
 # The staircase the fit is tracking, drawn underneath it exactly as
-# plot_envelope.R draws it -- and its iso-accuracy counterpart at the contour
-# levels, for the swapped-axes figure.
+# plot_paretologitenv.R draws it -- and its iso-accuracy counterpart at the
+# contour levels, for the swapped-axes figure.
 steps <- pareto_curves(d, dates)
 iso_steps <- iso_pareto_curves(d, LEVELS)
 

@@ -21,16 +21,16 @@
 # Estimation is by PROFILE: at fixed (lambda_c, lambda_t) the model is linear in
 # its coefficients, so each family's existing fitter runs on pre-transformed
 # columns, and the outer optimisation moves the lambdas against that family's
-# own objective -- deviance for S, the likelihood for A/B, mean fitted height
-# for the envelope, the grid deviance for the Pareto logit. Coefficient standard
+# own objective -- deviance for S, the likelihood for A/B, the grid deviance
+# for the Pareto logit, constrained or not. Coefficient standard
 # errors are therefore CONDITIONAL on the profiled lambdas; the lambdas
 # themselves are reported without standard errors rather than with invented
 # ones.
 #
 # How the lambdas are searched differs by family: S/A/B use a derivative-free
-# Nelder-Mead over the profiled objective, while the two frontier-per-se models
-# get gradient-based searches (see the bc_lambda_* block below) that reach the
-# same optima 10-80x faster -- groundwork for bootstrapping the whole pipeline.
+# Nelder-Mead over the profiled objective, while the frontier-per-se models
+# seed theirs from a gradient-based search (bc_lambda_paretologit below) that
+# reaches the neighbourhood 10-80x faster.
 #
 # Identification of lambda_t is weak by construction: Box-Cox shape is read off
 # deviation-from-linearity over the observed span, roughly (span)/(8*midpoint),
@@ -41,7 +41,7 @@
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")          # fit_panel_frontier via panel_frontier.R, U_GROUP, SIGMA_FORM
-src_source("envelope_frontier.R")  # fit_envelope, fit_pareto_logit
+src_source("envelope_frontier.R")  # fit_pareto_logit, fit_pareto_logit_env
 
 # BC_T0, bc_tf() and bc_inv() live in frontier_viz.R (sourced via fit_specs.R):
 # the model-agnostic curve builders there must evaluate and invert BC fits, and
@@ -91,16 +91,9 @@ bc_grid_augment <- function(lc, lt, off) {
   }
 }
 
-# The Bernoulli quasi-log-likelihood on the PROBABILITY scale, the objective
-# both Pareto-grid variants below share. Not -deviance/2: the two differ by
-# the saturated log-likelihood, which is constant in the lambdas, but only
-# this form is computed identically by the glm path and the parametric-link
-# path, so profiles that mix them stay comparable. mu is clamped away from
-# 0/1 so a clamped link (bc_mu outside phi's range) cannot emit -Inf.
-bc_qll <- function(y, mu) {
-  mu <- pmin(pmax(mu, 1e-12), 1 - 1e-12)
-  sum(y * log(mu) + (1 - y) * log(1 - mu))
-}
+# bc_qll(), the probability-scale quasi-log-likelihood these fits profile on,
+# lives beside bc_mu() in frontier_viz.R: fit_pareto_logit_env()
+# (envelope_frontier.R) needs it too, and this file sources that one.
 
 # The Pareto-grid fit with a PARAMETRIC LINK: the doubly-transformed family's
 # response side, mu = bc_mu(eta; lambda_odds), which is the fractional logit
@@ -161,10 +154,14 @@ bc_fit_at <- function(key, s, off, lc, lt, lo = 0, start = NULL,
                             fixed = "delta_(Intercept)", start = start,
                             finalHessian = final)
     list(fit = f, obj = as.numeric(logLik(f)))
-  } else if (key == "envelope") {
-    f <- fit_envelope(sa, BC_FORM, grid_augment = bc_grid_augment(lc, lt, off),
-                      lambda_odds = lo)
-    list(fit = f, obj = -f$value)   # the lowest-sitting surface, now over lambda too
+  } else if (key == "paretologitenv") {
+    # the constrained grid fit's own objective: `value` is the mean negative
+    # quasi-ll per node, and n_grid does not move with the lambdas, so -value
+    # profiles identically to the sum bc_qll the unconstrained fit reports
+    f <- fit_pareto_logit_env(sa, BC_FORM,
+                              grid_augment = bc_grid_augment(lc, lt, off),
+                              lambda_odds = lo)
+    list(fit = f, obj = -f$value)
   } else {
     if (abs(lo) < 1e-8) {
       f <- fit_pareto_logit(sa, BC_FORM,
@@ -177,36 +174,22 @@ bc_fit_at <- function(key, s, off, lc, lt, lo = 0, start = NULL,
   }
 }
 
-## ---- dedicated lambda searches for the frontier-per-se models ---------------------
+## ---- dedicated lambda search for the frontier-per-se models -----------------------
 #
-# The two models fitted to the Pareto frontier rather than to the runs get
-# gradient-based lambda searches in place of the generic Nelder-Mead profile.
-# Head-to-head comparisons (experiment_bc_paretologit.R and
-# experiment_bc_envelope.R) picked a DIFFERENT winner for each -- the
-# asymmetry is structural, not taste:
+# The models fitted to the Pareto frontier rather than to the runs seed their
+# lambda profiles from a gradient-based search on the UNCONSTRAINED grid
+# logit: outer L-BFGS-B over the lambdas with the exact gradient via the
+# ENVELOPE THEOREM -- at the inner optimum the beta-score is zero, so
+# d(profiled ll)/d lambda is the partial derivative, read off the inner glm's
+# own residuals. The inner problem is a convex canonical-link glm IRLS cannot
+# fail, and the profiled surface is smooth. (Joint L-BFGS-B over
+# (beta, lambda) silently misconverges at default tolerances -- the
+# b_x/lambda_c ravine -- and needs ~50x more evaluations once tightened
+# enough to be trustworthy; see experiment_bc_paretologit.R.)
 #
-#   paretologit  profile kept, outer L-BFGS-B over the lambdas with the exact
-#                gradient via the ENVELOPE THEOREM: at the inner optimum the
-#                beta-score is zero, so d(profiled ll)/d lambda is the partial
-#                derivative, read off the inner glm's own residuals. The inner
-#                problem is a convex canonical-link glm IRLS cannot fail, and
-#                the profiled surface is smooth. (Joint L-BFGS-B over
-#                (beta, lambda) silently misconverges at default tolerances --
-#                the b_x/lambda_c ravine -- and needs ~50x more evaluations
-#                once tightened enough to be trustworthy.)
-#
-#   envelope     JOINT SLSQP over (beta, lambda) at once: analytic objective
-#                gradient and constraint Jacobian, run constraints bilinear in
-#                (beta, lambda), monotonicity still enforced at the phi range
-#                endpoints because phi is increasing whatever lambda is. Two
-#                starts, best feasible kept. (The profile-gradient route fails
-#                HERE: the value function is only piecewise smooth in lambda --
-#                kinks where the active constraint set changes -- and recovering
-#                the KKT multipliers adds fragility, not robustness.)
-#
-# Both searches only pick the lambdas; fit_bc() then refits through bc_fit_at()
-# at the optimum, so the returned object is the canonical fit_pareto_logit /
-# fit_envelope result whatever route found the lambdas.
+# The search only picks seed lambdas; fit_bc() then profiles the full triple
+# by Nelder-Mead and refits through bc_fit_at() at the optimum, so the
+# returned object is the canonical inner fit whatever route found the lambdas.
 
 bc_lambda_paretologit <- function(s, off, lt_free, lambda_start) {
   # The grid staircase does not depend on the lambdas, so compute it once; only
@@ -253,105 +236,6 @@ bc_lambda_paretologit <- function(s, off, lt_free, lambda_start) {
   if (lt_free) o$par else c(o$par, 1)
 }
 
-bc_lambda_envelope <- function(s, off, lt_free, lambda_start) {
-  # The lambda-invariant setup, hoisted: the logit clipping, the Pareto
-  # reduction to binding candidates, and the grid coordinates. Mirrors the
-  # front half of fit_envelope(); the phi columns are rebuilt per evaluation.
-  L <- qlogis(clip_acc(s$acc, s$n_samples))
-  pos <- which(is.finite(L))
-  bind <- pos[pareto_binding(s$lncost[pos], s$tc[pos], L[pos])]
-  Lb <- L[bind]
-  cost_b <- s$cost[bind]
-  tau_b <- s$year[bind] - BC_T0
-  gr <- objective_grid(s)
-  cost_g <- exp(gr$lncost)
-  tau_g <- gr$tc + off
-  te <- range(tau_g)
-  ce <- range(cost_g)
-
-  # Everything the joint solver needs at theta = (beta, lc[, lt]): objective
-  # (mean surface height on the grid) and its gradient, constraints
-  # (ci - ui(lambda) beta <= 0: run rows then 4 monotonicity rows at the phi
-  # range endpoints) and their Jacobian. All closed-form via bc_dtf.
-  pieces <- function(b, lc, lt) {
-    phicb <- bc_tf(cost_b, lc)
-    phitb <- bc_tf(tau_b, lt)
-    ui <- rbind(cbind(1, phicb, phitb, phicb * phitb),
-                c(0, 1, 0, bc_tf(te[1], lt)), c(0, 1, 0, bc_tf(te[2], lt)),
-                c(0, 0, 1, bc_tf(ce[1], lc)), c(0, 0, 1, bc_tf(ce[2], lc)))
-    ci <- c(Lb, rep(0, 4))
-    phicg <- bc_tf(cost_g, lc)
-    phitg <- bc_tf(tau_g, lt)
-    Xg <- cbind(1, phicg, phitg, phicg * phitg)
-    p <- plogis(drop(Xg %*% b))
-    w <- p * (1 - p)
-    dg_lc <- c(-(b[2] + b[4] * phitb) * bc_dtf(cost_b, lc), 0, 0,
-               -b[4] * bc_dtf(ce[1], lc), -b[4] * bc_dtf(ce[2], lc))
-    dg_lt <- c(-(b[3] + b[4] * phicb) * bc_dtf(tau_b, lt),
-               -b[4] * bc_dtf(te[1], lt), -b[4] * bc_dtf(te[2], lt), 0, 0)
-    list(obj = mean(p),
-         g_obj = c(drop(crossprod(Xg, w)) / nrow(Xg),
-                   mean(w * (b[2] + b[4] * phitg) * bc_dtf(cost_g, lc)),
-                   mean(w * (b[3] + b[4] * phicg) * bc_dtf(tau_g, lt))),
-         g_con = as.vector(ci - ui %*% b),
-         jac = cbind(-ui, dg_lc, dg_lt),
-         ui = ui, ci = ci)
-  }
-
-  # Feasible start at given lambdas, replicating fit_envelope()'s b0: glm on
-  # all runs, curvature zeroed, slopes forced positive (so the monotonicity
-  # rows hold), intercept lifted to clear every run constraint.
-  cold <- function(lc, lt) {
-    phic <- bc_tf(s$cost, lc)
-    phit <- bc_tf(s$year - BC_T0, lt)
-    b0 <- unname(coef(glm(s$acc ~ phic + phit + I(phic * phit),
-                          family = quasibinomial(link = "logit"))))
-    b0[4] <- 0
-    b0[2] <- max(b0[2], 0.05)
-    b0[3] <- max(b0[3], 0.05)
-    pp <- pieces(b0, lc, lt)
-    b0[1] <- b0[1] + max(0, max(pp$g_con)) + 0.05
-    b0
-  }
-
-  free_i <- if (lt_free) 1:6 else 1:5
-  run1 <- function(lam0) {
-    th0 <- c(cold(lam0[1], lam0[2]), if (lt_free) lam0 else lam0[1])
-    unpack <- function(th) list(b = th[1:4], lc = th[5],
-                                lt = if (lt_free) th[6] else 1)
-    r <- nloptr::nloptr(
-      x0 = th0,
-      eval_f = function(th) {
-        u <- unpack(th)
-        pp <- pieces(u$b, u$lc, u$lt)
-        list(objective = pp$obj, gradient = pp$g_obj[free_i])
-      },
-      eval_g_ineq = function(th) {
-        u <- unpack(th)
-        pp <- pieces(u$b, u$lc, u$lt)
-        list(constraints = pp$g_con, jacobian = pp$jac[, free_i, drop = FALSE])
-      },
-      lb = c(rep(-Inf, 4), BC_BOX_C[1], if (lt_free) BC_BOX_T[1]),
-      ub = c(rep( Inf, 4), BC_BOX_C[2], if (lt_free) BC_BOX_T[2]),
-      opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
-                  maxeval = 5000, print_level = 0))
-    u <- unpack(r$solution)
-    pp <- pieces(u$b, u$lc, u$lt)
-    list(lam = c(u$lc, u$lt), obj = pp$obj, slack = -max(pp$g_con))
-  }
-
-  # Two starts, best feasible kept: agreement between them is the working
-  # check against the silent-misconvergence failure mode the joint approach
-  # showed on the (unconstrained) Pareto logit.
-  l0 <- pmin(pmax(lambda_start, c(BC_BOX_C[1], BC_BOX_T[1])),
-             c(BC_BOX_C[2], BC_BOX_T[2]))
-  starts <- unique(list(l0, c(1, 2)))
-  cand <- lapply(starts, run1)
-  ok <- vapply(cand, function(z) z$slack >= -1e-8, logical(1))
-  if (!any(ok)) stop("no feasible joint envelope solution from either start")
-  cand[ok][[which.min(vapply(cand[ok], `[[`, numeric(1), "obj"))]]$lam
-}
-
 # Profile fit for one family x benchmark. `s` is that benchmark's rows of the
 # analysis data; `lambda_start` seeds the outer optimiser (the caller passes S's
 # profiled lambdas to the slower families -- a starting point, not a constraint).
@@ -368,24 +252,24 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
   # The frontier-per-se models get the DOUBLY-transformed family: the
   # response side is phi(odds; lambda_odds) as well, the logit being its
   # lambda_odds = 0 member, so the specification treats odds and cost
-  # symmetrically. Their objectives are already stated on lambda_odds-
-  # invariant scales -- mean accuracy for the envelope, the probability-scale
-  # quasi-ll for the grid fit -- so the three-lambda profile is well-posed
-  # without Jacobian machinery. The dedicated 2-lambda gradient searches
-  # above survive as the SEED: they locate (lambda_cost, lambda_time) fast at
-  # lambda_odds = 0 (the nested logit-response model), and a Nelder-Mead then
+  # symmetrically. Their objective -- the probability-scale quasi-ll on the
+  # grid -- is already stated on a lambda_odds-invariant scale, so the
+  # three-lambda profile is well-posed without Jacobian machinery. The
+  # dedicated 2-lambda gradient search above survives as the SEED: it locates
+  # (lambda_cost, lambda_time) fast at lambda_odds = 0 (the nested
+  # logit-response model), and a Nelder-Mead then
   # explores the full triple from there. S/A/B keep the logit link: a
   # parametric link inside the panel-SFA kernel is heavier machinery with
   # notoriously weak identification, a bounded-response asymmetry accepted
   # and documented rather than papered over.
-  if (key %in% c("paretologit", "envelope")) {
+  if (key %in% c("paretologit", "paretologitenv")) {
+    # the envelope-constrained grid fit seeds from the UNCONSTRAINED profile
+    # search too: same objective family, and a seed need only land near
     seed <- tryCatch(
-      if (key == "paretologit")
-        bc_lambda_paretologit(s, off, lt_free, lambda_start[1:2])
-      else bc_lambda_envelope(s, off, lt_free, lambda_start[1:2]),
+      bc_lambda_paretologit(s, off, lt_free, lambda_start[1:2]),
       error = function(e) {
-        message("bc_lambda_", key, " seed failed (", conditionMessage(e),
-                "); seeding the profile from lambda_start")
+        message("bc_lambda_paretologit seed for ", key, " failed (",
+                conditionMessage(e), "); seeding the profile from lambda_start")
         c(lambda_start[1], if (lt_free) lambda_start[2] else 1)
       })
     neg3 <- function(l) {

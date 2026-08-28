@@ -22,16 +22,15 @@
 # point.
 #
 # Two fits, mirroring envelope_frontier.R's pair:
-#   fit_lncost_grid    ln C_a(t) sampled on a fixed (logit acc, date) grid,
-#                      OLS through the samples -- the dual of the Pareto-grid
-#                      logit, and the regression version of the nonparametric
-#                      check pareto_decline_qtr()
-#   fit_cost_envelope  the HIGHEST surface in (logit acc, date) lying at or
-#                      below every run's log cost -- the dual of the strict
-#                      envelope: the same Pareto corners bind, and only the
-#                      objective differs (mean fitted log cost over the grid,
-#                      maximized, where fit_envelope() minimizes mean fitted
-#                      accuracy over its grid)
+#   fit_lncost_grid      ln C_a(t) sampled on a fixed (logit acc, date) grid,
+#                        OLS through the samples -- the dual of the Pareto-grid
+#                        logit, and the regression version of the nonparametric
+#                        check pareto_decline_qtr()
+#   fit_lncost_grid_env  the same objective minimised subject to envelope
+#                        constraints: the surface lies at or BELOW every run's
+#                        log cost (achieving what run i achieved, by run i's
+#                        date, can cost no more than run i paid) and is
+#                        monotone -- the dual of fit_pareto_logit_env()
 #
 # Three specifications throughout, mirroring the accuracy direction: linear
 # and full quadratic in (logit accuracy, time) (COST_FORMS), and the Box-Cox
@@ -162,52 +161,32 @@ fit_lncost_grid <- function(data, formula = COST_FORMS$lin,
   fit
 }
 
-# The dual strict envelope: the highest surface ln C(la, tc) lying at or
-# below every run's log cost -- achieving what run i achieved, by run i's
-# date, can cost no more than run i paid. Monotone by constraint:
-# d lnC/d la >= 0 (better performance cannot be cheaper) and d lnC/d tc <= 0
-# (a released model stays available, so the record cannot rise). With the
-# quadratic each derivative is affine in (la, tc) jointly, so requiring it at
-# the FOUR CORNERS of the grid rectangle enforces it throughout -- the same
-# vertex argument fit_envelope() uses; for the linear specification the
-# corners collapse to one row per derivative. The run constraints are the
-# exact duals of fit_envelope()'s and the same Pareto reduction applies:
-# run j implies run i's constraint when it is no dearer, no later, and scored
-# no worse -- the identical pareto_binding() call. Everything is linear in
-# the coefficients, so this is a small LP; SLSQP dispatches it exactly, and
-# the best FEASIBLE candidate is kept. As in fit_envelope(), the quadratic
-# also starts from the linear solution, so the richer model can never
-# legitimately do worse than the one it nests.
+# The constraint system of fit_lncost_grid_env(): the run rows (at or BELOW
+# every run's log cost) and the monotonicity rows. The exact dual of
+# envelope_constraints() (envelope_frontier.R).
 #
-# Returns an object of class "cost_envelope_frontier": a LIST with
-#   coefficients   named numeric VECTOR (Intercept, la, tc)
-#   value          SCALAR, mean fitted log cost over the grid (the objective)
-#   worst_slack    SCALAR, minimum slack over all constraints; negative past
-#                  -1e-8 means infeasible
-#   n_binding      SCALAR integer, candidates surviving the Pareto reduction
-#   slack_envelope SCALAR, minimum slack over the RUN constraints, in log
-#                  dollars; 0 means the plane touches the data
-#   slack_mono     SCALAR, minimum slack over the two monotonicity rows
-#   tightest_row   SCALAR integer, row of `data` (post zero-drop) nearest the
-#                  plane
-#   env_slack      numeric VECTOR of run slacks, parallel to bind
-#   bind           integer VECTOR of candidate row indices
-fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
-                              n_level = 100, n_date = 40, margin = 0.05,
-                              grid_augment = NULL, response_lambda = 0) {
-  s <- iso_runs(data)
+#   s        DATA FRAME of runs AFTER iso_runs() -- carrying la, zeros dropped
+#            -- and, for the BC formula, after cost_bc_augment()
+#   formula  one of COST_FORMS or COST_BC_FORM; the monotonicity block keys
+#            off its term names
+#   gr       DATA FRAME of grid nodes carrying the formula's coordinate
+#            columns; only the RANGES of its coordinates are used, to place
+#            the corner rows
+#
+# Returns a LIST:
+#   Xb, cb  the run rows and their levels: feasibility is Xb %*% g <= cb
+#   bind    integer VECTOR of row indices into `s`, the runs behind Xb
+#   mono    monotonicity rows requiring mono %*% g >= 0
+cost_envelope_constraints <- function(s, formula, gr) {
   bind <- pareto_binding(s$lncost, s$tc, s$la)
   X  <- model.matrix(formula, s)
   Xb <- X[bind, , drop = FALSE]
   # the response as the formula states it: ln cost for the linear and
-  # quadratic specifications, phi(cost; response_lambda) for the doubly-
+  # quadratic specifications, phi(cost; lambda_cost) for the doubly-
   # transformed BC one -- the feasible set of COST surfaces is the same
   # either way, phi being monotone; only the parameterization moves
   y  <- model.response(model.frame(formula, s))
   cb <- y[bind]
-  gr <- iso_grid(data, n_level, n_date)
-  if (!is.null(grid_augment)) gr <- grid_augment(gr)
-  Xg <- model.matrix(delete.response(terms(formula)), gr)
 
   # monotonicity rows requiring row %*% g >= 0. e() returns a zero vector for
   # an absent term, so each block covers every specification it applies to.
@@ -222,8 +201,8 @@ fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
     # gat*phia*phit, and phi is increasing in its argument whatever lambda
     # is, so monotonicity in accuracy and date IS monotonicity in phia and
     # phit. Each derivative is linear in ONE other coordinate, so the ends of
-    # that coordinate's grid range bound it -- fit_envelope()'s phic branch,
-    # mirrored:
+    # that coordinate's grid range bound it -- envelope_constraints()'s phic
+    # branch, mirrored:
     #    d lnC/d phia =  ga + gat*phit  >= 0
     #   -d lnC/d phit = -(gt + gat*phia) >= 0
     mono <- unique(rbind(
@@ -233,7 +212,7 @@ fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
                numeric(ncol(X))))))
   } else {
     # quadratic (or linear): each derivative is affine in (la, tc) JOINTLY,
-    # so the four corners of the rectangle bound it -- fit_envelope()'s
+    # so the four corners of the rectangle bound it -- envelope_constraints()'s
     # corner blocks, mirrored:
     #    d lnC/d la  =  g_a + 2*g_aa*la + g_at*tc  >= 0
     #   -d lnC/d tc  = -(g_t + 2*g_tt*tc + g_at*la) >= 0
@@ -248,12 +227,17 @@ fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
         -(e("tc") + 2 * tc0 * e("I(tc^2)") + la0 * e("la:tc")),
         corners$la0, corners$tc0))))
   }
+  list(Xb = Xb, cb = cb, bind = bind, mono = mono)
+}
 
-  # Feasible start: OLS through the runs, curvature and interactions zeroed
-  # (they enter both derivatives, so leaving lm's values can hand SLSQP an
-  # infeasible start), slopes forced to the monotone signs, intercept dropped
-  # until the surface clears under every run.
-  b0 <- coef(lm(formula, data = s))
+# A starting point strictly inside the feasible set, from any lm's
+# coefficients: curvature and interactions zeroed (they enter both
+# derivatives, so leaving lm's values can hand SLSQP an infeasible start),
+# slopes forced to the monotone signs, intercept dropped until the surface
+# clears under every run by `margin`. The mirror of feasible_start()
+# (envelope_frontier.R).
+cost_feasible_start <- function(b0, Xb, cb, margin) {
+  b0[is.na(b0)] <- 0   # an aliased column would otherwise poison the drop
   for (nm in c("I(la^2)", "I(tc^2)", "la:tc", "phiat"))
     if (nm %in% names(b0)) b0[[nm]] <- 0
   for (nm in c("la", "phia"))
@@ -261,81 +245,91 @@ fit_cost_envelope <- function(data, formula = COST_FORMS$lin,
   for (nm in c("tc", "phit"))
     if (nm %in% names(b0)) b0[[nm]] <- min(b0[[nm]], 0)
   b0[[1]] <- b0[[1]] - max(0, max(drop(Xb %*% b0) - cb)) - margin
-  starts <- list(unname(b0))
-  tl <- attr(terms(formula), "term.labels")
-  if (any(grepl("^I\\(|:", tl))) {
-    inner <- fit_cost_envelope(data, COST_FORMS$lin, n_level, n_date, margin)
-    bs <- setNames(numeric(ncol(X)), nmv)
-    bs[names(coef(inner))] <- coef(inner)
-    starts <- c(starts, list(unname(bs)))
-  }
-
-  # Objective: mean fitted LOG COST over the grid, maximized -- the index
-  # inverted node by node, so the objective is in log dollars for EVERY
-  # response_lambda (at 0 the index is ln cost and this is the familiar
-  # linear objective with constant gradient). Where the index leaves phi's
-  # range the inversion is clamped rather than NA: below range (lambda > 0)
-  # reads as a huge negative log cost, which the maximizer flees, and every
-  # node's contribution is capped a little above the dearest observed run,
-  # closing the unbounded ray a NEGATIVE response_lambda would otherwise open
-  # (index -> range edge there means cost -> infinity).
-  cap <- max(s$lncost) + 5
-  obj_pieces <- function(g) {
-    eta <- drop(Xg %*% g)
-    if (abs(response_lambda) < 1e-8) {
-      lnc <- eta
-      w <- rep(1, length(eta))
-    } else {
-      base <- 1 + response_lambda * eta
-      lnc <- log(pmax(base, 1e-12)) / response_lambda
-      w <- ifelse(base > 1e-12, 1 / base, 0)
-    }
-    w[lnc >= cap] <- 0
-    lnc <- pmin(lnc, cap)
-    list(obj = -mean(lnc), grad = -drop(crossprod(Xg, w)) / nrow(Xg))
-  }
-  slack <- function(g) min(c(cb - drop(Xb %*% g), drop(mono %*% g)))
-  # Coefficient box: with near-collinear columns (a Box-Cox lambda that makes
-  # phi(tau) nearly constant) the LP can have an unbounded improving ray, and
-  # SLSQP will ride it to 1e28. The box keeps the solver finite;
-  # fit_cost_bc() then treats a solution AT the box as a failed fit, so the
-  # lambda profile steers away from the degenerate region.
-  bound <- 1e5
-  run1 <- function(x0) {
-    r <- nloptr::nloptr(
-      x0 = x0,
-      eval_f = function(g) {
-        p <- obj_pieces(g)
-        list(objective = p$obj, gradient = p$grad)
-      },
-      eval_g_ineq = function(g) list(
-        constraints = c(drop(Xb %*% g) - cb, -drop(mono %*% g)),
-        jacobian = rbind(Xb, -mono)),
-      lb = rep(-bound, ncol(X)), ub = rep(bound, ncol(X)),
-      opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
-                  maxeval = 5000, print_level = 0))
-    list(g = r$solution, obj = obj_pieces(r$solution)$obj,
-         slack = slack(r$solution))
-  }
-  cand <- c(lapply(starts, run1),
-            lapply(starts, function(x)
-              list(g = x, obj = obj_pieces(x)$obj, slack = slack(x))))
-  ok <- vapply(cand, function(z) z$slack >= -1e-8, logical(1))
-  if (!any(ok)) stop("no feasible cost envelope found")
-  best <- cand[ok][[which.min(vapply(cand[ok], `[[`, numeric(1), "obj"))]]
-
-  g <- setNames(best$g, nmv)
-  env_slack <- cb - drop(Xb %*% g)
-  structure(list(coefficients = g, value = -best$obj,
-                 worst_slack = best$slack, n_binding = length(bind),
-                 slack_envelope = min(env_slack),
-                 slack_mono = min(drop(mono %*% g)),
-                 tightest_row = bind[which.min(env_slack)],
-                 env_slack = env_slack, bind = bind, formula = formula),
-            class = "cost_envelope_frontier")
+  b0
 }
 
 coef.cost_envelope_frontier <- function(object, ...) object$coefficients
+
+## ---- hybrid dual: the grid OLS objective under the cost envelope's constraints --------
+
+# fit_lncost_grid()'s estimator inside the cost envelope's feasible set:
+# least squares to the record cost ln C_a(t) sampled on the (logit accuracy,
+# date) grid, subject to the surface lying at or below every run's log cost
+# and monotone -- up in accuracy, down in date. The cost-direction dual of
+# fit_pareto_logit_env() (envelope_frontier.R): every record node pulls on
+# the fit, at the price that the fit depends on the record's interior.
+#
+# No multi-start machinery: the objective is a convex quadratic and the
+# constraints are linear, so one SLSQP run from a feasible start finds the
+# global minimum. The coefficient box guards the same degenerate-column
+# hazard under the BC formula that fit_cost_bc()'s failed-fit check catches:
+# a lambda that makes phi(tau) nearly constant leaves a near-flat direction
+# the solver would otherwise ride into the 1e28s.
+#
+# Arguments as in fit_lncost_grid(), plus `margin`: log dollars by which the
+# starting surface is dropped clear of the lowest run constraint, so the
+# solver begins strictly inside the feasible set. For the BC formula the
+# response is phi(cost; lambda_cost) on both the grid and the constraints --
+# the same feasible set, reparameterized, and the SSR fit_cost_bc() profiles
+# carries the Box-Cox Jacobian term there.
+#
+# Returns an object of class c("lncost_grid_env", "cost_envelope_frontier"),
+# carrying fit_lncost_grid()'s n_grid / n_corners attributes: a LIST with
+#   coefficients   named numeric VECTOR, one per model-matrix column
+#   value          SCALAR, the objective: mean squared residual over the grid
+#   worst_slack    SCALAR, minimum slack over all constraints; negative past
+#                  -1e-8 means infeasible
+#   n_binding      SCALAR integer, candidates surviving the Pareto reduction
+#   slack_envelope SCALAR, minimum slack over the RUN constraints, in log
+#                  dollars; 0 means the surface touches the data
+#   slack_mono     SCALAR, minimum slack over the monotonicity rows
+#   tightest_row   SCALAR integer, row of the zero-dropped runs nearest the
+#                  surface
+#   env_slack      numeric VECTOR of run slacks, parallel to bind
+#   bind           integer VECTOR of candidate row indices
+#   formula        the formula as supplied, so the fit carries its own spec
+fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
+                                n_level = 100, n_date = 40, margin = 0.05,
+                                grid_augment = NULL) {
+  s <- iso_runs(data)
+  gr <- iso_grid_response(data, n_level, n_date)
+  gr$lncost <- gr$lnC
+  if (!is.null(grid_augment)) gr <- grid_augment(gr)
+  Xg <- model.matrix(delete.response(terms(formula)), gr)
+  yg <- model.response(model.frame(formula, gr))
+  cs <- cost_envelope_constraints(s, formula, gr)
+
+  fn <- function(g) mean((drop(Xg %*% g) - yg)^2)
+  gr_fn <- function(g) 2 * drop(crossprod(Xg, drop(Xg %*% g) - yg)) / nrow(Xg)
+
+  b0 <- cost_feasible_start(coef(lm(formula, data = gr)), cs$Xb, cs$cb, margin)
+  bound <- 1e5
+  r <- nloptr::nloptr(
+    x0 = unname(b0),
+    eval_f = function(g) list(objective = fn(g), gradient = gr_fn(g)),
+    eval_g_ineq = function(g) list(
+      constraints = c(drop(cs$Xb %*% g) - cs$cb, -drop(cs$mono %*% g)),
+      jacobian = rbind(cs$Xb, -cs$mono)),
+    lb = rep(-bound, ncol(Xg)), ub = rep(bound, ncol(Xg)),
+    opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
+                maxeval = 5000, print_level = 0))
+  g <- setNames(r$solution, colnames(Xg))
+
+  env_slack <- cs$cb - drop(cs$Xb %*% g)
+  fit <- structure(list(coefficients = g, value = fn(r$solution),
+                        worst_slack = min(c(env_slack, drop(cs$mono %*% g))),
+                        n_binding = length(cs$bind),
+                        slack_envelope = min(env_slack),
+                        slack_mono = min(drop(cs$mono %*% g)),
+                        tightest_row = cs$bind[which.min(env_slack)],
+                        env_slack = env_slack, bind = cs$bind,
+                        formula = formula),
+                   class = c("lncost_grid_env", "cost_envelope_frontier"))
+  if (fit$worst_slack < -1e-8) stop("no feasible constrained grid OLS found")
+  attr(fit, "n_grid")    <- nrow(gr)
+  attr(fit, "n_corners") <- length(pareto_binding(s$lncost, s$tc, s$la))
+  fit
+}
 
 ## ---- the SFA dual: a stochastic cost frontier -----------------------------------------
 
@@ -734,17 +728,13 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
       f <- fit_lncost_grid(sa, COST_BC_FORM, grid_augment = ga)
       list(fit = f, obj = -attr(f, "n_grid") / 2 * log(sum(residuals(f)^2)) +
              (lC - 1) * sumlny_grid)
-    } else if (key == "costenvelope") {
-      f <- fit_cost_envelope(sa, COST_BC_FORM, grid_augment = ga,
-                             response_lambda = lC)
-      # a solution with huge coefficients means the LP degenerated (see the
-      # coefficient box in fit_cost_envelope): score these lambdas as
-      # unfittable rather than letting a numerically meaningless objective
-      # win the profile
-      if (max(abs(coef(f))) > 1e4) stop("degenerate envelope LP")
-      # f$value is mean fitted LOG COST -- already lambda-invariant units,
-      # no Jacobian wanted. The HIGHEST surface under the runs.
-      list(fit = f, obj = f$value)
+    } else if (key == "costgridolsenv") {
+      f <- fit_lncost_grid_env(sa, COST_BC_FORM, grid_augment = ga)
+      if (max(abs(coef(f))) > 1e4) stop("degenerate constrained grid LS")
+      # the same Gaussian profile objective as costgridols: `value` is the
+      # mean squared residual over the same node set, so SSR = value * n_grid
+      list(fit = f, obj = -attr(f, "n_grid") / 2 *
+             log(f$value * attr(f, "n_grid")) + (lC - 1) * sumlny_grid)
     } else {
       f <- fit_cost_sfa(sa, COST_BC_FORM,
                         formula_sigma = if (key == "costsfab") ~ tc else ~ 1,
@@ -784,11 +774,11 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
 # used by the figures and the tables alike so they cannot drift apart.
 fit_cost_model <- function(key, s, form = COST_FORMS$lin) {
   switch(key,
-    costols      = lm(form, data = iso_runs(s)),
-    costsfa      = fit_cost_sfa(s, form),
-    costsfab     = fit_cost_sfa(s, form, formula_sigma = ~ tc),
-    costgridols  = fit_lncost_grid(s, form),
-    costenvelope = fit_cost_envelope(s, form))
+    costols        = lm(form, data = iso_runs(s)),
+    costsfa        = fit_cost_sfa(s, form),
+    costsfab       = fit_cost_sfa(s, form, formula_sigma = ~ tc),
+    costgridols    = fit_lncost_grid(s, form),
+    costgridolsenv = fit_lncost_grid_env(s, form))
 }
 
 # All benchmarks of one cost key's Box-Cox profile, on the shared worker

@@ -141,7 +141,7 @@ frontier_dtime <- function(co, lncost, tc) {
 # Each derivative is linear in (ln c, tc) jointly, so it is non-negative
 # everywhere on a rectangle exactly when it is non-negative at all four corners.
 # That is what makes the check below cheap and exact rather than a grid search,
-# and it is the same fact fit_envelope() uses to impose monotonicity.
+# and it is the same fact envelope_constraints() uses to impose monotonicity.
 corner_grid <- function(lnc_range, tc_range) {
   expand.grid(lncost = range(lnc_range), tc = range(tc_range))
 }
@@ -185,13 +185,16 @@ bc_mu <- function(eta, lo) {
   1 / (1 + qinv)
 }
 
-# d mu / d eta = mu(1-mu)/(1 + lo*eta) in-domain (1 at lo = 0 recovers the
-# logistic's mu(1-mu)); 0 outside, matching the clamped link.
-bc_mu_eta <- function(eta, lo) {
-  m <- bc_mu(eta, lo)
-  if (abs(lo) < 1e-8) return(m * (1 - m))
-  base <- 1 + lo * eta
-  ifelse(base > 0, m * (1 - m) / base, 0)
+# The Bernoulli quasi-log-likelihood on the PROBABILITY scale, the objective
+# the Pareto-grid fits share (fit_pareto_logit_env in envelope_frontier.R,
+# the Box-Cox profiles in boxcox_frontier.R). Not -deviance/2: the two differ
+# by the saturated log-likelihood, which is constant in the lambdas, but only
+# this form is computed identically by the glm path and the parametric-link
+# path, so profiles that mix them stay comparable. mu is clamped away from
+# 0/1 so a clamped link (bc_mu outside phi's range) cannot emit -Inf.
+bc_qll <- function(y, mu) {
+  mu <- pmin(pmax(mu, 1e-12), 1 - 1e-12)
+  sum(y * log(mu) + (1 - y) * log(1 - mu))
 }
 
 # A BC fit announces itself by the lambda attribute fit_bc() stamps on it;

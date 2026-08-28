@@ -53,11 +53,13 @@ store_specs <- function() fits_once("specs", function() {
   fit_all_specs(store_runs())
 })
 
-# envelope / paretologit: list(lin = , quad = ) of per-benchmark fit lists.
+# paretologit / paretologitenv: list(lin = , quad = ) of per-benchmark fit
+# lists.
 store_grid <- function(key) fits_once(paste0(key, "_grid"), function() {
   d <- store_runs()
   bs <- bench_levels(d$benchmark)
-  fitter <- if (key == "envelope") fit_envelope else fit_pareto_logit
+  fitter <- if (key == "paretologitenv") fit_pareto_logit_env else
+    fit_pareto_logit
   lapply(TIME_FORMS, function(form)
     setNames(lapply(bs, function(b)
       fitter(d[d$benchmark == b, ], formula = form)), bs))

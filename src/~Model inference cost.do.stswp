@@ -2,7 +2,7 @@ cd "D:\OneDrive\Documents\Work\Clients & prospects\EpochAI\inference-cost"
 
 set scheme plottig
 cwf default
-import delimited "data/cost_truncated_curves.csv", clear  // all benchmark results; sent by Luke in Slack; https://raw.githubusercontent.com/epoch-research/benchmarks/refs/heads/feature/bench-tok-budget-side/exports/cost_truncated_curves.csv
+import delimited "C:\Users\drood\Downloads\cost_truncated_curves (2).csv", clear  // all benchmark results; sent by Luke in Slack; https://raw.githubusercontent.com/epoch-research/benchmarks/refs/heads/feature/bench-tok-budget-side/exports/cost_truncated_curves.csv
 
 // gen task = cond(benchmark=="aime", "OTIS Mock AIME 2024-2025", ///
 //            cond(benchmark=="chess", "Chess Puzzles",           ///

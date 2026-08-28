@@ -22,7 +22,7 @@ benches <- bench_levels(d$benchmark)
 ## ---- the frontier ---------------------------------------------------------------------
 
 # pareto_steps() and pareto_curves() are in frontier_viz.R: this figure draws the
-# staircase on its own, while plot_envelope.R and plot_paretologit.R draw the
+# staircase on its own, while plot_paretologit.R and plot_paretologitenv.R draw the
 # same object underneath their fitted curves, and all three must agree exactly.
 curves <- pareto_curves(d, dates)
 

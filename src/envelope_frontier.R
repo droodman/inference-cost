@@ -1,27 +1,29 @@
-# Deterministic envelope frontier: the lowest-sitting logistic surface that
-# passes above every observed run.
+# Frontier-per-se fits in the accuracy direction: the empirical Pareto
+# staircase P_t(c) sampled on a fixed (log cost, date) grid, model S's
+# fractional logit fitted THROUGH those samples (fit_pareto_logit), and the
+# same objective minimised subject to envelope constraints
+# (fit_pareto_logit_env):
 #
-#   minimise   sum over a FIXED grid of G(z(c,t))        (accuracy units)
-#   subject to z_i >= logit(y_i)  for every run i         (the envelope)
-#              dz/d ln c >= 0                             (free disposal)
-#              dz/dt     >= 0                             (models stay available)
+#   z_i >= logit(y_i)  for every run i     the surface must clear everything
+#                                          ever observed
+#   dz/d ln c >= 0                         free disposal
+#   dz/dt     >= 0                         models stay available
 #
-# Why this rather than the SFA families:
+# Why constraints rather than the SFA families: monotonicity is imposed, not
+# checked afterwards -- the frontier cannot slope backwards in cost or time,
+# the pathology the lncost:tc interaction produced -- and there is no
+# inefficiency distribution, so nothing hinges on sigma_u, which never
+# identified cleanly in any specification we tried.
 #
-#   * The data enters ONLY through the constraints. Tightness is scored on a
-#     fixed grid, so the standard cannot drift as the population of runs
-#     changes -- and it did change hugely: gpqa's cheapest tercile went from 66
-#     runs with 14% zeros to 638 runs with 56% zeros, which is what dragged the
-#     mean-based fits' cheap end the wrong way.
-#   * Monotonicity is imposed, not checked afterwards. The frontier cannot slope
-#     backwards in cost or time, which is the pathology the lncost:tc
-#     interaction produced.
-#   * No inefficiency distribution, so nothing hinges on sigma_u, which never
-#     identified cleanly in any specification we tried.
+# The constrained fit replaced an earlier strict envelope (the lowest-sitting
+# surface above every run, its objective never looking at the staircase).
+# The two agreed closely wherever the constraints bound, but the envelope was
+# pinned by a handful of binding runs, so a single lucky run tilted the whole
+# surface; under the deviance objective every Pareto-efficient run pulls on
+# the fit in proportion to the grid area its staircase tread covers.
 #
-# The cost of all that: no standard errors, and the fit is pinned by a handful
-# of binding runs, so a single lucky run tilts the whole surface. Fit the
-# best-per-model variant alongside to see whether the answer rests on flukes.
+# The cost that remains: no standard errors -- grid nodes are not
+# observations, and the constrained optimum has no likelihood behind it.
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("frontier_viz.R")
@@ -64,7 +66,7 @@ clip_acc <- function(y, n) {
 # element i of each describes the same run.
 #
 #   cost  the cost coordinate. Only its ORDER is used, so any monotone transform
-#         serves; fit_envelope() passes log cost, plot_paretologit.R the same.
+#         serves; every caller here passes log cost.
 #   t     the date coordinate, on any numeric scale increasing with time (tc,
 #         centred years, in every caller here)
 #   L     the level being dominated -- logit of clipped accuracy for the
@@ -130,7 +132,8 @@ objective_grid <- function(data, n_cost = 100, n_date = 40) {
 #            in [0,1] -- P_t(c) is defined on raw accuracy, so zero and perfect
 #            scores participate, unlike the envelope's clipped constraints),
 #            lncost and tc, plus anything else `formula` names.
-#   formula  two-sided FORMULA with response acc, terms as in fit_envelope()
+#   formula  two-sided FORMULA with response acc, terms as in
+#            fit_pareto_logit_env()
 #   n_cost   SCALAR integer, forwarded to objective_grid()
 #   n_date   SCALAR integer, forwarded to objective_grid()
 #   grid_augment  optional FUNCTION applied to the grid data frame after
@@ -253,85 +256,45 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 
 ## ---- the fit -------------------------------------------------------------------------
 
-# Fit the envelope for ONE benchmark. Callers loop over benchmarks themselves;
-# nothing here splits by group.
+# The constraint system of fit_pareto_logit_env(), stacked into one
+# ui %*% beta >= ci:  every surviving run's level from below, then the
+# monotonicity rows.
 #
-#   data     DATA FRAME, one row per run, all of a single benchmark. Must carry
-#            the response and every term named in `formula`, plus `lncost` and
-#            `tc` (used directly for the Pareto reduction and the objective grid)
-#            and `n_samples` (used by clip_acc). Extra columns are ignored.
-#   formula  two-sided FORMULA, response ~ terms. Terms may be any subset of
-#            lncost, I(lncost^2), tc, I(tc^2) and lncost:tc, OR the Box-Cox trio
-#            phic, phit, phixt (boxcox_frontier.R); the monotonicity block and
-#            frontier_coefs_envelope() both key off exactly those names, so a
-#            term spelled differently would be silently unconstrained and
-#            silently dropped from the plotted surface.
-#   n_cost   SCALAR integer, grid points in log cost for the objective
-#   n_date   SCALAR integer, grid points in tc. The grid is the objective's
-#            weighting only -- the data enters through the constraints.
-#   margin   SCALAR numeric, logit units by which the starting surface is lifted
-#            clear of the highest constraint, so the solver begins strictly
-#            inside the feasible set rather than exactly on its boundary.
-#   grid_augment  optional FUNCTION applied to the grid data frame after
-#            construction, adding columns derived from its (lncost, tc)
-#            coordinates so terms like the Box-Cox trio are evaluable at grid
-#            nodes. The run data must already carry the same columns.
-#   lambda_odds  SCALAR, the response-side Box-Cox parameter of the doubly-
-#            transformed family (fit_bc): the surface's index is phi(odds;
-#            lambda_odds) rather than the logit, which is the special case
-#            lambda_odds = 0 (the default -- every non-BC caller). The run
-#            constraints become surface >= phi(odds_i) -- the same set of
-#            accuracy surfaces, reparameterized -- and the objective stays on
-#            the ACCURACY scale via the inverse link (bc_mu), so it is
-#            comparable across lambda_odds values by construction.
+# Runs scoring zero impose nothing (logit -Inf), so they are dropped before the
+# Pareto reduction rather than letting -Inf into the constraint matrix. The
+# explicit y > 0 matters when lambda_odds > 0: phi(0 odds) is then FINITE
+# (-1/lambda), and keeping it would smuggle the zero runs back in as
+# constraints the logit version deliberately excludes.
 #
-# Returns an object of class "envelope_frontier": a LIST with
+#   data     DATA FRAME of runs, as in fit_pareto_logit_env()
+#   formula  as in fit_pareto_logit_env(); the monotonicity block keys off its
+#            term names
+#   gr       DATA FRAME of grid nodes carrying the formula's coordinate columns.
+#            Only the RANGES of its coordinates are used here, to place the
+#            corner rows that make monotonicity hold over the whole rectangle.
+#   lambda_odds  as in fit_pareto_logit_env()
 #
-#   coefficients    named numeric VECTOR, one per column of model.matrix(formula)
-#   value           SCALAR, the objective: mean fitted accuracy over the grid
-#   worst_slack     SCALAR, minimum slack across ALL constraints, run and
-#                   monotonicity together. Negative beyond -1e-8 means infeasible.
-#   n_binding       SCALAR integer, how many run constraints survived the Pareto
-#                   reduction (candidates, not necessarily active)
-#   slack_envelope  SCALAR, minimum slack over the RUN constraints only, in logit
-#                   units; 0 means the surface touches the data
-#   slack_mono      SCALAR, minimum slack over the MONOTONICITY constraints, or
-#                   NA when the specification has none
-#   tightest_row    SCALAR integer, row index into `data` of the closest run
-#   env_slack       numeric VECTOR, one entry per candidate, in logit units
-#   bind            integer VECTOR of row indices into `data`, parallel to
-#                   env_slack, naming the candidates
-#   formula         the formula as supplied, so the fit carries its own spec
-fit_envelope <- function(data, formula = acc ~ lncost + tc,
-                         n_cost = 100, n_date = 40, margin = 0.05,
-                         grid_augment = NULL, lambda_odds = 0) {
+# Returns a LIST:
+#   ui, ci  the stacked system: ui %*% beta >= ci
+#   Xb, Lb  the run rows alone -- model-matrix rows and clipped levels
+#   bind    integer VECTOR of row indices into `data`, the runs behind Xb
+#   mono    the monotonicity rows alone (0 rows when the spec has none)
+envelope_constraints <- function(data, formula, gr, lambda_odds = 0) {
   mf <- model.frame(formula, data)
   y  <- model.response(mf)
   X  <- model.matrix(formula, data)
   pc <- clip_acc(y, data$n_samples)
   L  <- if (abs(lambda_odds) < 1e-8) qlogis(pc) else
     bc_tf(pc / (1 - pc), lambda_odds)
-
-  # runs scoring zero impose nothing (logit -Inf), so drop them before the
-  # Pareto reduction rather than letting -Inf into the constraint matrix.
-  # The explicit y > 0 matters when lambda_odds > 0: phi(0 odds) is then
-  # FINITE (-1/lambda), and keeping it would smuggle the zero runs back in as
-  # constraints the logit version deliberately excludes.
   pos <- which(is.finite(L) & y > 0)
   bind <- pos[pareto_binding(data$lncost[pos], data$tc[pos], L[pos])]
   Xb <- X[bind, , drop = FALSE]
   Lb <- L[bind]
 
-  # fixed grid: the objective's weighting, independent of where runs cluster;
-  # shared with fit_pareto_logit() via objective_grid()
-  gr <- objective_grid(data, n_cost, n_date)
-  if (!is.null(grid_augment)) gr <- grid_augment(gr)
-  Xg <- model.matrix(delete.response(terms(formula)), gr)
-
-  # monotonicity, evaluated at the corners (both derivatives are linear in beta)
-  # Both derivatives are linear in beta, so requiring them non-negative at the
-  # ENDS of each range enforces it throughout (a linear function of one variable
-  # is non-negative on an interval iff it is at both ends).
+  # monotonicity, evaluated at the corners: both derivatives are linear in beta,
+  # so requiring them non-negative at the ENDS of each range enforces it
+  # throughout (a linear function of one variable is non-negative on an interval
+  # iff it is at both ends).
   nmv <- colnames(X)
   # e(nm): nm a SCALAR string naming a model-matrix column. Returns a numeric
   # VECTOR of length ncol(X), the indicator for that column, or all zeros if the
@@ -342,12 +305,6 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
     if (nm %in% nmv) v[match(nm, nmv)] <- 1
     v
   }
-  ui <- Xb                                            # the envelope itself
-  ci <- Lb
-  # add(row): row a numeric VECTOR of length ncol(X), a constraint row requiring
-  # row %*% beta >= 0. Appends to ui/ci in the enclosing frame; returns nothing
-  # useful and is called for that effect.
-  add <- function(row) { ui <<- rbind(ui, row); ci <<- c(ci, 0) }
 
   # free disposal:  dz/d ln c = b_x + 2*b_xx*ln c + b_xt*tc   >= 0
   # stays available: dz/dtc   = b_t + 2*b_tt*tc  + b_xt*ln c  >= 0
@@ -385,128 +342,169 @@ fit_envelope <- function(data, formula = acc ~ lncost + tc,
   # Without the cross terms all four corners collapse to the same row; drop the
   # duplicates rather than hand the solver the same constraint four times.
   mono <- unique(mono)
-  for (i in seq_len(nrow(mono))) add(mono[i, ])
+  list(ui = rbind(Xb, mono), ci = c(Lb, numeric(nrow(mono))),
+       Xb = Xb, Lb = Lb, bind = bind, mono = mono)
+}
 
-  # mean fitted accuracy over the grid -- the surface's average height, on
-  # the PROBABILITY scale whatever lambda_odds is (bc_mu is the logistic at
-  # lambda_odds = 0), which is what makes the objective comparable across
-  # response transforms.
-  # fn(b):    b a numeric VECTOR of length ncol(X). Returns a SCALAR.
-  # gr_fn(b): the same argument; returns the gradient, a numeric VECTOR of
-  #           length ncol(X). Supplied analytically because SLSQP asks for it on
-  #           every iteration and a finite-difference gradient over ~200 grid
-  #           points would dominate the run time.
-  fn <- function(b) mean(bc_mu(drop(Xg %*% b), lambda_odds))
-  gr_fn <- function(b) {
-    drop(crossprod(Xg, bc_mu_eta(drop(Xg %*% b), lambda_odds))) / nrow(Xg)
-  }
-
-  # Feasible start: a quasibinomial fit with curvature zeroed and linear slopes
-  # forced positive (so monotonicity holds whatever glm returned), then lifted
-  # until it clears every envelope constraint.
-  b0 <- coef(glm(formula, data = data, family = quasibinomial(link = "logit")))
-  # Zero the interaction too, not just the squares: it also enters both
-  # derivatives, so leaving glm's value in place can hand SLSQP a start that
-  # violates monotonicity, and an infeasible start is how "no feasible envelope
-  # found" happens on a problem that is perfectly feasible. phixt is the same
-  # kind of hazard for the Box-Cox terms.
+# A starting point strictly inside the feasible set, made from any glm's
+# coefficients. Zero the curvature and interaction terms -- they enter both
+# monotonicity derivatives, so glm's values can hand the solver an infeasible
+# start, and an infeasible start is how "no feasible fit found" happens on a
+# problem that is perfectly feasible. Force the linear slopes positive (so
+# monotonicity holds whatever glm returned), then lift the intercept until
+# the surface clears every run constraint with `margin` to spare.
+#
+#   b0      named numeric VECTOR, glm coefficients on `formula`'s model matrix
+#   Xb, Lb  the run constraints, as envelope_constraints() returns them
+#   margin  SCALAR, logit units of clearance above the tightest run
+feasible_start <- function(b0, Xb, Lb, margin) {
+  b0[is.na(b0)] <- 0   # an aliased column would otherwise poison the lift
   for (nm in c("I(lncost^2)", "I(tc^2)", "lncost:tc", "phixt"))
     if (nm %in% names(b0)) b0[[nm]] <- 0
   for (nm in c("lncost", "tc", "phic", "phit"))
     if (nm %in% names(b0)) b0[[nm]] <- max(b0[[nm]], 0.05)
   b0[1] <- b0[1] + max(0, max(Lb - drop(Xb %*% b0))) + margin
-  starts <- list(b0)
-
-  # A richer model nests a simpler one, so it can never legitimately do worse --
-  # yet both constrOptim and SLSQP stalled well inside the feasible set when the
-  # near-collinear (ln c)^2 column was present, returning objectives ABOVE the
-  # linear fit. Starting the richer model from the simpler model's solution makes
-  # the nesting property hold by construction, whatever the solver does next.
-  curv <- grep("^I\\(", colnames(X), value = TRUE)
-  if (length(curv)) {
-    tl <- attr(terms(formula), "term.labels")
-    simpler <- reformulate(tl[!grepl("^I\\(", tl)],
-                           response = all.vars(formula)[1])
-    inner <- fit_envelope(data, simpler, n_cost, n_date, margin)
-    bs <- setNames(numeric(ncol(X)), colnames(X))
-    bs[names(coef(inner))] <- coef(inner)
-    starts <- c(starts, list(bs))
-  }
-
-  # SLSQP, not constrOptim. constrOptim uses a logarithmic barrier that blows up
-  # near the boundary; with ~100-200 constraint rows it dominated the objective
-  # and the optimiser halted well INSIDE the feasible set -- slack of +0.07 to
-  # +0.17 where a tight envelope must sit at 0, and objectives worse than the
-  # nested linear fit, which is impossible for a correct solver. SLSQP handles
-  # linear inequality constraints directly and can terminate exactly on them.
-  # run(x0): x0 a numeric VECTOR of length ncol(X), the starting coefficients.
-  # Returns a LIST of b (named numeric vector, the solution), obj (SCALAR
-  # objective at b) and slack (SCALAR, minimum over all constraint rows).
-  run <- function(x0) {
-    r <- nloptr::nloptr(
-      x0 = x0, eval_f = function(b) list(objective = fn(b), gradient = gr_fn(b)),
-      eval_g_ineq = function(b) list(constraints = as.vector(ci - ui %*% b),
-                                     jacobian = -ui),
-      opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
-                  maxeval = 5000, print_level = 0))
-    b <- setNames(r$solution, colnames(X))
-    list(b = b, obj = fn(b), slack = min(drop(ui %*% b) - ci))
-  }
-
-  # keep the best FEASIBLE candidate; a lower objective reached by leaving the
-  # feasible set is not an envelope
-  cand <- c(lapply(starts, run),
-            lapply(starts, function(x) list(b = x, obj = fn(x),
-                                            slack = min(drop(ui %*% x) - ci))))
-  ok <- vapply(cand, function(z) z$slack >= -1e-8, logical(1))
-  if (!any(ok)) stop("no feasible envelope found")
-  best <- cand[ok][[which.min(vapply(cand[ok], `[[`, numeric(1), "obj"))]]
-
-  # worst_slack pools two quite different constraints, and which of them is tight
-  # is the whole story about whether the surface touches the data. Report them
-  # apart:
-  #   slack_envelope  how far above the NEAREST RUN the surface sits, in logit
-  #                   units. Zero means it touches; large means it floats.
-  #   slack_mono      how much room is left in the monotonicity constraints.
-  # If slack_mono is 0 while slack_envelope is not, monotonicity is what is
-  # holding the surface up and the data is not binding anywhere -- the fit is
-  # then the lowest MONOTONE logistic surface above the runs, which is a strictly
-  # stronger requirement than the lowest logistic surface above them, and it can
-  # sit well clear of the Pareto staircase.
-  env_slack <- drop(Xb %*% best$b) - Lb
-  structure(list(coefficients = best$b, value = best$obj,
-                 worst_slack = best$slack, n_binding = length(bind),
-                 slack_envelope = min(env_slack),
-                 slack_mono = if (nrow(mono)) min(drop(mono %*% best$b)) else NA_real_,
-                 tightest_row = bind[which.min(env_slack)],
-                 env_slack = env_slack, bind = bind,
-                 formula = formula),
-            class = "envelope_frontier")
+  b0
 }
 
 # coef() method, so the fit answers to the same accessor as glm and maxLik fits.
 #
-#   object  an "envelope_frontier" as returned by fit_envelope()
+#   object  an "envelope_frontier" as returned by fit_pareto_logit_env()
 #   ...     ignored; present only to match the generic's signature
 #
 # Returns a named numeric VECTOR, one entry per model-matrix column.
 coef.envelope_frontier <- function(object, ...) object$coefficients
 
-# so frontier_coefs()/frontier_index() in frontier_viz.R work unchanged
+## ---- the fit: the companion's loss under the envelope's constraints -------------------
+
+# fit_pareto_logit()'s estimator inside the envelope's feasible set: the
+# quasibinomial deviance against the staircase P_t(c) sampled on the grid,
+# minimised subject to the surface lying at or above every run and to
+# monotonicity in cost and date. Every Pareto-efficient run pulls on the
+# surface in proportion to the grid area its staircase tread covers, at the
+# price that the fit depends on the staircase's interior, which sits below
+# the true frontier wherever the best available run underperformed it.
 #
-#   fit  an "envelope_frontier" as returned by fit_envelope()
+# No multi-start machinery, deliberately: at lambda_odds = 0 the deviance is
+# convex in beta (canonical logit link) and the constraints are linear, so one
+# SLSQP run from a feasible start finds the global minimum. (The strict
+# envelope this fit replaced needed candidate-racing -- its mean-of-sigmoids
+# objective was not convex and its solver stalled more than once. With
+# lambda_odds != 0 convexity is not guaranteed here either, but the
+# unconstrained analogue fit_pareto_bclink runs single-start BFGS on the same
+# smooth surface, and the same trust extends here.) SLSQP rather than
+# constrOptim throughout this file's history: constrOptim's logarithmic
+# barrier blew up near the boundary and halted well inside the feasible set,
+# where SLSQP handles linear inequality constraints directly and can
+# terminate exactly on them.
 #
-# Returns a named numeric VECTOR of length 6 in the FIXED order b0, bx, bt, btt,
-# bxt, bxx, whatever subset of terms the fit actually has -- a term the formula
-# omitted comes back as 0, so linear, cost-quadratic and full-quadratic fits all
-# evaluate through one prediction path. The order and names must match
-# frontier_coefs() in frontier_viz.R, which is what frontier_index() consumes.
-frontier_coefs_envelope <- function(fit) {
-  cf <- coef(fit)
-  # get1(nm): nm a SCALAR string naming a coefficient. Returns a SCALAR -- the
-  # estimate, or 0 when the fit does not carry that term.
-  get1 <- function(nm) if (nm %in% names(cf)) unname(cf[[nm]]) else 0
-  c(b0 = get1("(Intercept)"), bx = get1("lncost"), bt = get1("tc"),
-    btt = get1("I(tc^2)"), bxt = get1("lncost:tc"),
-    bxx = get1("I(lncost^2)"))
+# Zeros and ones: the staircase response keeps both, as in fit_pareto_logit()
+# -- bc_qll() clamps mu away from 0/1, so P = 0 and P = 1 terms stay finite.
+# The constraints exclude zeros (logit -Inf is unusable, and "the frontier
+# must exceed 0%" is no constraint) and clip ones by the run's own sample
+# size via clip_acc().
+#
+#   data     DATA FRAME, one row per run, all of a single benchmark. Must carry
+#            the response and every term named in `formula`, plus `lncost` and
+#            `tc` (used directly for the Pareto reduction and the grid) and
+#            `n_samples` (used by clip_acc). Extra columns are ignored.
+#   formula  two-sided FORMULA, response ~ terms. Terms may be any subset of
+#            lncost, I(lncost^2), tc, I(tc^2) and lncost:tc, OR the Box-Cox trio
+#            phic, phit, phixt (boxcox_frontier.R); the monotonicity block and
+#            frontier_coefs() both key off exactly those names, so a term
+#            spelled differently would be silently unconstrained and silently
+#            dropped from the plotted surface.
+#   n_cost   SCALAR integer, grid points in log cost
+#   n_date   SCALAR integer, grid points in tc
+#   margin   SCALAR numeric, logit units by which the starting surface is
+#            lifted clear of the highest constraint, so the solver begins
+#            strictly inside the feasible set rather than exactly on its
+#            boundary.
+#   grid_augment  optional FUNCTION applied to the grid data frame after
+#            construction, adding columns derived from its (lncost, tc)
+#            coordinates so terms like the Box-Cox trio are evaluable at grid
+#            nodes. The run data must already carry the same columns.
+#   lambda_odds  SCALAR, the response-side Box-Cox parameter of the doubly-
+#            transformed family (fit_bc): the surface's index is phi(odds;
+#            lambda_odds) rather than the logit, which is the special case
+#            lambda_odds = 0 (the default -- every non-BC caller). The run
+#            constraints become surface >= phi(odds_i) -- the same set of
+#            accuracy surfaces, reparameterized -- and the objective stays on
+#            the PROBABILITY scale via the inverse link (bc_mu), so it is
+#            comparable across lambda_odds values by construction -- what
+#            makes the Box-Cox profile well-posed.
+#
+# Returns an object of class c("pareto_logit_env", "envelope_frontier"),
+# carrying fit_pareto_logit()'s n_grid / n_corners attributes: a LIST with
+#
+#   coefficients    named numeric VECTOR, one per column of model.matrix(formula)
+#   value           SCALAR, the objective: mean deviance per grid node
+#   worst_slack     SCALAR, minimum slack across ALL constraints, run and
+#                   monotonicity together. Negative beyond -1e-8 means infeasible.
+#   n_binding       SCALAR integer, how many run constraints survived the Pareto
+#                   reduction (candidates, not necessarily active)
+#   slack_envelope  SCALAR, minimum slack over the RUN constraints only, in logit
+#                   units; 0 means the surface touches the data
+#   slack_mono      SCALAR, minimum slack over the MONOTONICITY constraints, or
+#                   NA when the specification has none
+#   tightest_row    SCALAR integer, row index into `data` of the closest run
+#   env_slack       numeric VECTOR, one entry per candidate, in logit units
+#   bind            integer VECTOR of row indices into `data`, parallel to
+#                   env_slack, naming the candidates
+#   formula         the formula as supplied, so the fit carries its own spec
+#
+# slack_envelope and slack_mono split worst_slack because which of the two is
+# tight is the whole story about what shapes the fit where it leaves the
+# staircase: slack_envelope = 0 means the surface touches a run;
+# slack_mono = 0 means the unconstrained fit wanted to slope backwards and
+# monotonicity is what holds it flat, so the fitted rate there is the
+# constraint's, not the data's.
+fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
+                                 n_cost = 100, n_date = 40, margin = 0.05,
+                                 grid_augment = NULL, lambda_odds = 0) {
+  gr <- pareto_grid_response(data, n_cost, n_date)
+  if (!is.null(grid_augment)) gr <- grid_augment(gr)
+  Xg <- model.matrix(delete.response(terms(formula)), gr)
+  P  <- gr$acc
+  cs <- envelope_constraints(data, formula, gr, lambda_odds)
+
+  # negative mean Bernoulli quasi-log-likelihood of the staircase values, on
+  # the probability scale whatever lambda_odds is. The score has the closed
+  # form (P - mu)/(1 + lo*eta) per node (the canonical (P - mu) at lo = 0),
+  # exactly as in fit_pareto_bclink (boxcox_frontier.R); 0 outside the
+  # clamped link's domain.
+  fn <- function(b) -bc_qll(P, bc_mu(drop(Xg %*% b), lambda_odds)) / nrow(Xg)
+  gr_fn <- function(b) {
+    eta <- drop(Xg %*% b)
+    w <- if (abs(lambda_odds) < 1e-8) rep(1, length(eta)) else {
+      base <- 1 + lambda_odds * eta
+      ifelse(base > 0, 1 / base, 0)
+    }
+    -drop(crossprod(Xg, (P - bc_mu(eta, lambda_odds)) * w)) / nrow(Xg)
+  }
+
+  b0 <- feasible_start(coef(glm(formula, data = gr,
+                                family = quasibinomial(link = "logit"))),
+                       cs$Xb, cs$Lb, margin)
+  r <- nloptr::nloptr(
+    x0 = b0, eval_f = function(b) list(objective = fn(b), gradient = gr_fn(b)),
+    eval_g_ineq = function(b) list(constraints = as.vector(cs$ci - cs$ui %*% b),
+                                   jacobian = -cs$ui),
+    opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
+                maxeval = 5000, print_level = 0))
+  b <- setNames(r$solution, colnames(Xg))
+  env_slack <- drop(cs$Xb %*% b) - cs$Lb
+  fit <- structure(
+    list(coefficients = b, value = fn(b),
+         worst_slack = min(drop(cs$ui %*% b) - cs$ci),
+         n_binding = length(cs$bind),
+         slack_envelope = min(env_slack),
+         slack_mono = if (nrow(cs$mono)) min(drop(cs$mono %*% b)) else NA_real_,
+         tightest_row = cs$bind[which.min(env_slack)],
+         env_slack = env_slack, bind = cs$bind, formula = formula),
+    class = c("pareto_logit_env", "envelope_frontier"))
+  if (fit$worst_slack < -1e-8) stop("no feasible constrained Pareto logit found")
+  attr(fit, "n_grid")    <- nrow(gr)
+  attr(fit, "n_corners") <- length(pareto_binding(data$lncost, data$tc, data$acc))
+  fit
 }
