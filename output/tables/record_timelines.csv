@@ -1,0 +1,153 @@
+"benchmark","accuracy_record","cheapest_model","accuracy","release_date","cost_per_task_usd"
+"AIME (OTIS Mock)",0.0111,"gpt-4-0613",0.0111,"2023-06-13",0.035724
+"AIME (OTIS Mock)",0.0111,"gpt-4-turbo",0.0667,"2023-11-06",0.024529
+"AIME (OTIS Mock)",0.0111,"gpt-3.5-turbo-0125",0.0222,"2024-01-25",0.000818
+"AIME (OTIS Mock)",0.0111,"gpt-4o-mini",0.0361,"2024-07-18",0.000573
+"AIME (OTIS Mock)",0.0111,"gemma-3-27b-it",0.0679,"2025-03-12",0.000176666666666667
+"AIME (OTIS Mock)",0.0667,"gpt-4-turbo",0.0667,"2023-11-06",0.024529
+"AIME (OTIS Mock)",0.0667,"gpt-4o-mini",0.0694,"2024-07-18",0.000603
+"AIME (OTIS Mock)",0.0667,"gemma-3-27b-it",0.0679,"2025-03-12",0.000176666666666667
+"AIME (OTIS Mock)",0.0694,"gpt-4o-mini",0.0694,"2024-07-18",0.000603
+"AIME (OTIS Mock)",0.0694,"gemma-3-27b-it",0.2001,"2025-03-12",0.000276666666666667
+"AIME (OTIS Mock)",0.7333,"o1 (medium)",0.7333,"2024-09-12",0.653247
+"AIME (OTIS Mock)",0.7333,"o3-mini (high)",0.7528,"2025-01-31",0.056971
+"AIME (OTIS Mock)",0.7333,"o4-mini (medium)",0.7333,"2025-04-16",0.026046
+"AIME (OTIS Mock)",0.7333,"openai/gpt-oss-120b (high)",0.7889,"2025-08-05",0.002994
+"AIME (OTIS Mock)",0.7333,"gemma-4-31b-it (minimal)",0.7333,"2026-04-02",0.000929
+"AIME (OTIS Mock)",0.8444,"o3 (medium)",0.8444,"2025-01-31",0.076852
+"AIME (OTIS Mock)",0.8444,"openai/gpt-oss-120b (high)",0.8889,"2025-08-05",0.003563
+"AIME (OTIS Mock)",0.8889,"openai/gpt-oss-120b (high)",0.8889,"2025-08-05",0.003563
+"AIME (OTIS Mock)",0.9139,"gpt-5 (high)",0.9139,"2025-08-07",0.163893
+"AIME (OTIS Mock)",0.9139,"gpt-5.2 (medium)",0.9306,"2025-12-11",0.132266
+"AIME (OTIS Mock)",0.9139,"gemini-3-flash-preview (high)",0.9556,"2025-12-17",0.067765
+"AIME (OTIS Mock)",0.9139,"qwen3.7-plus",0.9333,"2026-06-02",0.041423
+"AIME (OTIS Mock)",0.9611,"gpt-5.2 (high)",0.9611,"2025-12-11",0.176872
+"AIME (OTIS Mock)",0.9611,"gpt-5.4 (high)",0.9778,"2026-03-05",0.143241
+"AIME (OTIS Mock)",0.9611,"claude-fable-5 (low)",0.9778,"2026-06-09",0.13992
+"AIME (OTIS Mock)",0.9611,"claude-opus-5",0.9778,"2026-07-24",0.131495
+"AIME (OTIS Mock)",0.9778,"gpt-5.4 (high)",0.9778,"2026-03-05",0.143241
+"AIME (OTIS Mock)",0.9778,"claude-fable-5 (low)",0.9778,"2026-06-09",0.13992
+"AIME (OTIS Mock)",0.9778,"claude-opus-5",0.9778,"2026-07-24",0.131495
+"AIME (OTIS Mock)",1,"claude-fable-5 (high)",1,"2026-06-09",0.227085
+"Chess Puzzles",0.04,"gpt-4-0613",0.04,"2023-06-13",0.012237
+"Chess Puzzles",0.04,"gpt-4o",0.06,"2024-05-13",0.002749
+"Chess Puzzles",0.04,"gpt-4.1-mini",0.06,"2025-04-14",0.001214
+"Chess Puzzles",0.04,"gpt-5-nano (low)",0.14,"2025-08-07",0.001159
+"Chess Puzzles",0.04,"gemini-3.1-flash-lite (low)",0.19,"2026-03-03",0.00068
+"Chess Puzzles",0.04,"gemma-4-31b-it (minimal)",0.05,"2026-04-02",2e-04
+"Chess Puzzles",0.06,"gpt-4-turbo",0.06,"2023-11-06",0.015388
+"Chess Puzzles",0.06,"gpt-4o",0.06,"2024-05-13",0.002749
+"Chess Puzzles",0.06,"gpt-4.1-mini",0.06,"2025-04-14",0.001214
+"Chess Puzzles",0.06,"gpt-5-nano (low)",0.14,"2025-08-07",0.001159
+"Chess Puzzles",0.06,"gemini-3.1-flash-lite (low)",0.19,"2026-03-03",0.00068
+"Chess Puzzles",0.06,"gemma-4-26b-a4b-it (minimal)",0.06,"2026-04-02",0.000228
+"Chess Puzzles",0.13,"gpt-4o",0.13,"2024-05-13",0.003179
+"Chess Puzzles",0.13,"gpt-5-nano (low)",0.14,"2025-08-07",0.001159
+"Chess Puzzles",0.13,"gemini-3.1-flash-lite (low)",0.19,"2026-03-03",0.00068
+"Chess Puzzles",0.15,"o1 (high)",0.15,"2024-09-12",0.657939
+"Chess Puzzles",0.15,"o3 (low)",0.16,"2025-01-31",0.0562
+"Chess Puzzles",0.15,"o4-mini (medium)",0.15,"2025-04-16",0.050342
+"Chess Puzzles",0.15,"openai/gpt-oss-120b (high)",0.2,"2025-08-05",0.006979
+"Chess Puzzles",0.15,"gpt-5-nano (low)",0.15,"2025-08-07",0.001183
+"Chess Puzzles",0.15,"gemini-3.1-flash-lite (low)",0.19,"2026-03-03",0.00068
+"Chess Puzzles",0.38,"o3 (medium)",0.38,"2025-01-31",0.147778
+"Chess Puzzles",0.38,"gemini-3-flash-preview (high)",0.4,"2025-12-17",0.056501
+"Chess Puzzles",0.38,"gemini-3.5-flash (minimal)",0.43,"2026-05-19",0.007485
+"Chess Puzzles",0.4,"gpt-5.2 (medium)",0.4,"2025-12-11",0.22161
+"Chess Puzzles",0.4,"gemini-3-flash-preview (high)",0.4,"2025-12-17",0.056501
+"Chess Puzzles",0.4,"gemini-3.5-flash (minimal)",0.43,"2026-05-19",0.007485
+"Chess Puzzles",0.49,"gemini-3.1-pro-preview (high)",0.49,"2026-02-19",0.290026
+"Chess Puzzles",0.49,"gemini-3.5-flash (high)",0.5,"2026-05-19",0.095985
+"Chess Puzzles",0.5,"gemini-3.5-flash (high)",0.5,"2026-05-19",0.095985
+"FrontierMath, tiers 1-3",0.007,"gpt-4-turbo",0.007,"2023-11-06",0.157603
+"FrontierMath, tiers 1-3",0.007,"o3-mini (low)",0.007,"2025-01-31",0.003933
+"FrontierMath, tiers 1-3",0.007,"gpt-5-nano (minimal)",0.007,"2025-08-07",0.000362
+"FrontierMath, tiers 1-3",0.193,"o3 (low)",0.193,"2025-01-31",0.162521
+"FrontierMath, tiers 1-3",0.193,"o4-mini (medium)",0.2281,"2025-04-16",0.096252
+"FrontierMath, tiers 1-3",0.193,"gpt-5-nano (high)",0.193,"2025-08-07",0.034501
+"FrontierMath, tiers 1-3",0.2456,"gemini-2.5-pro",0.2456,"2025-03-25",0.329133
+"FrontierMath, tiers 1-3",0.2456,"o4-mini (medium)",0.2632,"2025-04-16",0.12769
+"FrontierMath, tiers 1-3",0.2456,"gpt-5-mini (high)",0.3228,"2025-08-07",0.103881
+"FrontierMath, tiers 1-3",0.2456,"gpt-5.4-nano (high)",0.2491,"2026-03-17",0.058199
+"FrontierMath, tiers 1-3",0.2456,"grok-4.3 (high)",0.2632,"2026-04-17",0.05215
+"FrontierMath, tiers 1-3",0.2456,"gpt-5.6-luna (max)",0.2526,"2026-07-09",0.039222
+"FrontierMath, tiers 1-3",0.3614,"o4-mini (high)",0.3614,"2025-04-16",0.711648
+"FrontierMath, tiers 1-3",0.3614,"gpt-5-mini (high)",0.386,"2025-08-07",0.1335
+"FrontierMath, tiers 1-3",0.3614,"gpt-5.4-nano (high)",0.3789,"2026-03-17",0.114789
+"FrontierMath, tiers 1-3",0.3614,"gpt-5.6-luna (max)",0.3754,"2026-07-09",0.061141
+"FrontierMath, tiers 1-3",0.4667,"gpt-5-mini (high)",0.4667,"2025-08-07",0.254533
+"FrontierMath, tiers 1-3",0.4667,"gpt-5.6-luna (max)",0.5404,"2026-07-09",0.087759
+"FrontierMath, tiers 1-3",0.5579,"gpt-5-pro (high)",0.5579,"2025-10-07",9.148944
+"FrontierMath, tiers 1-3",0.5579,"claude-opus-4-6 (max)",0.5649,"2026-02-05",1.543193
+"FrontierMath, tiers 1-3",0.5579,"gemini-3.1-pro-preview",0.5789,"2026-02-19",0.745353
+"FrontierMath, tiers 1-3",0.5579,"kimi-k2.6",0.5719,"2026-04-20",0.336924
+"FrontierMath, tiers 1-3",0.5579,"gpt-5.6-luna (max)",0.614,"2026-07-09",0.10367
+"FrontierMath, tiers 1-3",0.6596,"claude-opus-4-6 (max)",0.6596,"2026-02-05",1.659209
+"FrontierMath, tiers 1-3",0.6596,"gpt-5.6-luna (max)",0.6842,"2026-07-09",0.136508
+"FrontierMath, tiers 1-3",0.8246,"gpt-5.4-pro (xhigh)",0.8246,"2026-03-05",22.131003
+"FrontierMath, tiers 1-3",0.8246,"claude-fable-5 (max)",0.8702,"2026-06-09",3.791223
+"FrontierMath, tiers 1-3",0.8246,"gpt-5.6-terra (max)",0.8596,"2026-07-09",0.409388
+"FrontierMath, tiers 1-3",0.8702,"claude-fable-5 (max)",0.8702,"2026-06-09",3.791223
+"FrontierMath, tiers 1-3",0.8702,"gpt-5.6-sol (max)",0.8737,"2026-07-09",0.49369
+"FrontierMath, tiers 1-3",0.8912,"gpt-5.6-sol (max)",0.8912,"2026-07-09",0.507603
+"GPQA Diamond",0.0753333333333333,"gpt-4-0613",0.0753333333333333,"2023-06-13",0.02109
+"GPQA Diamond",0.0753333333333333,"gpt-4-turbo",0.282,"2023-11-06",0.019652
+"GPQA Diamond",0.0753333333333333,"gpt-4o",0.266711111111111,"2024-05-13",0.006484
+"GPQA Diamond",0.0753333333333333,"gpt-4o-mini",0.157866666666667,"2024-07-18",0.000373
+"GPQA Diamond",0.0753333333333333,"gemma-3-27b-it",0.206444444444444,"2025-03-12",0.000123666666666667
+"GPQA Diamond",0.0753333333333333,"gpt-5-nano (minimal)",0.212133333333333,"2025-08-07",0.000107
+"GPQA Diamond",0.287866666666667,"gpt-4-turbo",0.287866666666667,"2023-11-06",0.019673
+"GPQA Diamond",0.287866666666667,"gpt-4o",0.315111111111111,"2024-05-13",0.006524
+"GPQA Diamond",0.287866666666667,"o3-mini (low)",0.3536,"2025-01-31",0.006013
+"GPQA Diamond",0.287866666666667,"gemma-3-27b-it",0.291244444444444,"2025-03-12",0.00014
+"GPQA Diamond",0.295466666666667,"claude-3-opus-20240229",0.295466666666667,"2024-02-29",0.036608
+"GPQA Diamond",0.295466666666667,"gpt-4o",0.315111111111111,"2024-05-13",0.006524
+"GPQA Diamond",0.295466666666667,"o3-mini (low)",0.3536,"2025-01-31",0.006013
+"GPQA Diamond",0.295466666666667,"gpt-4.1-mini",0.516,"2025-04-14",0.001618
+"GPQA Diamond",0.295466666666667,"openai/gpt-oss-120b (high)",0.417466666666667,"2025-08-05",0.000909
+"GPQA Diamond",0.295466666666667,"gpt-5-nano (minimal)",0.313066666666667,"2025-08-07",0.000147
+"GPQA Diamond",0.315555555555556,"gpt-4o",0.315555555555556,"2024-05-13",0.006526
+"GPQA Diamond",0.315555555555556,"o3-mini (low)",0.3536,"2025-01-31",0.006013
+"GPQA Diamond",0.315555555555556,"gpt-4.1-mini",0.516,"2025-04-14",0.001618
+"GPQA Diamond",0.315555555555556,"openai/gpt-oss-120b (high)",0.417466666666667,"2025-08-05",0.000909
+"GPQA Diamond",0.315555555555556,"gpt-5-nano (low)",0.3872,"2025-08-07",0.000439
+"GPQA Diamond",0.315555555555556,"gemma-4-31b-it (minimal)",0.596,"2026-04-02",0.000271
+"GPQA Diamond",0.690266666666667,"o1 (high)",0.690266666666667,"2024-09-12",0.385362
+"GPQA Diamond",0.690266666666667,"o3 (low)",0.703733333333333,"2025-01-31",0.016582
+"GPQA Diamond",0.690266666666667,"o4-mini (medium)",0.696933333333333,"2025-04-16",0.014475
+"GPQA Diamond",0.690266666666667,"qwen3.5-397b-a17b",0.777733333333333,"2026-02-13",0.010926
+"GPQA Diamond",0.690266666666667,"qwen3.5-flash",0.745333333333333,"2026-02-25",0.003354
+"GPQA Diamond",0.690266666666667,"gpt-5.6-terra",0.696933333333333,"2026-07-09",0.002838
+"GPQA Diamond",0.7576,"o3 (high)",0.7576,"2025-01-31",0.059781
+"GPQA Diamond",0.7576,"gpt-5 (medium)",0.7972,"2025-08-07",0.037523
+"GPQA Diamond",0.7576,"gpt-5.1 (medium)",0.792933333333333,"2025-11-12",0.032142
+"GPQA Diamond",0.7576,"deepseek-reasoner",0.771866666666667,"2025-12-01",0.016038
+"GPQA Diamond",0.7576,"gpt-5.2 (low)",0.760133333333333,"2025-12-11",0.014645
+"GPQA Diamond",0.7576,"qwen3.5-397b-a17b",0.777733333333333,"2026-02-13",0.010926
+"GPQA Diamond",0.7576,"qwen3.5-flash",0.774,"2026-02-25",0.0034305
+"GPQA Diamond",0.803866666666667,"gemini-2.5-pro",0.803866666666667,"2025-03-25",0.089268
+"GPQA Diamond",0.803866666666667,"gpt-5 (medium)",0.803866666666667,"2025-08-07",0.037825
+"GPQA Diamond",0.803866666666667,"gpt-5.2 (medium)",0.816533333333333,"2025-12-11",0.025475
+"GPQA Diamond",0.803866666666667,"qwen3.5-397b-a17b",0.818133333333333,"2026-02-13",0.011296
+"GPQA Diamond",0.803866666666667,"gemini-3.5-flash (minimal)",0.818133333333333,"2026-05-19",0.00871
+"GPQA Diamond",0.803866666666667,"gemini-3.6-flash (minimal)",0.811466666666667,"2026-07-21",0.005453
+"GPQA Diamond",0.8156,"gpt-5 (high)",0.8156,"2025-08-07",0.069645
+"GPQA Diamond",0.8156,"gpt-5.2 (medium)",0.816533333333333,"2025-12-11",0.025475
+"GPQA Diamond",0.8156,"qwen3.5-397b-a17b",0.818133333333333,"2026-02-13",0.011296
+"GPQA Diamond",0.8156,"gemini-3.5-flash (minimal)",0.818133333333333,"2026-05-19",0.00871
+"GPQA Diamond",0.8156,"claude-opus-5 (low)",0.824933333333333,"2026-07-24",0.006223
+"GPQA Diamond",0.835066666666667,"gpt-5.1 (high)",0.835066666666667,"2025-11-12",0.080806
+"GPQA Diamond",0.835066666666667,"gpt-5.2 (medium)",0.8376,"2025-12-11",0.02858
+"GPQA Diamond",0.835066666666667,"qwen3.6-plus",0.838333333333333,"2026-03-31",0.0261775
+"GPQA Diamond",0.835066666666667,"gemini-3.5-flash (low)",0.845066666666667,"2026-05-19",0.014974
+"GPQA Diamond",0.835066666666667,"claude-opus-5 (low)",0.8384,"2026-07-24",0.007008
+"GPQA Diamond",0.885466666666667,"gpt-5.2 (xhigh)",0.885466666666667,"2025-12-11",0.183376
+"GPQA Diamond",0.885466666666667,"gemini-3.1-pro-preview",0.900666666666667,"2026-02-19",0.067371
+"GPQA Diamond",0.885466666666667,"gemini-3.5-flash (high)",0.899866666666667,"2026-05-19",0.051552
+"GPQA Diamond",0.885466666666667,"claude-opus-5",0.898933333333333,"2026-07-24",0.035578
+"GPQA Diamond",0.925866666666667,"gemini-3.1-pro-preview (high)",0.925866666666667,"2026-02-19",0.080591
+"Mystery Game Puzzles",0.0913,"gpt-3.5-turbo-0125",0.0913,"2024-01-25",0.000656
+"Mystery Game Puzzles",0.0913,"gpt-4o-mini",0.0922,"2024-07-18",0.00025
+"Mystery Game Puzzles",0.0913,"qwen3.5-flash",0.0922,"2026-02-25",0.000241
+"Mystery Game Puzzles",0.1246,"gpt-4o-mini",0.1246,"2024-07-18",0.000579
+"Mystery Game Puzzles",0.29,"o3 (high)",0.29,"2025-01-31",0.51144

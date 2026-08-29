@@ -30,6 +30,7 @@
 # inference cost.do" is Stata and out of scope here.
 SCRIPTS <- c(
   "pareto_frontiers.R",    # nonparametric staircase figure
+  "record_timelines.R",    # cost-record timelines table (HTML + CSV)
   "plot_frontiers.R",      # SFA + S figures, both views, + fit diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
   "plot_paretologitenv.R", # envelope-constrained variant, both views
