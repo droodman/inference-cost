@@ -348,10 +348,14 @@ for (spec in c("lin", "quad", "bc")) {
 # Everything is reported as the tables' transform 100*(1 - exp(rate/4)):
 # percent cheaper per quarter, positive = falling.
 #
-# Blanked, not extrapolated: where the inversion has no admissible root, and
-# where the fitted cost leaves the OBSERVED cost range -- the same clip the
-# 2-D iso-accuracy contours apply, because out there the "decline" is the
-# functional form talking to itself. For the accuracy direction the near-fold
+# Blanked, not extrapolated: where the accuracy level exceeded the STATE OF
+# THE ART at that date (the bundle's record matrix R is NA exactly there --
+# no run had achieved the level yet, so a "decline in its cost" is a claim
+# about something that did not exist, and unlike the fitted-surface views
+# these pages draw no empirical layer to mark where the fit stops being
+# disciplined by data); where the inversion has no admissible root; and where
+# the fitted cost leaves the OBSERVED cost range -- the same clip the 2-D
+# iso-accuracy contours apply. For the accuracy direction the near-fold
 # region (cost slope under 0.05 logits per log dollar) blanks too, mirroring
 # zacc_inverted's own guard: the ratio explodes exactly where the surface
 # stops being invertible.
@@ -371,13 +375,14 @@ decline_acc <- function(fit, bl) {
     tau <- tcm + bl$off
     den <- (p$bx + p$bxt * bc_tf(tau, p$lt)) * cost^p$lc
     num <- (p$bt + p$bxt * bc_tf(cost, p$lc)) * tau^(p$lt - 1)
-    g <- -num / ifelse(den > 0, den, NA_real_)
+    rate <- -num / ifelse(den > 0, den, NA_real_)
   } else {
     co <- frontier_coefs(fit)
     den <- frontier_dcost(co, u, tcm)
-    g <- -frontier_dtime(co, u, tcm) / ifelse(den > 0.05, den, NA_real_)
+    rate <- -frontier_dtime(co, u, tcm) / ifelse(den > 0.05, den, NA_real_)
   }
-  100 * (1 - exp(g / 4))
+  rate[is.na(bl$R)] <- NA_real_   # accuracy beyond the state of the art then
+  100 * (1 - exp(rate / 4))
 }
 
 decline_cost <- function(fit, bl) {
@@ -403,7 +408,9 @@ decline_cost <- function(fit, bl) {
     rate <- cost_dtime(co, g$x, g$t)
   }
   rate[is.na(lnC) | lnC < urng[1] | lnC > urng[2]] <- NA_real_
-  as_z(100 * (1 - exp(rate / 4)))
+  z <- as_z(100 * (1 - exp(rate / 4)))
+  z[is.na(bl$R)] <- NA_real_   # accuracy beyond the state of the art then
+  z
 }
 
 for (spec in c("lin", "quad", "bc")) {
