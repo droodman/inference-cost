@@ -28,6 +28,10 @@
 # each fitted surface, as a quarterly percentage -- over (accuracy, date); see
 # the decline section at the end of this file.
 #
+# Every page also gets a heatmap twin, heatmap_<key>_<spec>_<view>.png: the
+# fitted surface seen from directly above, as a static faceted figure (see
+# the heatmap section below).
+#
 # The widgets are static HTML + client-side WebGL (htmlwidgets/plotly): no
 # server, so they serve from the repo or GitHub Pages as-is. Written with
 # selfcontained = FALSE and a SHARED output/lib directory, so plotly.js is
@@ -303,6 +307,95 @@ page <- function(zs_emp, zs_fit, xs, view) {
   do.call(layout, c(list(p), lay))
 }
 
+# plotly keys its internal data references by tempfile-derived RANDOM ids
+# (visdat / cur_data / attrs), and they land verbatim in the saved JSON -- the
+# second source of meaningless rebuild-to-rebuild churn after saveWidget's
+# random element id. They are only cross-references among themselves, so
+# renaming them consistently to a stable stem makes identical pages serialize
+# identically.
+stable_plotly_ids <- function(w, stem) {
+  ids <- unique(c(names(w$x$visdat), names(w$x$attrs), w$x$cur_data))
+  map <- setNames(paste0(stem, "-", seq_along(ids)), ids)
+  names(w$x$visdat) <- unname(map[names(w$x$visdat)])
+  names(w$x$attrs)  <- unname(map[names(w$x$attrs)])
+  w$x$cur_data      <- unname(map[w$x$cur_data])
+  w
+}
+
+## ---- heatmap companions ---------------------------------------------------------------
+#
+# Every 3-D page gets a HEATMAP twin, heatmap_<key>_<spec>_<view>.png: the
+# FITTED surface seen from directly above, faceted per benchmark like the
+# other 2-D figures. The fill is the 3-D page's z on the same plasma ramp;
+# for the overlay views that means the fitted surface alone (the 3-D page's
+# wireframe, filled in), the empirical staircase being already available in
+# the 2-D figure sets. NA holes -- failed inversions, beyond-SOTA, clipped
+# regions -- stay holes.
+
+# The long data frame geom_raster wants, from a benchmark-keyed list of
+# [N_T, N_X] matrices and their x lattices. Column-major as.vector makes the
+# date index vary fastest, matching rep(x, each = N_T).
+heat_df <- function(zs, xs) {
+  do.call(rbind, lapply(benches, function(b) {
+    bl <- bundles[[b]]
+    data.frame(benchmark = factor(LABELS[[b]], levels = unname(LABELS[benches])),
+               x = rep(xs[[b]], each = N_T),
+               year = rep(bl$year, times = length(xs[[b]])),
+               z = as.vector(zs[[b]]))
+  }))
+}
+
+# Axis pieces shared with the 3-D pages' labeling tricks: log cost labeled in
+# dollars, logit accuracy labeled in percent.
+COST_BRK <- log(10^(-5:1))
+COST_LAB <- dollar_log(10^(-5:1))
+ACC_BRK_P <- c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99)
+
+heat_plot <- function(zs, xs, view) {
+  hd <- heat_df(zs, xs)
+  p <- ggplot(hd, aes(x, year, fill = z)) +
+    geom_raster(na.rm = TRUE) +
+    facet_wrap(~ benchmark, ncol = 2, scales = "free") +
+    labs(y = NULL) +
+    # title above the bar: frontier_theme's top-left legend otherwise sets
+    # the title beside the colorbar, where the two collide
+    guides(fill = guide_colourbar(title.position = "top",
+                                  barwidth = grid::unit(12, "lines"),
+                                  barheight = grid::unit(0.6, "lines"))) +
+    frontier_theme() +
+    theme(panel.grid.major = element_blank(),
+          legend.title = element_text(colour = INK_SECOND, size = 9))
+  if (view == "frontier") {
+    p + scale_x_continuous(name = "Cost per task (log scale)",
+                           breaks = COST_BRK, labels = COST_LAB) +
+      scale_fill_gradientn(name = "fitted accuracy", colours = PALETTE,
+                           limits = c(0, 1), breaks = seq(0, 1, 0.25),
+                           labels = sprintf("%d%%", seq(0, 100, 25)),
+                           na.value = SURFACE)
+  } else if (view == "isoaccuracy") {
+    p + scale_x_continuous(name = "Accuracy",
+                           breaks = qlogis(ACC_BRK_P),
+                           labels = sprintf("%g%%", 100 * ACC_BRK_P)) +
+      scale_fill_gradientn(name = "fitted cost per task", colours = PALETTE,
+                           breaks = COST_BRK, labels = COST_LAB,
+                           na.value = SURFACE)
+  } else {
+    p + scale_x_continuous(name = "Accuracy",
+                           breaks = qlogis(ACC_BRK_P),
+                           labels = sprintf("%g%%", 100 * ACC_BRK_P)) +
+      scale_fill_gradientn(name = "cost drop, %/qtr", colours = PALETTE,
+                           na.value = SURFACE)
+  }
+}
+
+save_heatmap <- function(zs, xs, view, key, spec) {
+  fh <- sprintf("heatmap_%s_%s_%s.png", key, spec, view)
+  ggsave(out_path(fh), heat_plot(zs, xs, view), width = 10,
+         height = fig_height(length(benches)), dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", fh, "\n")
+}
+
 VIEWS <- c("frontier", "isoaccuracy")
 for (spec in c("lin", "quad", "bc")) {
   for (key in names(fits)) {
@@ -322,11 +415,16 @@ for (spec in c("lin", "quad", "bc")) {
       }), benches)
       w <- page(zs_emp, zs_fit, xs, view)
       f <- sprintf("surface3d_%s_%s_%s.html", key, spec, view)
+      # a DETERMINISTIC element id: saveWidget otherwise stamps a random
+      # htmlwidget-xxxx id into every page, so identical rebuilds diff in git
+      w$elementId <- sub("\\.html$", "", f)
+      w <- stable_plotly_ids(w, w$elementId)
       # selfcontained = FALSE with one shared lib/: plotly.js lands in
       # output/lib once, each page stays small, and GitHub Pages serves both
       htmlwidgets::saveWidget(w, out_path(f), selfcontained = FALSE,
                               libdir = "lib", title = f)
       cat("wrote", f, "\n")
+      save_heatmap(zs_fit, xs, view, key, spec)
     }
   }
 }
@@ -424,8 +522,11 @@ for (spec in c("lin", "quad", "bc")) {
     xs <- lapply(bundles, function(bl) bl$la)
     w <- page(NULL, zs, xs, "decline")
     f <- sprintf("surface3d_%s_%s_decline.html", key, spec)
+    w$elementId <- sub("\\.html$", "", f)   # deterministic ids, as above
+    w <- stable_plotly_ids(w, w$elementId)
     htmlwidgets::saveWidget(w, out_path(f), selfcontained = FALSE,
                             libdir = "lib", title = f)
     cat("wrote", f, "\n")
+    save_heatmap(zs, xs, "decline", key, spec)
   }
 }

@@ -12,9 +12,9 @@ map!(x -> match(r"(.*?)(-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])?$", x)[1], 
 
 # distill instances of multiple runs for same model-benchmark-effort-budget 
 df = combine(groupby(df, [:model, :benchmark, :effort, :budget]), 
-                          :acc=>mean=>:acc, :mean_tokens_used=>mean=>:mean_tokens_used, :cost=>mean=>:cost, :full_run_acc=>mean=>:full_run_acc, :n_samples=>sum=>:n_samples)
-df.lncost = log.(df.cost)
-replace!(df.lncost, -Inf=>missing)
+                          :acc=>mean=>:acc, :cost=>mean=>:cost, :n_samples=>sum=>:n_samples)
+
+df.lncost = log.(df.cost); replace!(df.lncost, -Inf=>missing)
 
 models = CSV.read("data/Model versions-Grid view.csv", DataFrame)  # https://airtable.com/appDFXXgaG1xLtXGL/tblNoPbI37OaCgVKo/viw42jmOv5ayC2n3M
 dropmissing!(models, ["id", "Version release date"])
@@ -26,14 +26,16 @@ for r ∈ eachrow(df)
   iszero(length(I)) || (r.releaseyear = date2year.(minimum(models."Version release date"[I])))
 end
 dropmissing!(df, [:releaseyear, :acc, :lncost])
-unique!(df, [:model, :effort, :acc, :cost, :releaseyear, :benchmark])  # duplicate rows arise when increasing the budget elicits the same effort and score
+unique!(df, [:model, :effort, :acc, :cost, :releaseyear, :benchmark])  # duplicate rows arise when the budget exceeds what's fruitful
 
-df.logitacc = logit.(min.(df.acc, 1 .− 1 ./ (2 .* df.n_samples)))
-df = df[.!isinf.(df.logitacc),:]
+df.logitacc = logit.(min.(df.acc, 1 .− .5 ./ df.n_samples))  # censor perfect scores to 1-1/2n
+deleteat!(df, isinf.(df.logitacc))
 
+# Pareto cost frontier over an accuracy-time grid
 cost_frontier(df, accgrid, tgrid) =
   [minimum(r.lncost for r ∈ eachrow(df) if r.logitacc≥a && r.releaseyear≤t; init=Inf) |> (x->isinf(x) ? missing : x) for a∈accgrid, t∈tgrid]
 
+# return dataframe with cost frontier that ranges between extrema of logitacc and release year in a provided dataframe
 function cost_frontier_df(df)
   accgrid = range(extrema(skipmissing(df.logitacc))...; length=100)
   tgrid = range(extrema(df.releaseyear)...; length=40)

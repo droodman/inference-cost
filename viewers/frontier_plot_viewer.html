@@ -184,13 +184,16 @@
 
         <!-- 3-D: interactive WebGL surfaces (plot_surfaces_3d.R) -- the
              empirical staircase/record surface with the fitted surface
-             overlaid. Built for the frontier-per-se models only: the
-             Pareto-grid logit and its envelope-constrained variant, in both
-             directions and all three orders. -->
+             overlaid. Heatmap: the same fitted surface seen from directly
+             above, as a static faceted figure. Both are built for the
+             frontier-per-se models only: the Pareto-grid logit and its
+             envelope-constrained variant, in both directions and all three
+             orders. -->
         <div class="control-group">
           <div class="group-label">Rendering</div>
           <label><input type="radio" name="rendering" value="2d" checked /> 2-D</label>
           <label><input type="radio" name="rendering" value="3d" /> 3-D</label>
+          <label><input type="radio" name="rendering" value="heatmap" /> Heatmap</label>
         </div>
       </div>
 
@@ -265,28 +268,33 @@
         const label = document.getElementById("filename");
         const model = getRadioValue("model");
 
-        // Decline-rate surfaces exist only as 3-D pages: the quantity is a
-        // whole surface over (accuracy, date), and the 2-D figure set has no
-        // counterpart for it.
-        if (getRadioValue("plotType") === "decline" &&
-            getRadioValue("rendering") !== "3d") {
+        const rendering = getRadioValue("rendering");
+
+        // Decline-rate surfaces exist only as 3-D pages and heatmaps: the
+        // quantity is a whole surface over (accuracy, date), and the 2-D
+        // curve-figure set has no counterpart for it.
+        if (getRadioValue("plotType") === "decline" && rendering === "2d") {
           img.style.display = "none";
           frame.style.display = "none";
           label.innerHTML =
-            '<span class="missing">Cost-decline surfaces are 3-D only; switch Rendering to 3-D.</span>';
+            '<span class="missing">Cost-decline surfaces exist as 3-D pages and heatmaps; switch Rendering.</span>';
           return;
         }
 
-        if (getRadioValue("rendering") === "3d") {
+        // 3-D pages and their heatmap twins exist for the frontier-per-se
+        // models (the Pareto-grid pair, both directions) -- see
+        // plot_surfaces_3d.R
+        if (rendering !== "2d" &&
+            !["paretologit", "paretologitenv"].includes(model)) {
           img.style.display = "none";
-          // 3-D surfaces exist for the frontier-per-se models (the Pareto-grid
-          // pair, both directions) -- see plot_surfaces_3d.R
-          if (!["paretologit", "paretologitenv"].includes(model)) {
-            frame.style.display = "none";
-            label.innerHTML =
-              '<span class="missing">3-D renderings are built for the Pareto-grid models only.</span>';
-            return;
-          }
+          frame.style.display = "none";
+          label.innerHTML =
+            '<span class="missing">3-D renderings and heatmaps are built for the Pareto-grid models only.</span>';
+          return;
+        }
+
+        if (rendering === "3d") {
+          img.style.display = "none";
           const key = getRadioValue("direction") === "cost" ? COST_KEY[model] : model;
           const filename = `surface3d_${key}_${getRadioValue("order")}_${getRadioValue("plotType")}.html`;
           frame.style.display = "block";
@@ -298,7 +306,13 @@
         }
 
         frame.style.display = "none";
-        const filename = buildFilename();
+        let filename;
+        if (rendering === "heatmap") {
+          const key = getRadioValue("direction") === "cost" ? COST_KEY[model] : model;
+          filename = `heatmap_${key}_${getRadioValue("order")}_${getRadioValue("plotType")}.png`;
+        } else {
+          filename = buildFilename();
+        }
         const src = `../output/${filename}`;
 
         img.onerror = function () {
