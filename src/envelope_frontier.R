@@ -36,7 +36,7 @@ src_source("frontier_viz.R")
 # Clip ONLY at the top. logit(1) = +Inf makes the problem infeasible, so a run
 # scoring n/n is treated as 1 - 1/(2n). But logit(0) = -Inf is harmless: "the
 # frontier must exceed 0%" is no constraint at all, and such runs are dropped
-# below. Clipping the bottom as well INVENTS a floor -- with n = 40 a zero
+# below. Clipping the bottom as well INVENTS a floor -- with n = 100 a zero
 # becomes 0.0125, logit -4.37 -- and that spurious floor was what pinned fm13's
 # envelope at its cheapest costs and pushed the whole surface far above the data.
 #
@@ -104,7 +104,7 @@ pareto_binding <- function(cost, t, L) {
 # Returns a DATA FRAME of n_cost * n_date rows, numeric columns lncost and tc:
 # the full cross of two uniform sequences over the observed ranges, lncost
 # varying fastest.
-objective_grid <- function(data, n_cost = 100, n_date = 40) {
+objective_grid <- function(data, n_cost = 100, n_date = 100) {
   expand.grid(lncost = seq(min(data$lncost), max(data$lncost), length.out = n_cost),
               tc     = seq(min(data$tc),     max(data$tc),     length.out = n_date))
 }
@@ -152,7 +152,7 @@ objective_grid <- function(data, n_cost = 100, n_date = 40) {
 # where P is undefined dropped. Split out of fit_pareto_logit() so the Box-Cox
 # lambda search (boxcox_frontier.R) can compute it ONCE per benchmark -- the
 # staircase does not depend on the lambdas, only the regressor columns do.
-pareto_grid_response <- function(data, n_cost = 100, n_date = 40) {
+pareto_grid_response <- function(data, n_cost = 100, n_date = 100) {
   gr <- objective_grid(data, n_cost, n_date)
   s  <- data[order(data$lncost), ]
   gr$acc <- NA_real_
@@ -218,7 +218,7 @@ pareto_grid_response <- function(data, n_cost = 100, n_date = 40) {
 #   share_moved  SCALAR in [0, 1], fraction of nodes whose record moved at all
 #                over the horizon
 #   n_nodes      SCALAR integer, nodes entering the average
-pareto_decline_qtr <- function(data, n_cost = 100, n_date = 40, dt = 1) {
+pareto_decline_qtr <- function(data, n_cost = 100, n_date = 100, dt = 1) {
   gr <- pareto_grid_response(data, n_cost, n_date)
   gr <- gr[gr$acc > 0 & gr$tc + dt <= max(data$tc), , drop = FALSE]
   if (!nrow(gr)) return(NULL)
@@ -243,7 +243,7 @@ pareto_decline_qtr <- function(data, n_cost = 100, n_date = 40, dt = 1) {
 }
 
 fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
-                             n_cost = 100, n_date = 40, grid_augment = NULL) {
+                             n_cost = 100, n_date = 100, grid_augment = NULL) {
   gr <- pareto_grid_response(data, n_cost, n_date)
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
   s <- data[order(data$lncost), ]
@@ -460,7 +460,7 @@ coef.envelope_frontier <- function(object, ...) object$coefficients
 # monotonicity is what holds it flat, so the fitted rate there is the
 # constraint's, not the data's.
 fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
-                                 n_cost = 100, n_date = 40, margin = 0.05,
+                                 n_cost = 100, n_date = 100, margin = 0.05,
                                  grid_augment = NULL, lambda_odds = 0) {
   gr <- pareto_grid_response(data, n_cost, n_date)
   if (!is.null(grid_augment)) gr <- grid_augment(gr)

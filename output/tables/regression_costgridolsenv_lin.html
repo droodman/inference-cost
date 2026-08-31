@@ -34,15 +34,15 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <th colspan="1" class="grp"><div class="hd">Pooled, primary (log $)</div></th>
 </tr></thead><tbody>
 <tr><td>Intercept</td>
-<td>-8.554</td>
+<td>-8.567</td>
 <td class="grp">-7.335</td>
-<td class="grp">-3.448</td>
+<td class="grp">-3.454</td>
 <td class="grp">-9.577</td>
 <td class="grp">-2.634</td>
-<td class="grp">-3.465</td>
-<td class="grp">3.114</td>
+<td class="grp">-3.478</td>
+<td class="grp">3.225</td>
 <td class="grp">-1.333</td>
-<td class="grp">-9.066</td>
+<td class="grp">-9.070</td>
 <td class="grp">-8.276</td>
 <td class="grp">-2.738</td>
 <td class="grp"></td>
@@ -51,57 +51,57 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td>0.358</td>
 <td class="grp">0.280</td>
 <td class="grp">1.172</td>
-<td class="grp">0.151</td>
+<td class="grp">0.150</td>
 <td class="grp">2.488</td>
 <td class="grp">0.604</td>
-<td class="grp">2.415</td>
+<td class="grp">2.450</td>
 <td class="grp">0.723</td>
-<td class="grp">0.219</td>
+<td class="grp">0.218</td>
 <td class="grp">0.230</td>
 <td class="grp">0.657</td>
 <td class="grp"></td>
 </tr>
 <tr><td>time</td>
-<td>-1.131</td>
+<td>-1.150</td>
 <td class="grp">-1.311</td>
-<td class="grp">-1.340</td>
-<td class="grp">-1.039</td>
+<td class="grp">-1.362</td>
+<td class="grp">-1.036</td>
 <td class="grp">-0.023</td>
-<td class="grp">-0.000</td>
-<td class="grp">-0.051</td>
+<td class="grp">-0.033</td>
+<td class="grp">-0.182</td>
 <td class="grp">-0.634</td>
-<td class="grp">-1.707</td>
-<td class="grp">-1.244</td>
-<td class="grp">0.000</td>
-<td class="grp">-0.969</td>
+<td class="grp">-1.706</td>
+<td class="grp">-1.245</td>
+<td class="grp">-0.000</td>
+<td class="grp">-0.976</td>
 </tr>
 <tr class="gap"><td>cost drop, %/qtr</td>
-<td>24.6</td>
+<td>25.0</td>
 <td class="grp">28.0</td>
-<td class="grp">28.5</td>
-<td class="grp">22.9</td>
+<td class="grp">28.9</td>
+<td class="grp">22.8</td>
 <td class="grp">0.6</td>
-<td class="grp">0.0</td>
-<td class="grp">1.3</td>
+<td class="grp">0.8</td>
+<td class="grp">4.4</td>
 <td class="grp">14.7</td>
 <td class="grp">34.7</td>
-<td class="grp">26.7</td>
-<td class="grp">-0.0</td>
-<td class="grp">21.5</td>
+<td class="grp">26.8</td>
+<td class="grp">0.0</td>
+<td class="grp">21.7</td>
 </tr>
 <tr><td>N</td>
-<td>2599</td>
-<td class="grp">2898</td>
-<td class="grp">1821</td>
-<td class="grp">2974</td>
-<td class="grp">3199</td>
-<td class="grp">2838</td>
-<td class="grp">2231</td>
-<td class="grp">1789</td>
-<td class="grp">3193</td>
-<td class="grp">3690</td>
-<td class="grp">3650</td>
-<td class="grp">13491</td>
+<td>6486</td>
+<td class="grp">7244</td>
+<td class="grp">4497</td>
+<td class="grp">7422</td>
+<td class="grp">8018</td>
+<td class="grp">7117</td>
+<td class="grp">5581</td>
+<td class="grp">4488</td>
+<td class="grp">7973</td>
+<td class="grp">9230</td>
+<td class="grp">9142</td>
+<td class="grp">33667</td>
 </tr>
 </tbody><tfoot><tr><td colspan="13">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero are excluded -- logit 0 is unusable as a coordinate -- and runs scoring n/n are clipped by their own sample size. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: this is the grid OLS's objective -- the record cost ln C_a(t) sampled on the uniform (logit accuracy, date) grid -- minimised subject to the cost envelope's constraints: the surface must lie at or below every positive-accuracy run's log cost, rise with accuracy and never rise with date. Grid nodes are not observations and the constrained fit has no likelihood, so errors would be fictions twice over. N is the defined grid nodes.  cost drop, %/qtr is 100*(1 - exp(b_time / 4)): the time coefficient transformed directly -- the estimand is a single coefficient here, not the ratio of two as in the accuracy-direction tables. Standard error by the delta method on the transform, where a covariance exists. Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope moves with accuracy and date, so no single rate describes those columns. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery). The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is needed. It is pooled by inverse-variance weights where every benchmark carries a covariance, and by an unweighted mean otherwise (a mechanical average, as for the accuracy tables' envelope and Pareto-grid columns). The other coefficients are in each benchmark's own logit units and are not pooled. Pooled N sums the primary benchmark columns. The pooled pair covers the linear specification only.</td></tr></tfoot></table>
 </body></html>

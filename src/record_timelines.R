@@ -51,7 +51,8 @@ timelines <- do.call(rbind, lapply(
         q <- q[which.min(q$cost), ]
         if (q$cost >= rec) return(NULL)
         rec <<- q$cost
-        data.frame(benchmark = LABELS[[b]],
+        data.frame(bench = b,
+                   benchmark = LABELS[[b]],
                    level = a,
                    model = model_label(q$model, q$effort),
                    acc = q$acc,
@@ -137,3 +138,48 @@ o <- c(o, '</tbody><tfoot><tr><td colspan="6">',
        '</td></tr></tfoot></table></body></html>')
 writeLines(o, out_path("tables", "record_timelines.html"))
 cat("wrote record_timelines.html\n")
+
+## ---- figures: one per benchmark --------------------------------------------------
+#
+# The same timelines drawn on the (release date, cost) plane, one figure per
+# benchmark: each accuracy record's cost trace as a connected colored line
+# marching right and down. Labels name the models, placed by ggrepel; a run
+# that holds the cost record for several levels at once (common at the cheap
+# end) is labeled once.
+
+for (b in unique(timelines$bench)) {
+  tl <- timelines[timelines$bench == b, ]
+  tl$lev <- factor(fmt_lev(tl$level), levels = fmt_lev(sort(unique(tl$level))))
+
+  # one label per model per date: near-identical runs of the same model often
+  # hold several levels' records at once, and labeling each dot double-prints
+  # the name
+  labs <- tl[!duplicated(tl[c("model", "date")]), ]
+
+  n_lev <- nlevels(tl$lev)
+  p <- ggplot(tl, aes(date, cost)) +
+    geom_line(aes(group = lev, colour = lev), linewidth = 0.55) +
+    geom_point(aes(colour = lev), size = 1.7) +
+    ggrepel::geom_text_repel(
+      data = labs, aes(label = model), colour = INK_SECOND, size = 2.5,
+      segment.colour = INK_MUTED, segment.size = 0.25, min.segment.length = 0.3,
+      box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1) +
+    scale_y_log10(breaks = 10^(-5:2), labels = dollar_log) +
+    scale_x_date(expand = expansion(mult = c(0.05, 0.05))) +
+    scale_colour_manual(name = "accuracy record",
+                        values = colorRampPalette(PALETTE)(n_lev)) +
+    guides(colour = guide_legend(nrow = 1)) +
+    labs(title = paste0(LABELS[[b]], ": cost records at each accuracy record"),
+         x = NULL, y = "Cost per task (log scale)",
+         caption = paste(
+           "Each line follows one accuracy record's cost record over time:",
+           "models scoring at least the record at lower cost than every",
+           "predecessor.\nA model holding several levels' records at once is",
+           "labeled once.")) +
+    frontier_theme()
+
+  f <- sprintf("record_timeline_%s.png", b)
+  ggsave(out_path(f), p, width = 11, height = 7, dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", f, "\n")
+}

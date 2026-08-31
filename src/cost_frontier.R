@@ -104,7 +104,7 @@ iso_runs <- function(data) {
 #   n_date   SCALAR integer, nodes in tc
 #
 # Returns a DATA FRAME of n_level * n_date rows, columns la and tc.
-iso_grid <- function(data, n_level = 100, n_date = 40) {
+iso_grid <- function(data, n_level = 100, n_date = 100) {
   s <- iso_runs(data)
   expand.grid(la = seq(min(s$la), max(s$la), length.out = n_level),
               tc = seq(min(s$tc), max(s$tc), length.out = n_date))
@@ -117,7 +117,7 @@ iso_grid <- function(data, n_level = 100, n_date = 40) {
 # Nodes where no run had yet achieved the level are dropped, not imputed.
 #
 # Returns a DATA FRAME with columns la, tc, lnC -- the defined nodes only.
-iso_grid_response <- function(data, n_level = 100, n_date = 40) {
+iso_grid_response <- function(data, n_level = 100, n_date = 100) {
   s <- iso_runs(data)
   gr <- iso_grid(data, n_level, n_date)
   gr$lnC <- NA_real_
@@ -149,7 +149,7 @@ iso_grid_response <- function(data, n_level = 100, n_date = 40) {
 # `grid_augment` adds columns derived from the grid's (la, tc) coordinates --
 # how the BC terms become evaluable at grid nodes, as in fit_pareto_logit().
 fit_lncost_grid <- function(data, formula = COST_FORMS$lin,
-                            n_level = 100, n_date = 40, grid_augment = NULL) {
+                            n_level = 100, n_date = 100, grid_augment = NULL) {
   gr <- iso_grid_response(data, n_level, n_date)
   gr$lncost <- gr$lnC
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
@@ -289,7 +289,7 @@ coef.cost_envelope_frontier <- function(object, ...) object$coefficients
 #   bind           integer VECTOR of candidate row indices
 #   formula        the formula as supplied, so the fit carries its own spec
 fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
-                                n_level = 100, n_date = 40, margin = 0.05,
+                                n_level = 100, n_date = 100, margin = 0.05,
                                 grid_augment = NULL) {
   s <- iso_runs(data)
   gr <- iso_grid_response(data, n_level, n_date)

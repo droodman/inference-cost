@@ -38,7 +38,7 @@ src_source("fit_store.R")   # pulls the whole fitting stack
 suppressMessages(library(plotly))
 
 N_X <- 100   # lattice density along the non-time axis, matching the fits' grids
-N_T <- 40
+N_T <- 100
 
 d <- load_runs()
 benches <- bench_levels(d$benchmark)
