@@ -158,9 +158,73 @@ for (i in seq_len(nrow(rec_births))) {
 cat("\ncost decline at fixed frontier performance, from the staircase alone",
     "\n(measured over a year, expressed as a compound quarterly rate)\n")
 cat(sprintf("%-6s %8s %8s %7s\n", "bench", "%/qtr", "moved", "nodes"))
+check <- list()
 for (b in bench_levels(d$benchmark)) {
   r <- pareto_decline_qtr(d[d$benchmark == b, ])
   if (is.null(r)) next
   cat(sprintf("%-6s %7.1f%% %7.1f%% %7d\n",
               b, r$pct_qtr, 100 * r$share_moved, r$n_nodes))
+  check[[b]] <- r
 }
+
+## ---- the same check, saved as a table (HTML + CSV) -----------------------------------
+
+dir.create(out_path("tables"), showWarnings = FALSE, recursive = TRUE)
+
+write.csv(data.frame(benchmark = unname(LABELS[names(check)]),
+                     decline_pct_qtr = vapply(check, `[[`, 0, "pct_qtr"),
+                     share_records_moved = vapply(check, `[[`, 0,
+                                                  "share_moved"),
+                     n_nodes = vapply(check, `[[`, 0L, "n_nodes"),
+                     row.names = NULL),
+          out_path("tables", "staircase_check.csv"), row.names = FALSE)
+cat("\nwrote staircase_check.csv\n")
+
+esc <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  gsub("<", "&lt;", x, fixed = TRUE)
+}
+o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
+       '<title>Staircase check</title>',
+       '<style>',
+       # the regression tables' palette, so this page sits beside them
+       'body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}',
+       'h1{font-size:1.25em;margin:0 0 4px 0}',
+       'p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}',
+       'table{border-collapse:collapse;background:#fcfcfb;font-size:.9em}',
+       'th,td{padding:3px 14px;text-align:right;white-space:nowrap}',
+       'th:first-child,td:first-child{text-align:left}',
+       'thead th{border-bottom:1px solid #1d1d1d;font-weight:600}',
+       'tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;',
+       '  text-align:left;white-space:normal;padding-top:8px;max-width:760px}',
+       '</style></head><body>',
+       '<h1>Cost decline at fixed frontier performance, staircase alone</h1>',
+       '<p class="sub">The nonparametric sense check: no model anywhere.</p>',
+       '<table><thead><tr><th>Benchmark</th><th>Decline, %/qtr</th>',
+       '<th>Records moved</th><th>Grid nodes</th></tr></thead><tbody>')
+for (b in names(check)) {
+  r <- check[[b]]
+  o <- c(o, sprintf('<tr><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td>%d</td></tr>',
+                    esc(LABELS[[b]]), r$pct_qtr, 100 * r$share_moved,
+                    r$n_nodes))
+}
+o <- c(o, '</tbody><tfoot><tr><td colspan="4">',
+       paste("At every node of the fixed (log cost, date) grid the fitted",
+             "models are scored on, the record cost of the node's frontier",
+             "performance one YEAR later is compared with the record now;",
+             "the geometric-mean log change is compounded down to the",
+             "quarterly rate the regression tables print, so the columns are",
+             "directly comparable. Records moved is the share of nodes whose",
+             "record changed at all over the year -- the average is that",
+             "share's real drops diluted by zeros elsewhere. Nodes are",
+             "dropped where the frontier is undefined, at zero accuracy, and",
+             "within the horizon of the last run; a benchmark observed for",
+             "less than a year has no measurable horizon and no row. Levels",
+             "are weighted by the log-cost width of their staircase steps",
+             "(the grid is uniform in log cost) -- a THIRD level weighting",
+             "beside the accuracy-direction grids' cost-uniform and the",
+             "cost-direction grids' accuracy-uniform measures, which is part",
+             "of why the model columns it checks legitimately spread."),
+       '</td></tr></tfoot></table></body></html>')
+writeLines(o, out_path("tables", "staircase_check.html"))
+cat("wrote staircase_check.html\n")

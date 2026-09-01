@@ -893,13 +893,26 @@ notes_cost <- function(key, tt) {
     paste("No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling",
           "distribution to appeal to."))
   bc <- paste(
-    "BC columns are the DOUBLY-transformed Box-Cox family: phi(cost; lambda_cost) is linear in",
-    "phi(odds; lambda_odds), phi(time; lambda_time) and their product, with phi(x; lambda) =",
-    "(x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost, to the ODDS a/(1-a) -- at",
-    "lambda_odds = 0 phi(odds) IS logit accuracy -- and to years since mid-2020, GPT-3's release.",
-    "The family is closed under inversion, so it treats odds and cost fully symmetrically and its",
-    "accuracy-direction counterpart estimates the same surface class. It nests the single-transform",
-    "version at lambda_cost = 0 (ln cost as the response) and the linear model at (0, 0, 1). The",
+    if (key %in% c("costsfa", "costsfab"))
+      paste("BC columns keep LN COST as the response: the response-side lambda is deliberately DROPPED",
+            "for the SFA duals, because a Box-Cox transform of the dependent variable soaks up residual",
+            "skewness, and the composite residual's skewness is exactly what identifies the one-sided",
+            "inefficiency term (with lambda_cost free, sigma_u collapsed to zero on two benchmarks while",
+            "sigma_v ballooned to absorb it; dropping it rescues math_lvl5, but on swe_bench_verified",
+            "even the regressor transforms alone absorb the frontier term -- read that column's sigma_u",
+            "accordingly). The regressors are transformed: ln cost is linear in",
+            "phi(odds; lambda_odds), phi(time; lambda_time) and their product, with phi(x; lambda) =",
+            "(x^lambda - 1)/lambda (log at lambda = 0) applied to the ODDS a/(1-a) -- at lambda_odds = 0",
+            "phi(odds) IS logit accuracy -- and to years since mid-2020, GPT-3's release. The family",
+            "nests the linear model at (lambda_odds, lambda_time) = (0, 1) with no product term. The")
+    else
+      paste("BC columns are the DOUBLY-transformed Box-Cox family: phi(cost; lambda_cost) is linear in",
+            "phi(odds; lambda_odds), phi(time; lambda_time) and their product, with phi(x; lambda) =",
+            "(x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost, to the ODDS a/(1-a) -- at",
+            "lambda_odds = 0 phi(odds) IS logit accuracy -- and to years since mid-2020, GPT-3's release.",
+            "The family is closed under inversion, so it treats odds and cost fully symmetrically and its",
+            "accuracy-direction counterpart estimates the same surface class. It nests the single-transform",
+            "version at lambda_cost = 0 (ln cost as the response) and the linear model at (0, 0, 1). The"),
     "lambdas are profiled",
     switch(key,
            costols = paste("against the Gaussian profile likelihood -- the residual sum of squares on the",
@@ -910,7 +923,7 @@ notes_cost <- function(key, tt) {
            costgridolsenv = paste("against the grid's Gaussian profile likelihood (transformed-scale residual",
                                   "sum of squares with the Box-Cox Jacobian term), subject to the cost",
                                   "envelope's constraints,"),
-           "against the likelihood, with the Box-Cox Jacobian term for the response transform,"),
+           "against the likelihood (no Jacobian: the response is untransformed),"),
     "and are reported without standard errors; a lambda of exactly 3 or -2 sits on the edge of",
     "the search box, the flat profile having run to the wall. fm13's lambda_time is fixed at 1",
     "(its five months of data identify no time curvature).",
@@ -998,12 +1011,15 @@ notes_plain <- function(key, kind, tt = "lin") {
     "mid-2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in",
     "cost at every date -- the quadratic's bending back toward the data cannot happen -- while the product term",
     "still allows the cost slope one sign change over time.",
-    if (key %in% c("paretologit", "paretologitenv"))
+    if (key %in% c("S", "paretologit", "paretologitenv"))
       paste("For this model the RESPONSE side is transformed too: the index is phi(odds; lambda_odds), the",
             "logit exactly at lambda_odds = 0, so odds and cost are treated symmetrically -- the profile is",
-            "well-posed because the objective is stated on a lambda_odds-invariant scale.")
+            "well-posed because the objective is stated on a lambda_odds-invariant scale (the response is",
+            "never transformed; lambda_odds is a link parameter, so no Jacobian arises).")
     else
-      "For this model the index is the logit: the response side keeps its link.",
+      paste("For this model the index is the logit: the response side keeps its link, because the SFA's",
+            "one-sided inefficiency term is identified off the response's asymmetry -- exactly the signal a",
+            "free link-shape parameter would compete for."),
     "The lambdas are estimated per benchmark by profiling",
     switch(key, S = "the quasibinomial deviance,", A = , B = "the likelihood,",
            paretologit = "the probability-scale quasi-likelihood,",
@@ -1017,7 +1033,7 @@ notes_plain <- function(key, kind, tt = "lin") {
     if (key %in% c("A", "B"))
       paste("The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) --",
             "its LR row tests exactly those restrictions -- but not the quadratic.")
-    else if (key %in% c("paretologit", "paretologitenv"))
+    else if (key %in% c("S", "paretologit", "paretologitenv"))
       paste("The BC specification nests the linear one (lambda_cost = 0, lambda_odds = 0, lambda_time = 1, no",
             "product term) but not the quadratic.")
     else

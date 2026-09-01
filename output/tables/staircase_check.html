@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Staircase check</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.9em}
+th,td{padding:3px 14px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:760px}
+</style></head><body>
+<h1>Cost decline at fixed frontier performance, staircase alone</h1>
+<p class="sub">The nonparametric sense check: no model anywhere.</p>
+<table><thead><tr><th>Benchmark</th><th>Decline, %/qtr</th>
+<th>Records moved</th><th>Grid nodes</th></tr></thead><tbody>
+<tr><td>AIME (OTIS Mock)</td><td>45.4%</td><td>87.2%</td><td>4415</td></tr>
+<tr><td>Chess Puzzles</td><td>32.9%</td><td>89.2%</td><td>3704</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td>52.1%</td><td>90.3%</td><td>3530</td></tr>
+<tr><td>GPQA Diamond</td><td>36.2%</td><td>88.8%</td><td>4376</td></tr>
+<tr><td>Mystery Game Puzzles</td><td>7.8%</td><td>33.8%</td><td>5601</td></tr>
+<tr><td>FrontierMath 2025-02</td><td>41.7%</td><td>97.9%</td><td>3105</td></tr>
+<tr><td>FrontierMath, tier 4 (2025-07)</td><td>18.4%</td><td>100.0%</td><td>1032</td></tr>
+<tr><td>FrontierMath, tier 4 v2</td><td>43.6%</td><td>100.0%</td><td>684</td></tr>
+<tr><td>MATH, level 5</td><td>48.1%</td><td>99.4%</td><td>3312</td></tr>
+<tr><td>SimpleQA Verified</td><td>50.0%</td><td>100.0%</td><td>1711</td></tr>
+<tr><td>SWE-Bench Verified</td><td>22.4%</td><td>78.6%</td><td>1517</td></tr>
+</tbody><tfoot><tr><td colspan="4">
+At every node of the fixed (log cost, date) grid the fitted models are scored on, the record cost of the node's frontier performance one YEAR later is compared with the record now; the geometric-mean log change is compounded down to the quarterly rate the regression tables print, so the columns are directly comparable. Records moved is the share of nodes whose record changed at all over the year -- the average is that share's real drops diluted by zeros elsewhere. Nodes are dropped where the frontier is undefined, at zero accuracy, and within the horizon of the last run; a benchmark observed for less than a year has no measurable horizon and no row. Levels are weighted by the log-cost width of their staircase steps (the grid is uniform in log cost) -- a THIRD level weighting beside the accuracy-direction grids' cost-uniform and the cost-direction grids' accuracy-uniform measures, which is part of why the model columns it checks legitimately spread.
+</td></tr></tfoot></table></body></html>

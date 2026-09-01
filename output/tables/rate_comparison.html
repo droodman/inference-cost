@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" />
+<title>Rate comparison</title>
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;background:#fcfcfb}
+h1{font-size:1.25em;margin:0 0 4px 0}
+p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
+table{border-collapse:collapse;background:#fcfcfb;font-size:.9em}
+th,td{padding:3px 12px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:7em}
+th.grp,td.grp{border-left:1px solid #e6e6e2}
+tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
+  text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+</style></head><body>
+<h1>Cost decline per quarter at fixed accuracy, all estimates</h1>
+<p class="sub">Positive = cheaper. Nonparametric and smoothed-surface
+aggregates first, then the frontier fits, then the run-cloud pair.</p>
+<table><thead><tr>
+<th><div class="hd">Benchmark</div></th><th><div class="hd">Staircase</div></th><th><div class="hd">BC surface</div></th><th class="grp"><div class="hd">Grid OLS</div></th><th><div class="hd">Grid OLS + envelope</div></th><th class="grp"><div class="hd">SFA cost</div></th><th><div class="hd">OLS runs</div></th><th class="grp"><div class="hd">Pareto logit</div></th><th><div class="hd">Pareto logit + envelope</div></th>
+</tr></thead><tbody>
+<tr><td>AIME (OTIS Mock)</td><td>45.4%</td><td class="grp">62.5%</td><td>56.0%</td><td class="grp">16.3%</td><td>-1.8%</td><td class="grp">8.8%</td><td>68.0%</td><td>78.6%</td></tr>
+<tr><td>Chess Puzzles</td><td>32.9%</td><td class="grp">35.8%</td><td>34.0%</td><td class="grp">24.2%</td><td>22.5%</td><td class="grp">3.6%</td><td>56.7%</td><td>52.6%</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td>52.1%</td><td class="grp">47.4%</td><td>34.8%</td><td class="grp">15.2%</td><td>-52.2%</td><td class="grp">1.0%</td><td>75.0%</td><td>73.7%</td></tr>
+<tr><td>GPQA Diamond</td><td>36.2%</td><td class="grp">55.3%</td><td>46.4%</td><td class="grp">20.7%</td><td>-11.5%</td><td class="grp">7.0%</td><td>59.1%</td><td>57.8%</td></tr>
+<tr><td>Mystery Game Puzzles</td><td>7.8%</td><td class="grp">11.8%</td><td>12.4%</td><td class="grp">0.5%</td><td>-23.5%</td><td class="grp">-2.4%</td><td>63.4%</td><td>34.7%</td></tr>
+<tr><td>FrontierMath 2025-02</td><td>41.7%</td><td class="grp">55.4%</td><td>42.5%</td><td class="grp">6.1%</td><td>-46.3%</td><td class="grp">-10.2%</td><td>56.5%</td><td>60.8%</td></tr>
+<tr><td>FrontierMath, tier 4 (2025-07)</td><td>18.4%</td><td class="grp">25.1%</td><td>27.2%</td><td class="grp">17.1%</td><td>-263.7%</td><td class="grp">-34.6%</td><td>43.9%</td><td>48.8%</td></tr>
+<tr><td>FrontierMath, tier 4 v2</td><td>43.6%</td><td class="grp">34.6%</td><td>53.5%</td><td class="grp">14.7%</td><td>-5.3%</td><td class="grp">25.2%</td><td>78.7%</td><td>87.5%</td></tr>
+<tr><td>MATH, level 5</td><td>48.1%</td><td class="grp">62.6%</td><td>54.3%</td><td class="grp">41.4%</td><td>32.4%</td><td class="grp">16.5%</td><td>69.4%</td><td>84.8%</td></tr>
+<tr><td>SimpleQA Verified</td><td>50.0%</td><td class="grp">53.9%</td><td>50.8%</td><td class="grp">29.9%</td><td>-36.0%</td><td class="grp">4.3%</td><td>55.2%</td><td>-0.0%</td></tr>
+<tr><td>SWE-Bench Verified</td><td>22.4%</td><td class="grp">24.2%</td><td>22.9%</td><td class="grp">0.0%</td><td>0.4%</td><td class="grp">12.6%</td><td>36.3%</td><td>13.9%</td></tr>
+</tbody><tfoot><tr><td colspan="9">
+Every column targets the fall per quarter in the cost of fixed frontier performance. Staircase is the nonparametric check (pareto_frontiers.R, saved as staircase_check.html): record costs read off the empirical staircase at every grid node, over a one-year horizon, geometric-mean change compounded to a quarterly rate. BC surface is the SAME aggregate -- same nodes, horizon and compounding -- with the empirical record replaced by the Box-Cox Pareto-grid cost fit's surface, so the gap between the two columns is purely what smoothing does (levels of exactly 1 are excluded there; the node sets differ slightly). The remaining columns are the LINEAR fits' single coefficients: the cost-direction fits' time coefficient transformed directly, the accuracy-direction pair's -b_t/b_x ratio. SFA cost and OLS runs follow the model-effort run cloud rather than the record; negative values there are the cloud drifting dearer while the record collapses.
+</td></tr></tfoot></table></body></html>

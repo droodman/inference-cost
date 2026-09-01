@@ -79,34 +79,47 @@ iso_runs <- function(data) {
   s[order(s$lncost), ]
 }
 
-# The fixed grid the cost-direction objectives use: the full cross of logit
-# accuracy levels and dates, uniform over each observed range -- the exact
-# mirror of objective_grid(). Uniform in LOGIT accuracy, so levels are
-# weighted evenly on the scale the family is linear in; pareto_decline_qtr()
-# instead weights levels by the log-cost width of their staircase steps (its
-# grid is uniform in log cost), so its average and these fits answer the same
-# question under slightly different level weightings.
+# The fixed grid the cost-direction objectives use: the full cross of
+# accuracy levels and dates, uniform over each observed range. Uniform in
+# ACCURACY -- the nodes sit at qlogis of an even sequence from the smallest
+# positive (clipped) observed accuracy to the largest clipped one, so the
+# ENDPOINTS are exactly the old logit-uniform grid's -- which makes the
+# objectives integrate misfit evenly over the accuracy scale, the same
+# measure the display axes use.
 #
-# An alternative that sampled the staircase's own levels at objective_grid's
-# (log cost, date) nodes -- matching the check's step-width weighting exactly
-# -- was tried and REVERTED: it broke the mirror symmetry with the
-# accuracy-direction grids without fixing what motivated it. The contours'
-# visible misfit to the records is the linear family's inability to bend
-# around the frontier's shelf-and-cliff shape (see plot_cost_frontier.R and
-# the moving-ceiling analysis), not a weighting artifact. Each direction's
-# uniform grid carries the mirrored hazard, kept knowingly: this one weights
-# the clipped top tail heavily (clip_acc stretches n/n scores to la ~ 7,
-# where the record is a single best run), as the accuracy-direction grid
-# weights the wide flat cost-steps that dilute its -b_t/b_x.
+# This deliberately RETIRES an earlier design that was uniform in LOGIT
+# accuracy, defended then as the mirror of the accuracy direction's
+# lncost-uniform grid ("uniform on the scale the family is linear in") and
+# kept with a documented hazard: it weighted the clipped top tail heavily
+# (clip_acc stretches n/n scores to la ~ 7, where the record is a single
+# best run), so half a benchmark's nodes could sit at accuracies above 90%
+# or below 5%. Weighting la-uniform nodes by p(1-p) is the same fix (the
+# Jacobian of the substitution); moving the nodes needs no weights anywhere
+# downstream. The formal mirror symmetry with objective_grid() is knowingly
+# given up; the asymmetry is real -- accuracy is bounded and sampled with
+# binomial noise, log cost is neither. (A separate alternative that sampled
+# the staircase's own levels was tried much earlier and REVERTED; the
+# contours' visible misfit to the records is the linear family's inability
+# to bend around the frontier's shelf-and-cliff shape, not a weighting
+# artifact, and remains so under this grid.)
 #
 #   data     DATA FRAME as for iso_runs(); only the ranges of la and tc are used
-#   n_level  SCALAR integer, nodes in logit accuracy
+#   n_level  SCALAR integer, nodes in accuracy
 #   n_date   SCALAR integer, nodes in tc
 #
-# Returns a DATA FRAME of n_level * n_date rows, columns la and tc.
+# Returns a DATA FRAME of n_level * n_date rows, columns la and tc -- la
+# because that is the scale the models' formulas use; only the SPACING is
+# accuracy-uniform.
 iso_grid <- function(data, n_level = 100, n_date = 100) {
   s <- iso_runs(data)
-  expand.grid(la = seq(min(s$la), max(s$la), length.out = n_level),
+  a <- seq(plogis(min(s$la)), plogis(max(s$la)), length.out = n_level)
+  la <- qlogis(a)
+  # the qlogis(plogis(.)) round trip can land a hair ABOVE the observed
+  # maximum, leaving the top level "never achieved" and its nodes dropped;
+  # pin the endpoints to the observed values exactly
+  la[1] <- min(s$la)
+  la[n_level] <- max(s$la)
+  expand.grid(la = la,
               tc = seq(min(s$tc), max(s$tc), length.out = n_date))
 }
 
@@ -148,15 +161,20 @@ iso_grid_response <- function(data, n_level = 100, n_date = 100) {
 # response name (lncost); the grid's sampled record is aliased to it here.
 # `grid_augment` adds columns derived from the grid's (la, tc) coordinates --
 # how the BC terms become evaluable at grid nodes, as in fit_pareto_logit().
+# gr0 / n_corners: lambda-invariant precomputations the Box-Cox profile
+# passes in once per benchmark, exactly as in fit_pareto_logit()
 fit_lncost_grid <- function(data, formula = COST_FORMS$lin,
-                            n_level = 100, n_date = 100, grid_augment = NULL) {
-  gr <- iso_grid_response(data, n_level, n_date)
+                            n_level = 100, n_date = 100, grid_augment = NULL,
+                            gr0 = NULL, n_corners = NULL) {
+  gr <- if (is.null(gr0)) iso_grid_response(data, n_level, n_date) else gr0
   gr$lncost <- gr$lnC
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
   fit <- lm(formula, data = gr)
-  s <- iso_runs(data)
   attr(fit, "n_grid")    <- nrow(gr)
-  attr(fit, "n_corners") <- length(pareto_binding(s$lncost, s$tc, s$la))
+  attr(fit, "n_corners") <- if (is.null(n_corners)) {
+    s <- iso_runs(data)
+    length(pareto_binding(s$lncost, s$tc, s$la))
+  } else n_corners
   class(fit) <- c("lncost_grid_ols", class(fit))
   fit
 }
@@ -177,8 +195,11 @@ fit_lncost_grid <- function(data, formula = COST_FORMS$lin,
 #   Xb, cb  the run rows and their levels: feasibility is Xb %*% g <= cb
 #   bind    integer VECTOR of row indices into `s`, the runs behind Xb
 #   mono    monotonicity rows requiring mono %*% g >= 0
-cost_envelope_constraints <- function(s, formula, gr) {
-  bind <- pareto_binding(s$lncost, s$tc, s$la)
+cost_envelope_constraints <- function(s, formula, gr, bind = NULL) {
+  # `bind` may be passed in by the Box-Cox profile: the Pareto set is
+  # invariant across the lambdas (see envelope_constraints), so the O(n^2)
+  # reduction need not run per profile evaluation
+  if (is.null(bind)) bind <- pareto_binding(s$lncost, s$tc, s$la)
   X  <- model.matrix(formula, s)
   Xb <- X[bind, , drop = FALSE]
   # the response as the formula states it: ln cost for the linear and
@@ -288,24 +309,27 @@ coef.cost_envelope_frontier <- function(object, ...) object$coefficients
 #   env_slack      numeric VECTOR of run slacks, parallel to bind
 #   bind           integer VECTOR of candidate row indices
 #   formula        the formula as supplied, so the fit carries its own spec
+# gr0, bind, n_corners and start as in fit_pareto_logit_env(): the Box-Cox
+# profile's hoisted invariants and its warm start, with the same
+# fall-back-to-cold rule when a warm-started solve ends infeasible.
 fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
                                 n_level = 100, n_date = 100, margin = 0.05,
-                                grid_augment = NULL) {
+                                grid_augment = NULL, gr0 = NULL, bind = NULL,
+                                n_corners = NULL, start = NULL) {
   s <- iso_runs(data)
-  gr <- iso_grid_response(data, n_level, n_date)
+  gr <- if (is.null(gr0)) iso_grid_response(data, n_level, n_date) else gr0
   gr$lncost <- gr$lnC
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
   Xg <- model.matrix(delete.response(terms(formula)), gr)
   yg <- model.response(model.frame(formula, gr))
-  cs <- cost_envelope_constraints(s, formula, gr)
+  cs <- cost_envelope_constraints(s, formula, gr, bind = bind)
 
   fn <- function(g) mean((drop(Xg %*% g) - yg)^2)
   gr_fn <- function(g) 2 * drop(crossprod(Xg, drop(Xg %*% g) - yg)) / nrow(Xg)
 
-  b0 <- cost_feasible_start(coef(lm(formula, data = gr)), cs$Xb, cs$cb, margin)
   bound <- 1e5
-  r <- nloptr::nloptr(
-    x0 = unname(b0),
+  solve1 <- function(x0) nloptr::nloptr(
+    x0 = x0,
     eval_f = function(g) list(objective = fn(g), gradient = gr_fn(g)),
     eval_g_ineq = function(g) list(
       constraints = c(drop(cs$Xb %*% g) - cs$cb, -drop(cs$mono %*% g)),
@@ -313,6 +337,17 @@ fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
     lb = rep(-bound, ncol(Xg)), ub = rep(bound, ncol(Xg)),
     opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
                 maxeval = 5000, print_level = 0))
+  r <- NULL
+  if (!is.null(start) && length(start) == ncol(Xg)) {
+    r <- solve1(unname(start))
+    if (min(c(cs$cb - drop(cs$Xb %*% r$solution),
+              drop(cs$mono %*% r$solution))) < -1e-8) r <- NULL
+  }
+  if (is.null(r)) {
+    b0 <- cost_feasible_start(coef(lm(formula, data = gr)), cs$Xb, cs$cb,
+                              margin)
+    r <- solve1(unname(b0))
+  }
   g <- setNames(r$solution, colnames(Xg))
 
   env_slack <- cs$cb - drop(cs$Xb %*% g)
@@ -327,7 +362,8 @@ fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
                    class = c("lncost_grid_env", "cost_envelope_frontier"))
   if (fit$worst_slack < -1e-8) stop("no feasible constrained grid OLS found")
   attr(fit, "n_grid")    <- nrow(gr)
-  attr(fit, "n_corners") <- length(pareto_binding(s$lncost, s$tc, s$la))
+  attr(fit, "n_corners") <- if (is.null(n_corners))
+    length(pareto_binding(s$lncost, s$tc, s$la)) else n_corners
   fit
 }
 
@@ -538,6 +574,37 @@ cost_surface <- function(fit, sub) {
 # no single rate describes the fit.
 cost_decline_qtr <- function(fit) 100 * (1 - exp(cost_coefs(fit)[["gt"]] / 4))
 
+# pareto_decline_qtr's aggregate (envelope_frontier.R) read off a FITTED cost
+# surface instead of the empirical record: the SAME grid, the same node
+# filters, the same one-year horizon and geometric-mean compounding -- only
+# the record cost ln C_a(t) is replaced by the fitted surface at the node's
+# level, so the gap between this number and the staircase check's is purely
+# what smoothing does to the aggregate. Works for any cost fit cost_surface()
+# can evaluate, curved or Box-Cox included, which is what makes it the
+# nonlinear specifications' answer to the single-coefficient rate above.
+#
+# Two node exclusions beyond the check's own: levels of exactly 1 (their
+# logit is not a coordinate; the empirical record still exists there but the
+# surface cannot be asked for it) and nodes where a Box-Cox index leaves
+# phi's range. n_nodes counts what remains; comparisons against the check
+# should note the (small) node-set difference.
+#
+# Returns NULL if no node survives, else list(pct_qtr, n_nodes) with the
+# same meanings as pareto_decline_qtr's.
+surface_decline_qtr <- function(fit, data, dt = 1) {
+  gr <- pareto_grid_response(data)
+  gr <- gr[gr$acc > 0 & gr$acc < 1 & gr$tc + dt <= max(data$tc), ,
+           drop = FALSE]
+  if (!nrow(gr)) return(NULL)
+  srf <- cost_surface(fit, data)
+  la <- qlogis(gr$acc)
+  dln <- srf$f(la, gr$tc + dt) - srf$f(la, gr$tc)
+  ok <- is.finite(dln)
+  if (!any(ok)) return(NULL)
+  list(pct_qtr = 100 * (1 - exp(mean(dln[ok]) / (4 * dt))),
+       n_nodes = sum(ok))
+}
+
 # Accuracy-versus-cost curves at each drawn date, for frontier_plot(). NOT an
 # inversion: the surface is SWEPT parametrically along the observed logit
 # accuracy range and plotted as (exp(lnC), plogis(la)) -- exact for every
@@ -637,12 +704,13 @@ cost_iso_curves <- function(fitset, data, tbar,
 # Estimation is by PROFILE, as for the accuracy BC: at fixed lambdas the
 # model is linear in its coefficients, so each family's own fitter runs on
 # pre-transformed columns and the outer optimiser moves the lambdas against
-# that family's own objective -- SSR for the two least-squares fits, the
-# closed-form likelihood for the SFA duals, mean fitted height (maximized)
-# for the envelope. Coefficient standard errors are conditional on the
-# profiled lambdas, which are reported without standard errors. lambda_time
-# is fixed at 1 where the observed tau span cannot identify it (bc_lt_free;
-# fm13), exactly as in the accuracy direction.
+# that family's own objective -- the Jacobian-corrected Gaussian profile for
+# the least-squares fits, the closed-form likelihood for the SFA duals.
+# Coefficient standard errors are conditional on the profiled lambdas, which
+# are reported without standard errors. lambda_time is fixed at 1 where the
+# observed tau span cannot identify it (bc_lt_free), exactly as in the
+# accuracy direction -- and for the SFA duals lambda_cost is fixed at 0 (the
+# response stays ln cost): see the identification note in fit_cost_bc().
 
 # The DOUBLY-transformed family: the response side carries its own lambda,
 #
@@ -716,6 +784,10 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
   sumlny_runs <- sum(s$lncost)
   gr0 <- iso_grid_response(s)
   sumlny_grid <- sum(gr0$lnC)
+  # the other lambda-invariant piece, hoisted for the same reason: the Pareto
+  # reduction, which doubles as the envelope constraint candidates and the
+  # n_corners attribute
+  bind0 <- pareto_binding(s$lncost, s$tc, s$la)
 
   fit_at <- function(lC, lo, lt) {
     sa <- cost_bc_augment(s, lC, lo, lt, off)
@@ -725,29 +797,52 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
       list(fit = f, obj = -nrow(sa) / 2 * log(sum(residuals(f)^2)) +
              (lC - 1) * sumlny_runs)
     } else if (key == "costgridols") {
-      f <- fit_lncost_grid(sa, COST_BC_FORM, grid_augment = ga)
+      f <- fit_lncost_grid(sa, COST_BC_FORM, grid_augment = ga,
+                           gr0 = gr0, n_corners = length(bind0))
       list(fit = f, obj = -attr(f, "n_grid") / 2 * log(sum(residuals(f)^2)) +
              (lC - 1) * sumlny_grid)
     } else if (key == "costgridolsenv") {
-      f <- fit_lncost_grid_env(sa, COST_BC_FORM, grid_augment = ga)
+      f <- fit_lncost_grid_env(sa, COST_BC_FORM, grid_augment = ga,
+                               gr0 = gr0, bind = bind0,
+                               n_corners = length(bind0),
+                               start = ws$start_env)
+      ws$start_env <- coef(f)   # warm-start the next profile evaluation
       if (max(abs(coef(f))) > 1e4) stop("degenerate constrained grid LS")
       # the same Gaussian profile objective as costgridols: `value` is the
       # mean squared residual over the same node set, so SSR = value * n_grid
       list(fit = f, obj = -attr(f, "n_grid") / 2 *
              log(f$value * attr(f, "n_grid")) + (lC - 1) * sumlny_grid)
     } else {
+      # the SFA duals: lC is always 0 here (see below), so phicost IS ln cost
+      # and the response is untransformed -- no Jacobian term, the likelihood
+      # is already on the fixed ln-cost scale
       f <- fit_cost_sfa(sa, COST_BC_FORM,
                         formula_sigma = if (key == "costsfab") ~ tc else ~ 1,
                         start = ws$start)
       ws$start <- coef(f)   # warm-start the next profile evaluation
-      list(fit = f, obj = as.numeric(logLik(f)) + (lC - 1) * sumlny_runs)
+      list(fit = f, obj = as.numeric(logLik(f)))
     }
   }
 
   # A failed inner fit scores -1e6: bad, not fatal, so the outer search
   # steers away from lambdas where the model cannot be fitted.
+  #
+  # The SFA duals profile TWO lambdas, with lambda_cost pinned at 0 (phicost
+  # is then exactly ln cost -- the response untransformed). Deliberate, not a
+  # shortcut: a Box-Cox transform of the dependent variable is a
+  # skewness-soaking device, and the composite residual's skewness is exactly
+  # what identifies the one-sided inefficiency term -- with lambda_cost free,
+  # sigma_u collapsed to zero on two benchmarks (math_lvl5,
+  # swe_bench_verified) while sigma_v ballooned to absorb it, a frontier
+  # model quietly ceasing to be one. The least-squares fits have no such term
+  # to protect and keep the full doubly-transformed family.
+  sfa <- key %in% c("costsfa", "costsfab")
   neg <- function(l) {
-    lC <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
+    if (sfa) {
+      lC <- 0; lo <- l[1]; lt <- if (lt_free) l[2] else 1
+    } else {
+      lC <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
+    }
     if (lC < BC_BOX_C[1] || lC > BC_BOX_C[2] ||
         lo < COST_BC_BOX_O[1] || lo > COST_BC_BOX_O[2] ||
         lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
@@ -755,17 +850,36 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
     if (is.null(r) || !is.finite(r$obj)) return(1e6)
     -r$obj
   }
-  opt <- optim(c(lambda_start[1], lambda_start[2],
-                 if (lt_free) lambda_start[3]), neg,
-               method = "Nelder-Mead",
-               control = list(reltol = 1e-6, maxit = 300))
-  lC <- opt$par[1]; lo <- opt$par[2]
-  lt <- if (lt_free) opt$par[3] else 1
+  if (sfa) {
+    lC <- 0
+    if (lt_free) {
+      opt <- optim(c(lambda_start[2], lambda_start[3]), neg,
+                   method = "Nelder-Mead",
+                   control = list(reltol = 1e-6, maxit = 300))
+      lo <- opt$par[1]; lt <- opt$par[2]
+    } else {
+      # optimize(), not 1-D Nelder-Mead, which optim() itself warns against
+      opt <- optimize(function(x) neg(x), interval = COST_BC_BOX_O,
+                      tol = 1e-4)
+      lo <- opt$minimum; lt <- 1
+    }
+  } else {
+    opt <- optim(c(lambda_start[1], lambda_start[2],
+                   if (lt_free) lambda_start[3]), neg,
+                 method = "Nelder-Mead",
+                 control = list(reltol = 1e-6, maxit = 300))
+    lC <- opt$par[1]; lo <- opt$par[2]
+    lt <- if (lt_free) opt$par[3] else 1
+  }
 
+  # the canonical refit at the optimum: cold-started for the constrained grid
+  # fit, so the returned object is exactly what a standalone fit at these
+  # lambdas produces (the SFA duals keep their warm start, as before)
+  ws$start_env <- NULL
   fit <- fit_at(lC, lo, lt)$fit
   attr(fit, "bc_lambda") <- c(lambda_cost = lC, lambda_odds = lo,
                               lambda_time = lt)
-  attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE, lambda_odds = TRUE,
+  attr(fit, "bc_lambda_free") <- c(lambda_cost = !sfa, lambda_odds = TRUE,
                                    lambda_time = lt_free)
   fit
 }

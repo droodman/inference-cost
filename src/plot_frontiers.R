@@ -61,7 +61,8 @@ NOTES_BASE <- paste("All models retained. Data prepared once in prepare_data.R,"
 NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2, time^2,",
                     "cost x time) jointly; see this script's LR table and",
                     "monotonicity check for whether the block earns its keep.")
-NOTES_BC <- paste("Box-Cox: the logit is linear in phi(cost), phi(years since",
+NOTES_BC <- paste("Box-Cox: phi(odds) -- profiled for S, the logit for the",
+                  "SFA pair -- is linear in phi(cost), phi(years since",
                   "mid-2020) and their product, with the transform parameters",
                   "profiled per benchmark; monotone in cost at every date.")
 

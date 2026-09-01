@@ -180,9 +180,51 @@ bc_inv <- function(phi, l) {
 # Computed via 1/(1 + odds^-1) so huge odds cannot overflow to NaN.
 bc_mu <- function(eta, lo) {
   if (abs(lo) < 1e-8) return(plogis(eta))
+  # index assignment, not ifelse: this sits inside the Box-Cox profiles'
+  # innermost loops, where ifelse's temporaries were a measured 1/3 of the
+  # whole profile's time. Same values, NA propagation included.
   base <- 1 + lo * eta
-  qinv <- ifelse(base > 0, base^(-1 / lo), if (lo > 0) Inf else 0)
+  qinv <- rep(if (lo > 0) Inf else 0, length(base))
+  i <- which(base > 0)
+  qinv[i] <- base[i]^(-1 / lo)
+  qinv[is.na(base)] <- NA_real_
   1 / (1 + qinv)
+}
+
+# d mu / d eta = mu(1-mu)/(1 + lo*eta) in-domain (1 at lo = 0 recovers the
+# logistic's mu(1-mu)); 0 outside, matching the clamped link. Index
+# assignment, not ifelse, as in bc_mu.
+bc_mu_eta <- function(eta, lo) {
+  m <- bc_mu(eta, lo)
+  if (abs(lo) < 1e-8) return(m * (1 - m))
+  base <- 1 + lo * eta
+  out <- numeric(length(eta))
+  i <- which(base > 0)
+  out[i] <- m[i] * (1 - m[i]) / base[i]
+  out[is.na(base)] <- NA_real_
+  out
+}
+
+# The doubly-transformed family's response side as a glm LINK object: the
+# index is phi(odds; lo), the logit exactly at lo = 0 (where the stock logit
+# link is returned, so the nested member is bit-identical to the plain
+# fractional logit). Fitting through glm rather than a hand-rolled optimiser
+# keeps everything downstream honest for model S: IRLS does the estimation,
+# deviance() the profile objective, and sandwich/coeftest the robust standard
+# errors, exactly as at the logit. The clamps keep IRLS finite where the
+# index leaves phi's range (mu pinned just inside (0,1), mu.eta just above
+# 0); a fit pushed hard against that wall fails to converge and the lambda
+# profile scores those lambdas as unfittable rather than trusting it.
+bc_link <- function(lo) {
+  if (abs(lo) < 1e-8) return("logit")
+  eps <- .Machine$double.eps
+  structure(list(
+    linkfun  = function(mu) bc_tf(mu / (1 - mu), lo),
+    linkinv  = function(eta) pmin(pmax(bc_mu(eta, lo), eps), 1 - eps),
+    mu.eta   = function(eta) pmax(bc_mu_eta(eta, lo), eps),
+    valideta = function(eta) TRUE,
+    name     = sprintf("bc_odds(lambda = %.4g)", lo)
+  ), class = "link-glm")
 }
 
 # The Bernoulli quasi-log-likelihood on the PROBABILITY scale, the objective
@@ -193,7 +235,11 @@ bc_mu <- function(eta, lo) {
 # path, so profiles that mix them stay comparable. mu is clamped away from
 # 0/1 so a clamped link (bc_mu outside phi's range) cannot emit -Inf.
 bc_qll <- function(y, mu) {
-  mu <- pmin(pmax(mu, 1e-12), 1 - 1e-12)
+  # which() + index assignment, not pmin/pmax: profile-hot (see bc_mu)
+  lo <- which(mu < 1e-12)
+  hi <- which(mu > 1 - 1e-12)
+  mu[lo] <- 1e-12
+  mu[hi] <- 1 - 1e-12
   sum(y * log(mu) + (1 - y) * log(1 - mu))
 }
 

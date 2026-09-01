@@ -15,7 +15,16 @@
 # orientations:
 #
 #   frontier     x = ln cost, y = year, z = accuracy      (performance surface)
-#   isoaccuracy  x = logit accuracy, y = year, z = ln cost (cost surface)
+#   isoaccuracy  x = accuracy, y = year, z = ln cost      (cost surface)
+#
+# Accuracy axes are PLAIN accuracy, not logit: the logit stretch made 0.5%
+# vs 1% look as different as 50% vs 73%, an emphasis the accuracy-direction
+# fits (probability-scale quasi-likelihoods) do not share. The level lattice
+# is therefore uniform in accuracy; internally the fits are still evaluated
+# at its logit coordinates, so nothing about any FIT changes -- the display
+# does. (The cost-direction objectives' own la-uniform node weighting, a
+# documented tail-heavy hazard, is unaffected; the display just no longer
+# mirrors it.)
 #
 # so 4 model keys x 3 specifications x 2 views = 24 HTML files,
 # surface3d_<key>_<spec>_<view>.html. Each direction is NATIVE in one view and
@@ -74,7 +83,11 @@ bundle <- function(b) {
   off <- (s$year - s$tc)[1] - BC_T0
 
   lnc <- seq(min(s$lncost), max(s$lncost), length.out = N_X)
-  la  <- seq(min(su$la), max(su$la), length.out = N_X)
+  # uniform in ACCURACY (so heatmap rasters stay regular and the axis reads
+  # plainly), carried as logit values because that is the scale the fits and
+  # the record are evaluated on
+  la  <- qlogis(seq(plogis(min(su$la)), plogis(max(su$la)),
+                    length.out = N_X))
   tc  <- seq(min(s$tc), max(s$tc), length.out = N_T)
 
   # P_t(c) over (lnc, tc), raw accuracy, NA where no run is cheaper & earlier
@@ -217,13 +230,12 @@ ax_cost <- function(rng) {
                               ticktext = dollar_log(10^k[keep])))
 }
 
-# An accuracy axis: internally logit accuracy (the lattice the fits live on),
-# labelled in PERCENT, the same trick ax_cost plays with dollars.
-ax_acc <- function(rng) {
-  a <- c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99)
-  keep <- qlogis(a) >= rng[1] & qlogis(a) <= rng[2]
-  c(ax("accuracy"), list(tickvals = qlogis(a[keep]),
-                         ticktext = sprintf("%g%%", 100 * a[keep])))
+# A plain accuracy axis, labelled in percent.
+ax_prob <- function(rng) {
+  a <- seq(0, 1, 0.25)
+  keep <- a >= rng[1] - 0.02 & a <= rng[2] + 0.02
+  c(ax("accuracy"), list(tickvals = a[keep],
+                         ticktext = sprintf("%d%%", 100 * a[keep])))
 }
 
 # Initial viewpoint: the box's near lower corner is the one with the LOWEST
@@ -286,10 +298,10 @@ page <- function(zs_emp, zs_fit, xs, view) {
       list(xaxis = ax_cost(range(xs[[b]])),
            zaxis = c(ax("accuracy"), list(range = c(0, 1))))
     else if (view == "isoaccuracy")
-      list(xaxis = ax("logit accuracy"),
+      list(xaxis = ax_prob(range(xs[[b]])),
            zaxis = c(ax_cost(bl$zrng_cost), list(range = bl$zrng_cost)))
     else
-      list(xaxis = ax_acc(range(xs[[b]])),
+      list(xaxis = ax_prob(range(xs[[b]])),
            zaxis = ax("cost drop, %/qtr"))
     lay[[sc]] <- c(list(domain = doms[[i]], yaxis = ax("year"),
                         aspectmode = "cube", camera = CAMERA), zx)
@@ -329,68 +341,152 @@ stable_plotly_ids <- function(w, stem) {
 # other 2-D figures. The fill is the 3-D page's z on the same plasma ramp;
 # for the overlay views that means the fitted surface alone (the 3-D page's
 # wireframe, filled in), the empirical staircase being already available in
-# the 2-D figure sets. NA holes -- failed inversions, beyond-SOTA, clipped
-# regions -- stay holes.
+# the 2-D figure sets.
+#
+# The heatmaps are NEVER masked by the data: the fitted surface fills its
+# whole domain, and the empirical frontier is DRAWN over it instead, as a
+# PAIR of 50%-black step lines: the running extremes of the observed values
+# of the plotted variable -- best and worst (positive) accuracy so far in the
+# (accuracy, date) views, cheapest and dearest run so far in the (cost, date)
+# view. Between the lines, models with those values actually existed by that
+# date; outside them, the surface is the functional form extrapolating,
+# visible but labeled as such by the band, rather than hidden by a mask.
+# (The decline 3-D pages keep their mask: they draw no lines to carry the
+# distinction.) The only remaining holes are where the fit itself has no
+# value -- a quadratic's fold, a Box-Cox index off its transform's range.
+
+# Each panel's fill is normalized to ITS OWN anchor range -- the range of the
+# same benchmark's colored surface on the 3-D page (the empirical staircase P
+# for the frontier view, the record R for the iso view, the masked decline
+# surface for the decline view, via zs_ref). plotly normalizes every scene's
+# colors to that scene's own values, so this is what makes a heatmap panel
+# and its 3-D scene agree color-for-color; a single shared scale let one
+# extreme benchmark compress everyone else into a corner of the ramp. The
+# bracket in each strip label carries the panel's mapping (dark -> bright),
+# and values outside it saturate at the endpoints.
+heat_anchor <- function(view, b, zs_ref = NULL) {
+  bl <- bundles[[b]]
+  r <- switch(view,
+              frontier    = range(bl$P, na.rm = TRUE),
+              isoaccuracy = range(bl$R, na.rm = TRUE),
+              range(zs_ref[[b]], na.rm = TRUE))
+  if (r[1] == r[2]) r + c(-0.5, 0.5) else r
+}
+
+fmt_anchor <- function(view, r) {
+  switch(view,
+         frontier    = sprintf("[%.0f%%, %.0f%%]", 100 * r[1], 100 * r[2]),
+         isoaccuracy = sprintf("[%s, %s]", dollar_log(exp(r[1])),
+                               dollar_log(exp(r[2]))),
+         sprintf("[%.0f, %.0f %%/qtr]", r[1], r[2]))
+}
+
+heat_labels <- function(view, zs_ref = NULL) {
+  setNames(vapply(benches, function(b)
+    sprintf("%s  %s", LABELS[[b]],
+            fmt_anchor(view, heat_anchor(view, b, zs_ref))), ""), benches)
+}
 
 # The long data frame geom_raster wants, from a benchmark-keyed list of
-# [N_T, N_X] matrices and their x lattices. Column-major as.vector makes the
-# date index vary fastest, matching rep(x, each = N_T).
-heat_df <- function(zs, xs) {
+# [N_T, N_X] matrices and their x lattices, fills normalized per panel.
+# Column-major as.vector makes the date index vary fastest, matching
+# rep(x, each = N_T).
+heat_df <- function(zs, xs, view, labs_b, zs_ref = NULL) {
   do.call(rbind, lapply(benches, function(b) {
     bl <- bundles[[b]]
-    data.frame(benchmark = factor(LABELS[[b]], levels = unname(LABELS[benches])),
+    a <- heat_anchor(view, b, zs_ref)
+    zn <- (zs[[b]] - a[1]) / (a[2] - a[1])
+    zn[zn < 0] <- 0
+    zn[zn > 1] <- 1
+    data.frame(benchmark = factor(labs_b[[b]], levels = unname(labs_b)),
                x = rep(xs[[b]], each = N_T),
                year = rep(bl$year, times = length(xs[[b]])),
-               z = as.vector(zs[[b]]))
+               z = as.vector(zn))
   }))
 }
 
-# Axis pieces shared with the 3-D pages' labeling tricks: log cost labeled in
-# dollars, logit accuracy labeled in percent.
+# The empirical frontiers as step paths over (year, x), built from the runs
+# themselves rather than the lattice: a running extreme enters at the run
+# that sets it and holds until the next record, ending at the panel's last
+# date. Both extremes are returned -- the observed RANGE of the plotted
+# variable at each date. For the frontier view that is the cheapest and
+# dearest run so far; for the other two views the best and worst CLIPPED
+# logit accuracy so far (zeros excluded by iso_runs, as everywhere on that
+# scale). `side` keeps geom_path from joining the two staircases; `labs_b`
+# is the per-panel strip-label vector, so the paths land in the right facets.
+frontier_steps <- function(view, labs_b) {
+  one_run <- function(v, yr, ymax, extreme) {
+    run <- extreme(v)
+    new <- !duplicated(run)
+    xk <- run[new]
+    yk <- yr[new]
+    data.frame(x = rep(xk, each = 2),
+               year = as.vector(rbind(yk, c(yk[-1], ymax))))
+  }
+  do.call(rbind, lapply(benches, function(b) {
+    bl <- bundles[[b]]
+    if (view == "frontier") {
+      s <- bl$s[order(bl$s$tc), ]
+      v <- s$lncost
+    } else {
+      s <- iso_runs(bl$s)
+      s <- s[order(s$tc), ]
+      v <- plogis(s$la)   # the accuracy axes plot plain accuracy
+    }
+    ymax <- max(bl$year)
+    out <- rbind(cbind(one_run(v, s$year, ymax, cummin), side = "lo"),
+                 cbind(one_run(v, s$year, ymax, cummax), side = "hi"))
+    out$benchmark <- factor(labs_b[[b]], levels = unname(labs_b))
+    out
+  }))
+}
+
+# Axis pieces shared with the 3-D pages' labeling tricks: log cost labeled
+# in dollars.
 COST_BRK <- log(10^(-5:1))
 COST_LAB <- dollar_log(10^(-5:1))
-ACC_BRK_P <- c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99)
 
-heat_plot <- function(zs, xs, view) {
-  hd <- heat_df(zs, xs)
-  p <- ggplot(hd, aes(x, year, fill = z)) +
+# `fill_limits`, when given, pins the color scale (values beyond it squish
+# into the endpoint colors) -- the decline maps calibrate it to the region
+# inside the frontier, so extrapolated rates cannot stretch the ramp.
+# Time on the HORIZONTAL axis, the modeled variable on the vertical -- the
+# reading convention of every other 2-D figure in the repo. No colorbar: the
+# fill is per-panel normalized (see heat_anchor), so the mapping lives in
+# each strip label's bracket and a caption states the rule once.
+heat_plot <- function(zs, xs, view, zs_ref = NULL) {
+  labs_b <- heat_labels(view, zs_ref)
+  hd <- heat_df(zs, xs, view, labs_b, zs_ref)
+  p <- ggplot(hd, aes(year, x, fill = z)) +
     geom_raster(na.rm = TRUE) +
+    geom_path(data = frontier_steps(view, labs_b), aes(year, x, group = side),
+              inherit.aes = FALSE, colour = "black", alpha = 0.5,
+              linewidth = 0.7) +
     facet_wrap(~ benchmark, ncol = 2, scales = "free") +
-    labs(y = NULL) +
-    # title above the bar: frontier_theme's top-left legend otherwise sets
-    # the title beside the colorbar, where the two collide
-    guides(fill = guide_colourbar(title.position = "top",
-                                  barwidth = grid::unit(12, "lines"),
-                                  barheight = grid::unit(0.6, "lines"))) +
+    scale_fill_gradientn(colours = PALETTE, limits = c(0, 1),
+                         na.value = SURFACE, guide = "none") +
+    labs(x = NULL,
+         caption = paste0(
+           "Fill runs dark to bright over each panel's own bracketed range ",
+           "-- the same per-panel normalization the 3-D pages use, so equal ",
+           "color means equal value between a panel\nand its 3-D scene; ",
+           "values outside the bracket saturate at the endpoints. The ",
+           "50%-black staircases bound the observed range of the vertical ",
+           "variable at each date.")) +
     frontier_theme() +
-    theme(panel.grid.major = element_blank(),
-          legend.title = element_text(colour = INK_SECOND, size = 9))
+    theme(panel.grid.major = element_blank())
   if (view == "frontier") {
-    p + scale_x_continuous(name = "Cost per task (log scale)",
-                           breaks = COST_BRK, labels = COST_LAB) +
-      scale_fill_gradientn(name = "fitted accuracy", colours = PALETTE,
-                           limits = c(0, 1), breaks = seq(0, 1, 0.25),
-                           labels = sprintf("%d%%", seq(0, 100, 25)),
-                           na.value = SURFACE)
-  } else if (view == "isoaccuracy") {
-    p + scale_x_continuous(name = "Accuracy",
-                           breaks = qlogis(ACC_BRK_P),
-                           labels = sprintf("%g%%", 100 * ACC_BRK_P)) +
-      scale_fill_gradientn(name = "fitted cost per task", colours = PALETTE,
-                           breaks = COST_BRK, labels = COST_LAB,
-                           na.value = SURFACE)
+    p + scale_y_continuous(name = "Cost per task (log scale)",
+                           breaks = COST_BRK, labels = COST_LAB)
   } else {
-    p + scale_x_continuous(name = "Accuracy",
-                           breaks = qlogis(ACC_BRK_P),
-                           labels = sprintf("%g%%", 100 * ACC_BRK_P)) +
-      scale_fill_gradientn(name = "cost drop, %/qtr", colours = PALETTE,
-                           na.value = SURFACE)
+    p + scale_y_continuous(name = "Accuracy",
+                           breaks = seq(0, 1, 0.25),
+                           labels = sprintf("%d%%", seq(0, 100, 25)))
   }
 }
 
-save_heatmap <- function(zs, xs, view, key, spec) {
+save_heatmap <- function(zs, xs, view, key, spec, zs_ref = NULL) {
   fh <- sprintf("heatmap_%s_%s_%s.png", key, spec, view)
-  ggsave(out_path(fh), heat_plot(zs, xs, view), width = 10,
+  ggsave(out_path(fh), heat_plot(zs, xs, view, zs_ref), width = 10,
          height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fh, "\n")
@@ -401,7 +497,8 @@ for (spec in c("lin", "quad", "bc")) {
   for (key in names(fits)) {
     fset <- fits[[key]][[spec]]
     for (view in VIEWS) {
-      xs <- lapply(bundles, function(bl) if (view == "frontier") bl$lnc else bl$la)
+      xs <- lapply(bundles, function(bl)
+        if (view == "frontier") bl$lnc else plogis(bl$la))
       zs_emp <- lapply(bundles, function(bl) if (view == "frontier") bl$P else bl$R)
       zs_fit <- setNames(lapply(benches, function(b) {
         bl <- bundles[[b]]
@@ -459,11 +556,18 @@ for (spec in c("lin", "quad", "bc")) {
 # stops being invertible.
 
 # Both return a [N_T, N_X] matrix of quarterly percentage declines on the
-# bundle's (la, tc) lattice, NA where blanked.
-decline_acc <- function(fit, bl) {
+# bundle's (la, tc) lattice, NA where blanked. mask = FALSE (the heatmaps)
+# skips the DATA masks -- the SOTA record and the observed cost range -- and
+# keeps only the fit-domain blanks: there the empirical frontier is drawn
+# over the map instead, and the color scale is pinned to the in-frontier
+# range, so the unmasked region can be shown without being mistaken for, or
+# distorting, the anchored one.
+decline_acc <- function(fit, bl, mask = TRUE) {
   u <- zacc_inverted(fit, bl)               # ln cost over (la, tc)
-  urng <- range(bl$s$lncost)
-  u[u < urng[1] | u > urng[2]] <- NA_real_
+  if (mask) {
+    urng <- range(bl$s$lncost)
+    u[u < urng[1] | u > urng[2]] <- NA_real_
+  }
   tcm <- matrix(bl$tc, N_T, N_X)
   if (is_bc_fit(fit)) {
     # dz/d ln c = (bx + bxt*phit) * lc-transform slope * c = (...) * c^lc;
@@ -479,11 +583,13 @@ decline_acc <- function(fit, bl) {
     den <- frontier_dcost(co, u, tcm)
     rate <- -frontier_dtime(co, u, tcm) / ifelse(den > 0.05, den, NA_real_)
   }
-  rate[is.na(bl$R)] <- NA_real_   # accuracy beyond the state of the art then
-  100 * (1 - exp(rate / 4))
+  if (mask) rate[is.na(bl$R)] <- NA_real_   # beyond the state of the art then
+  z <- 100 * (1 - exp(rate / 4))
+  z[!is.finite(z)] <- NA_real_
+  z
 }
 
-decline_cost <- function(fit, bl) {
+decline_cost <- function(fit, bl, mask = TRUE) {
   g <- grid_lt(bl$la, bl$tc)
   urng <- range(bl$s$lncost)
   if (is_cost_bc(fit)) {
@@ -505,9 +611,11 @@ decline_cost <- function(fit, bl) {
     lnC <- cost_index(co, g$x, g$t)
     rate <- cost_dtime(co, g$x, g$t)
   }
-  rate[is.na(lnC) | lnC < urng[1] | lnC > urng[2]] <- NA_real_
+  rate[is.na(lnC)] <- NA_real_              # fit domain: no cost attains it
+  if (mask) rate[lnC < urng[1] | lnC > urng[2]] <- NA_real_
   z <- as_z(100 * (1 - exp(rate / 4)))
-  z[is.na(bl$R)] <- NA_real_   # accuracy beyond the state of the art then
+  if (mask) z[is.na(bl$R)] <- NA_real_      # beyond the state of the art then
+  z[!is.finite(z)] <- NA_real_
   z
 }
 
@@ -519,7 +627,7 @@ for (spec in c("lin", "quad", "bc")) {
       if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl)
       else decline_cost(fset[[b]], bl)
     }), benches)
-    xs <- lapply(bundles, function(bl) bl$la)
+    xs <- lapply(bundles, function(bl) plogis(bl$la))
     w <- page(NULL, zs, xs, "decline")
     f <- sprintf("surface3d_%s_%s_decline.html", key, spec)
     w$elementId <- sub("\\.html$", "", f)   # deterministic ids, as above
@@ -527,6 +635,14 @@ for (spec in c("lin", "quad", "bc")) {
     htmlwidgets::saveWidget(w, out_path(f), selfcontained = FALSE,
                             libdir = "lib", title = f)
     cat("wrote", f, "\n")
-    save_heatmap(zs, xs, "decline", key, spec)
+    # the heatmap twin: UNMASKED (the frontier band is drawn over it
+    # instead), with each panel's colors anchored to its masked variant's
+    # range -- exactly the range its 3-D scene colors span
+    zs_full <- setNames(lapply(benches, function(b) {
+      bl <- bundles[[b]]
+      if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl, mask = FALSE)
+      else decline_cost(fset[[b]], bl, mask = FALSE)
+    }), benches)
+    save_heatmap(zs_full, xs, "decline", key, spec, zs_ref = zs)
   }
 }

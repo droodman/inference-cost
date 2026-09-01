@@ -242,14 +242,23 @@ pareto_decline_qtr <- function(data, n_cost = 100, n_date = 100, dt = 1) {
        n_nodes     = length(dln))
 }
 
+# gr0 and n_corners let a caller that fits MANY times on one benchmark -- the
+# Box-Cox lambda profile -- pass the staircase and corner count in once
+# instead of recomputing them per fit: neither depends on the lambdas (the
+# staircase is raw accuracy; the Pareto set is invariant to any monotone
+# transform), and together they were a measured third of the profile's time.
+# Left NULL (every one-shot caller), behavior is unchanged.
 fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
-                             n_cost = 100, n_date = 100, grid_augment = NULL) {
-  gr <- pareto_grid_response(data, n_cost, n_date)
+                             n_cost = 100, n_date = 100, grid_augment = NULL,
+                             gr0 = NULL, n_corners = NULL) {
+  gr <- if (is.null(gr0)) pareto_grid_response(data, n_cost, n_date) else gr0
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
-  s <- data[order(data$lncost), ]
   fit <- glm(formula, data = gr, family = quasibinomial(link = "logit"))
   attr(fit, "n_grid")    <- nrow(gr)
-  attr(fit, "n_corners") <- length(pareto_binding(s$lncost, s$tc, s$acc))
+  attr(fit, "n_corners") <- if (is.null(n_corners)) {
+    s <- data[order(data$lncost), ]
+    length(pareto_binding(s$lncost, s$tc, s$acc))
+  } else n_corners
   class(fit) <- c("pareto_grid_logit", class(fit))
   fit
 }
@@ -279,15 +288,22 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 #   Xb, Lb  the run rows alone -- model-matrix rows and clipped levels
 #   bind    integer VECTOR of row indices into `data`, the runs behind Xb
 #   mono    the monotonicity rows alone (0 rows when the spec has none)
-envelope_constraints <- function(data, formula, gr, lambda_odds = 0) {
+envelope_constraints <- function(data, formula, gr, lambda_odds = 0,
+                                 bind = NULL) {
   mf <- model.frame(formula, data)
   y  <- model.response(mf)
   X  <- model.matrix(formula, data)
   pc <- clip_acc(y, data$n_samples)
   L  <- if (abs(lambda_odds) < 1e-8) qlogis(pc) else
     bc_tf(pc / (1 - pc), lambda_odds)
-  pos <- which(is.finite(L) & y > 0)
-  bind <- pos[pareto_binding(data$lncost[pos], data$tc[pos], L[pos])]
+  # `bind` may be passed in by the Box-Cox profile, which calls this hundreds
+  # of times per benchmark: the O(n^2) Pareto reduction depends on L only
+  # through order comparisons, and every lambda_odds transforms L
+  # monotonically, so the binding set never moves across the profile
+  if (is.null(bind)) {
+    pos <- which(is.finite(L) & y > 0)
+    bind <- pos[pareto_binding(data$lncost[pos], data$tc[pos], L[pos])]
+  }
   Xb <- X[bind, , drop = FALSE]
   Lb <- L[bind]
 
@@ -459,14 +475,22 @@ coef.envelope_frontier <- function(object, ...) object$coefficients
 # slack_mono = 0 means the unconstrained fit wanted to slope backwards and
 # monotonicity is what holds it flat, so the fitted rate there is the
 # constraint's, not the data's.
+# gr0, bind and n_corners are the lambda-invariant precomputations a Box-Cox
+# profile passes in (see fit_pareto_logit); `start` warm-starts SLSQP from the
+# previous profile iteration's solution -- consecutive evaluations sit at
+# nearby lambdas, the same argument the SFA profiles' warm starts make. A
+# warm-started solve that ends infeasible falls back to the cold start rather
+# than failing.
 fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
                                  n_cost = 100, n_date = 100, margin = 0.05,
-                                 grid_augment = NULL, lambda_odds = 0) {
-  gr <- pareto_grid_response(data, n_cost, n_date)
+                                 grid_augment = NULL, lambda_odds = 0,
+                                 gr0 = NULL, bind = NULL, n_corners = NULL,
+                                 start = NULL) {
+  gr <- if (is.null(gr0)) pareto_grid_response(data, n_cost, n_date) else gr0
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
   Xg <- model.matrix(delete.response(terms(formula)), gr)
   P  <- gr$acc
-  cs <- envelope_constraints(data, formula, gr, lambda_odds)
+  cs <- envelope_constraints(data, formula, gr, lambda_odds, bind = bind)
 
   # negative mean Bernoulli quasi-log-likelihood of the staircase values, on
   # the probability scale whatever lambda_odds is. The score has the closed
@@ -476,22 +500,34 @@ fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
   fn <- function(b) -bc_qll(P, bc_mu(drop(Xg %*% b), lambda_odds)) / nrow(Xg)
   gr_fn <- function(b) {
     eta <- drop(Xg %*% b)
-    w <- if (abs(lambda_odds) < 1e-8) rep(1, length(eta)) else {
+    resid <- P - bc_mu(eta, lambda_odds)
+    if (abs(lambda_odds) >= 1e-8) {
       base <- 1 + lambda_odds * eta
-      ifelse(base > 0, 1 / base, 0)
+      w <- numeric(length(eta))
+      i <- which(base > 0)
+      w[i] <- 1 / base[i]
+      resid <- resid * w
     }
-    -drop(crossprod(Xg, (P - bc_mu(eta, lambda_odds)) * w)) / nrow(Xg)
+    -drop(crossprod(Xg, resid)) / nrow(Xg)
   }
 
-  b0 <- feasible_start(coef(glm(formula, data = gr,
-                                family = quasibinomial(link = "logit"))),
-                       cs$Xb, cs$Lb, margin)
-  r <- nloptr::nloptr(
-    x0 = b0, eval_f = function(b) list(objective = fn(b), gradient = gr_fn(b)),
+  solve1 <- function(x0) nloptr::nloptr(
+    x0 = x0, eval_f = function(b) list(objective = fn(b), gradient = gr_fn(b)),
     eval_g_ineq = function(b) list(constraints = as.vector(cs$ci - cs$ui %*% b),
                                    jacobian = -cs$ui),
     opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
                 maxeval = 5000, print_level = 0))
+  r <- NULL
+  if (!is.null(start) && length(start) == ncol(Xg)) {
+    r <- solve1(unname(start))
+    if (min(drop(cs$ui %*% r$solution) - cs$ci) < -1e-8) r <- NULL
+  }
+  if (is.null(r)) {
+    b0 <- feasible_start(coef(glm(formula, data = gr,
+                                  family = quasibinomial(link = "logit"))),
+                         cs$Xb, cs$Lb, margin)
+    r <- solve1(b0)
+  }
   b <- setNames(r$solution, colnames(Xg))
   env_slack <- drop(cs$Xb %*% b) - cs$Lb
   fit <- structure(
@@ -505,6 +541,7 @@ fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
     class = c("pareto_logit_env", "envelope_frontier"))
   if (fit$worst_slack < -1e-8) stop("no feasible constrained Pareto logit found")
   attr(fit, "n_grid")    <- nrow(gr)
-  attr(fit, "n_corners") <- length(pareto_binding(data$lncost, data$tc, data$acc))
+  attr(fit, "n_corners") <- if (is.null(n_corners))
+    length(pareto_binding(data$lncost, data$tc, data$acc)) else n_corners
   fit
 }

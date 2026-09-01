@@ -92,9 +92,10 @@ SPEC_NOTE <- c(
   quad = paste("ln cost is a full quadratic in logit accuracy and date",
                "(zeros excluded); where the surface bends back in accuracy",
                "the curve stops rather than fold."),
-  bc = paste("Box-Cox both sides: phi(cost) is linear in phi(odds), phi(years",
-             "since mid-2020) and their product (zeros excluded), all three",
-             "transform parameters profiled on lambda-invariant objectives."))
+  bc = paste("Box-Cox: phi(cost) -- profiled for the least-squares fits,",
+             "fixed at ln cost for the SFA duals, whose inefficiency term the",
+             "response transform would confound -- is linear in phi(odds) and",
+             "phi(years since mid-2020) (zeros excluded)."))
 ISO_SPEC_NOTE <- c(
   lin = paste("The linear surface cannot bend, so its parallel contours miss",
               "the records' sharp rise toward each date's best-achieved",
@@ -103,11 +104,11 @@ ISO_SPEC_NOTE <- c(
   quad = paste("Full quadratic in logit accuracy and date. Curvature helps",
                "the fit, but a cliff whose location rides the advancing",
                "ceiling still cannot be tracked by one fixed surface."),
-  bc = paste("Box-Cox both sides: phi(cost) linear in phi(odds), phi(years",
-             "since mid-2020) and their product, all three lambdas profiled;",
-             "a lambda on the search-box edge means the profile ran to the",
-             "wall, and contours blank where the fitted index leaves phi's",
-             "range."))
+  bc = paste("Box-Cox: phi(cost) -- profiled for the least-squares fits,",
+             "fixed at ln cost for the SFA duals -- linear in phi(odds) and",
+             "phi(years since mid-2020); a lambda on the search-box edge",
+             "means the profile ran to the wall, and contours blank where",
+             "the fitted index leaves phi's range."))
 
 for (key in names(MODELS)) {
   m <- MODELS[[key]]
