@@ -103,10 +103,40 @@ build_runs <- function(curves_csv = data_path("cost_truncated_curves.csv"),
   agg$lncost[!is.finite(agg$lncost)] <- NA_real_   # Stata's ln(0) is missing
   agg$benchmarkid  <- as.integer(factor(agg$benchmark))
 
-  # censor GPQA scores, for which 25% is the expected minimum, to [25%,100%]
-  # the full_run_acc values are almost all in this range, but the method of synthesizing
-  # rows by budget level put them in [0%,100%]
-  agg$acc[agg$benchmark=="gpqa"] <- (pmax(.25, agg$acc[agg$benchmark=="gpqa"]) - .25) / .75
+  # Rescale each benchmark from its GUESSING FLOOR to 1, onto [0, 1].
+  #
+  # Unanswered questions score at the probability of guessing correctly, so
+  # every benchmark's accuracy has a floor: 25% for GPQA's four-way choices,
+  # 0.1% for AIME's integer answers, ~9.2% for the mystery puzzles, and 0
+  # wherever a wrong answer and no answer score alike (the FrontierMath set,
+  # chess, MATH, SimpleQA, SWE-Bench). Rescaled, accuracy means the same thing
+  # everywhere -- the share of the way from guessing to perfect -- which is
+  # what makes the logit, the pooling and the cross-benchmark figures
+  # comparable. A floor of 0 leaves the column untouched, so this generalises
+  # the GPQA-only censoring it replaces rather than adding a step.
+  #
+  # The floor is READ OFF THE DATA rather than kept as a hand-written list
+  # that would silently rot as benchmarks are added: the truncation curves
+  # give every benchmark many fully-truncated rows that answer nothing and so
+  # score exactly the floor, a point mass of 169-1294 rows here. Taking the
+  # most common value in the bottom half of the distribution finds it and
+  # cannot be fooled by a mass of perfect scores at the top. A run BELOW its
+  # floor (it answered, and answered worse than chance) clips to 0, as GPQA's
+  # scores always did.
+  guess_floor <- function(a) {
+    lo <- a[a <= median(a)]
+    as.numeric(names(sort(table(lo), decreasing = TRUE))[1])
+  }
+  floors <- vapply(split(agg$acc, agg$benchmark), guess_floor, numeric(1))
+  nz <- floors[floors > 0]
+  if (length(nz))
+    message("guessing floors rescaled to 0: ",
+            paste(sprintf("%s %.4g", names(nz), nz), collapse = ", "))
+  for (b in names(floors)) {
+    g <- floors[[b]]
+    i <- agg$benchmark == b
+    agg$acc[i] <- (pmax(g, agg$acc[i]) - g) / (1 - g)
+  }
 
   # Stata's collapse leaves data sorted by its by() variables, and duplicates
   # drop keeps the FIRST row in that order -- so sort the same way, with radix

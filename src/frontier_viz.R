@@ -821,7 +821,21 @@ iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
 # Analysis sample: build_runs() supplies the data (already deduplicated there,
 # mirroring the .do file's `duplicates drop`), and this adds only the derived
 # time variables.
+#
+# READ ONCE PER PROCESS. Every script called this independently and
+# fit_store.R kept a snapshot of its own -- eleven reads minutes apart in a
+# full run -- so a data file that changed mid-run (OneDrive finishing a sync,
+# in the case that prompted this) yielded outputs mixing two datasets: the
+# nonparametric columns computed from one, the fitted columns from the other,
+# with nothing to reveal the split. One read makes that impossible, and lets
+# fit_store.R drop its own copy. Guarded like the other process-level state
+# (.fit_store, .fit_cluster_env): library files are re-sourced many times per
+# process and an unguarded assignment would empty the cache on each pass.
+if (!exists(".runs_cache", inherits = FALSE))
+  .runs_cache <- new.env(parent = emptyenv())
+
 load_runs <- function() {
+  if (!is.null(.runs_cache$d)) return(.runs_cache$d)
   d <- build_runs()
   d$t <- as_t(d$releasedate)
   d <- d[stats::complete.cases(d[c("acc", "lncost", "t", "model", "effort")]), ]
@@ -836,6 +850,7 @@ load_runs <- function() {
   dup <- duplicated(d[c("benchmark", "model", "effort", "acc", "cost", "releasedate")])
   if (any(dup))
     warning(sprintf("%d duplicate row(s) survived prepare_data.R", sum(dup)))
+  .runs_cache$d <- d
   d
 }
 

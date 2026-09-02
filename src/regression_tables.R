@@ -848,8 +848,9 @@ notes_cost <- function(key, tt) {
   dir <- paste(
     "This model fits LN COST as the response, linear in logit accuracy and time (years,",
     "centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the",
-    "benchmark's reference date. Runs scoring zero are excluded -- logit 0 is unusable as a",
-    "coordinate -- and runs scoring n/n are clipped by their own sample size. Accuracy is a",
+    "benchmark's reference date. Runs scoring zero -- that is, no better than guessing, since",
+    "accuracy is rescaled from each benchmark's guessing floor -- are excluded, logit 0 being",
+    "unusable as a coordinate, and runs scoring n/n are clipped by their own sample size. Accuracy is a",
     "REGRESSOR here, so its sampling noise is measurement error, which attenuates the",
     "logit-accuracy slope.")
   se <- switch(key,
@@ -1002,8 +1003,9 @@ notes_plain <- function(key, kind, tt = "lin") {
     else
       paste("For this model the alpha^2 weights borrow an information interpretation the fit cannot support --",
             "there is no likelihood behind it -- so the pooled figures are mechanical averages."),
-    "One scale caveat: gpqa accuracy is rescaled for its 0.25 guessing floor before the logit (prepare_data.R),",
-    "a scale on which Epoch's alpha_gpqa was not necessarily estimated.")
+    "One scale caveat: accuracy is rescaled from each benchmark's guessing floor -- 0.25 on gpqa, 0.001 on aime,",
+    "0.092 on mystery, 0 elsewhere -- to 1 before the logit (prepare_data.R), a scale on which Epoch's alpha_b",
+    "were not necessarily estimated.")
   bc <- paste(
     "BC columns are a Box-Cox alternative to the quadratic: the index is linear in phi(cost), phi(time) and",
     "their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost per",

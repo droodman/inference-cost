@@ -6,31 +6,45 @@ body{font-family:"Segoe UI",Arial,sans-serif;margin:12px;color:#1d1d1d;backgroun
 h1{font-size:1.25em;margin:0 0 4px 0}
 p.sub{color:#5e5e5e;margin:0 0 16px 0;font-size:.9em}
 table{border-collapse:collapse;background:#fcfcfb;font-size:.9em}
-th,td{padding:3px 12px;text-align:right;white-space:nowrap}
-th:first-child,td:first-child{text-align:left}
-thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom}
-thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:7em}
-th.grp,td.grp{border-left:1px solid #e6e6e2}
+th,td{padding:3px 12px;text-align:center;white-space:nowrap}
+thead tr:first-child th:first-child{text-align:left}
+thead th{border-bottom:1px solid #1d1d1d;font-weight:600;vertical-align:bottom;text-align:center}
+thead th .hd{white-space:normal;overflow-wrap:break-word;max-width:7em;margin:0 auto}
+thead th[colspan] .hd{max-width:none}
+thead tr:first-child th[colspan]{border-bottom:0}
+thead tr:first-child th[colspan] .hd{border-bottom:1px solid #1d1d1d;padding-bottom:3px}
+tbody th:first-child,tbody td:first-child{text-align:left}
 tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
   text-align:left;white-space:normal;padding-top:8px;max-width:900px}
+.order-row th,.order-row td{color:#4d4d4d;padding-bottom:1em}
 </style></head><body>
-<h1>Cost decline per quarter at fixed accuracy, all estimates</h1>
-<p class="sub">Positive = cheaper. Nonparametric and smoothed-surface
-aggregates first, then the frontier fits, then the run-cloud pair.</p>
+<h1>Average quarterly rate of decline in cost of given accuracy</h1>
 <table><thead><tr>
-<th><div class="hd">Benchmark</div></th><th><div class="hd">Staircase</div></th><th><div class="hd">BC surface</div></th><th class="grp"><div class="hd">Grid OLS</div></th><th><div class="hd">Grid OLS + envelope</div></th><th class="grp"><div class="hd">SFA cost</div></th><th><div class="hd">OLS runs</div></th><th class="grp"><div class="hd">Pareto logit</div></th><th><div class="hd">Pareto logit + envelope</div></th>
+<th rowspan="2">Benchmark</th>
+<th rowspan="2"><div class="hd">Data start</div></th>
+<th rowspan="2"><div class="hd">Non-parametric</div></th>
+<th colspan="5"><div class="hd">Cost models</div></th>
+<th colspan="2"><div class="hd">Accuracy models</div></th>
+</tr><tr>
+<th colspan="2"><div class="hd">Model frontier</div></th>
+<th><div class="hd">Model frontier, require envelopment</div></th>
+<th><div class="hd">Model all data</div></th>
+<th><div class="hd">Stochastic frontier analysis</div></th>
+<th><div class="hd">Model frontier</div></th>
+<th><div class="hd">Model frontier, require envelopment</div></th>
 </tr></thead><tbody>
-<tr><td>AIME (OTIS Mock)</td><td>45.4%</td><td class="grp">62.5%</td><td>56.0%</td><td class="grp">16.3%</td><td>-1.8%</td><td class="grp">8.8%</td><td>68.0%</td><td>78.6%</td></tr>
-<tr><td>Chess Puzzles</td><td>32.9%</td><td class="grp">35.8%</td><td>34.0%</td><td class="grp">24.2%</td><td>22.5%</td><td class="grp">3.6%</td><td>56.7%</td><td>52.6%</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td>52.1%</td><td class="grp">47.4%</td><td>34.8%</td><td class="grp">15.2%</td><td>-52.2%</td><td class="grp">1.0%</td><td>75.0%</td><td>73.7%</td></tr>
-<tr><td>GPQA Diamond</td><td>36.2%</td><td class="grp">55.3%</td><td>46.4%</td><td class="grp">20.7%</td><td>-11.5%</td><td class="grp">7.0%</td><td>59.1%</td><td>57.8%</td></tr>
-<tr><td>Mystery Game Puzzles</td><td>7.8%</td><td class="grp">11.8%</td><td>12.4%</td><td class="grp">0.5%</td><td>-23.5%</td><td class="grp">-2.4%</td><td>63.4%</td><td>34.7%</td></tr>
-<tr><td>FrontierMath 2025-02</td><td>41.7%</td><td class="grp">55.4%</td><td>42.5%</td><td class="grp">6.1%</td><td>-46.3%</td><td class="grp">-10.2%</td><td>56.5%</td><td>60.8%</td></tr>
-<tr><td>FrontierMath, tier 4 (2025-07)</td><td>18.4%</td><td class="grp">25.1%</td><td>27.2%</td><td class="grp">17.1%</td><td>-263.7%</td><td class="grp">-34.6%</td><td>43.9%</td><td>48.8%</td></tr>
-<tr><td>FrontierMath, tier 4 v2</td><td>43.6%</td><td class="grp">34.6%</td><td>53.5%</td><td class="grp">14.7%</td><td>-5.3%</td><td class="grp">25.2%</td><td>78.7%</td><td>87.5%</td></tr>
-<tr><td>MATH, level 5</td><td>48.1%</td><td class="grp">62.6%</td><td>54.3%</td><td class="grp">41.4%</td><td>32.4%</td><td class="grp">16.5%</td><td>69.4%</td><td>84.8%</td></tr>
-<tr><td>SimpleQA Verified</td><td>50.0%</td><td class="grp">53.9%</td><td>50.8%</td><td class="grp">29.9%</td><td>-36.0%</td><td class="grp">4.3%</td><td>55.2%</td><td>-0.0%</td></tr>
-<tr><td>SWE-Bench Verified</td><td>22.4%</td><td class="grp">24.2%</td><td>22.9%</td><td class="grp">0.0%</td><td>0.4%</td><td class="grp">12.6%</td><td>36.3%</td><td>13.9%</td></tr>
-</tbody><tfoot><tr><td colspan="9">
-Every column targets the fall per quarter in the cost of fixed frontier performance. Staircase is the nonparametric check (pareto_frontiers.R, saved as staircase_check.html): record costs read off the empirical staircase at every grid node, over a one-year horizon, geometric-mean change compounded to a quarterly rate. BC surface is the SAME aggregate -- same nodes, horizon and compounding -- with the empirical record replaced by the Box-Cox Pareto-grid cost fit's surface, so the gap between the two columns is purely what smoothing does (levels of exactly 1 are excluded there; the node sets differ slightly). The remaining columns are the LINEAR fits' single coefficients: the cost-direction fits' time coefficient transformed directly, the accuracy-direction pair's -b_t/b_x ratio. SFA cost and OLS runs follow the model-effort run cloud rather than the record; negative values there are the cloud drifting dearer while the record collapses.
+<tr class="order-row"><td><i>Model order</i></td><td></td><td></td><td>Linear</td><td>Box-Cox</td><td>Linear</td><td>Linear</td><td>Linear</td><td>Linear</td><td>Linear</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td>2023-03</td><td>57.5%</td><td>43.4%</td><td>53.0%</td><td>28.5%</td><td>&minus;1.2%</td><td>&minus;9.7%</td><td>68.8%</td><td>75.8%</td></tr>
+<tr><td>Chess Puzzles</td><td>2023-06</td><td>36.7%</td><td>35.1%</td><td>31.8%</td><td>27.9%</td><td>3.9%</td><td>6.7%</td><td>57.1%</td><td>51.9%</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td>2023-11</td><td>59.4%</td><td>51.1%</td><td>58.9%</td><td>56.4%</td><td>24.0%</td><td>26.8%</td><td>72.0%</td><td>71.3%</td></tr>
+<tr><td>GPQA Diamond</td><td>2023-03</td><td>50.0%</td><td>35.9%</td><td>46.5%</td><td>4.4%</td><td>&minus;8.4%</td><td>&minus;10.2%</td><td>61.2%</td><td>80.2%</td></tr>
+<tr><td>Mystery Game Puzzles</td><td>2023-06</td><td>52.6%</td><td>39.2%</td><td>37.5%</td><td>4.6%</td><td>5.0%</td><td>&minus;8.9%</td><td>55.5%</td><td>48.5%</td></tr>
+<tr><td>FrontierMath 2025-02</td><td>2024-05</td><td>57.1%</td><td>42.1%</td><td>50.7%</td><td>9.3%</td><td>&minus;8.0%</td><td>&minus;54.4%</td><td>56.9%</td><td>60.5%</td></tr>
+<tr><td>FrontierMath, tier 4 (2025-07)</td><td>2024-06</td><td>37.0%</td><td>28.1%</td><td>9.1%</td><td>&minus;0.0%</td><td>&minus;33.3%</td><td>&minus;231.4%</td><td>64.9%</td><td>50.5%</td></tr>
+<tr><td>FrontierMath, tier 4 v2</td><td>2025-01</td><td>45.8%</td><td>54.3%</td><td>8.9%</td><td>54.4%</td><td>30.3%</td><td>26.6%</td><td>78.5%</td><td>84.6%</td></tr>
+<tr><td>MATH, level 5</td><td>2023-06</td><td>59.5%</td><td>49.3%</td><td>56.6%</td><td>15.0%</td><td>&minus;12.0%</td><td>&minus;22.1%</td><td>70.1%</td><td>81.7%</td></tr>
+<tr><td>SimpleQA Verified</td><td>2024-10</td><td>31.7%</td><td>40.1%</td><td>31.4%</td><td>14.2%</td><td>&minus;5.3%</td><td>&minus;30.2%</td><td>61.3%</td><td>99.0%</td></tr>
+<tr><td>SWE-Bench Verified</td><td>2024-05</td><td>30.7%</td><td>25.3%</td><td>29.9%</td><td>2.7%</td><td>1.5%</td><td>&minus;3.1%</td><td>36.0%</td><td>40.3%</td></tr>
+</tbody><tfoot><tr><td colspan="10">
+All numbers are estimates of the average quarterly drop in the cost of a given level of accuracy on a given benchmark, over the years of available data. The "non-parametric" values are averages over even 100&times;100 grids that span the benchmark's release date and accuracy ranges, with the latter scaled within the state of the art (SOTA) for that benchmark at each given time. At each point, the lowest cost of performance at least as good one year later is found and divided by the initial cost. The geometric mean of the ratios is reexpressed as a quarterly decline rate. Results in all cost model columns are coefficients on release year as an explanator for log cost, again reexpressed quarterly; except that in the nonlinear Box-Cox variant, the statistic is computed as in the non-parametric column, using the model's best-fit surface. In the accuracy model columns accuracy is the dependent variable and log cost as an explanatory variable, so the rates are extracted as -b_t/b_x. "Model frontier" means modeling the empirical frontier as realized at a grid of points, either with ordinary least squares (OLS; for log cost) or with a logit link (for accuracy). "Model frontier, require envelopment" means the same, but with the constraint that the fitted surface is never above any data point (for cost) or below (for accuracy). "Model all data" means modeling all runs, not just the frontier, with OLS. "Stochastic frontier analysis" models the frontier and the distribution of runs around it with a half-normal distribution of inefficiency.
 </td></tr></tfoot></table></body></html>

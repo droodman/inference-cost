@@ -29,6 +29,7 @@
 # below source; they produce nothing and are not run directly. "Model
 # inference cost.do" is Stata and out of scope here.
 SCRIPTS <- c(
+  "plot_accuracy_scatter.R",# raw accuracy-vs-date plate, no fits at all
   "pareto_frontiers.R",    # nonparametric staircase figure
   "record_timelines.R",    # cost-record timelines table (HTML + CSV)
   "plot_frontiers.R",      # SFA + S figures, both views, + fit diagnostics
@@ -36,7 +37,7 @@ SCRIPTS <- c(
   "plot_paretologitenv.R", # envelope-constrained variant, both views
   "plot_cost_frontier.R",  # cost-direction dual figures, both views
   "plot_surfaces_3d.R",    # interactive 3-D surfaces for the Pareto-grid pair
-  "cost_frontier_report.R",# cost-direction dual fits: rate comparison (console)
+  "cost_frontier_report.R",# cost-direction dual fits: rate comparison (table)
   "regression_tables.R",   # HTML + RTF tables in output/tables/
   "animate_frontiers.R"    # semiannual-accumulation movies (slow; skippable)
 )

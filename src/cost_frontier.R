@@ -68,6 +68,14 @@ COST_FORMS <- list(lin  = lncost ~ la + tc,
 # Runs usable in the cost direction: logit of clipped accuracy as a
 # coordinate, zeros dropped. Every function below starts from this.
 #
+# Since accuracy is rescaled from each benchmark's guessing floor to 1
+# (prepare_data.R), a zero here means "no better than chance", not "nothing
+# right" -- and it is a large share of the runs on the benchmarks with a high
+# floor, because a fully truncated run answers nothing and scores exactly the
+# floor. Dropping them is the same mechanical rule as before (logit 0 = -Inf)
+# and now also the right one substantively: a run at chance says nothing about
+# what capability costs.
+#
 #   data  DATA FRAME of one benchmark's runs; needs acc, n_samples, lncost, tc
 #
 # Returns the rows with finite logit accuracy, sorted by lncost, with the
@@ -575,30 +583,28 @@ cost_surface <- function(fit, sub) {
 cost_decline_qtr <- function(fit) 100 * (1 - exp(cost_coefs(fit)[["gt"]] / 4))
 
 # pareto_decline_qtr's aggregate (envelope_frontier.R) read off a FITTED cost
-# surface instead of the empirical record: the SAME grid, the same node
-# filters, the same one-year horizon and geometric-mean compounding -- only
-# the record cost ln C_a(t) is replaced by the fitted surface at the node's
-# level, so the gap between this number and the staircase check's is purely
-# what smoothing does to the aggregate. Works for any cost fit cost_surface()
-# can evaluate, curved or Box-Cox included, which is what makes it the
-# nonlinear specifications' answer to the single-coefficient rate above.
+# surface instead of the empirical record: the IDENTICAL node set (shared via
+# decline_nodes()), the same dt-year horizon and geometric-mean compounding
+# -- only the record cost ln C_a(t) is replaced by the fitted surface at the
+# node's level, so the gap between this number and the staircase check's is
+# purely what smoothing does to the aggregate. Works for any cost fit
+# cost_surface() can evaluate, curved or Box-Cox included, which is what
+# makes it the nonlinear specifications' answer to the single-coefficient
+# rate above.
 #
-# Two node exclusions beyond the check's own: levels of exactly 1 (their
-# logit is not a coordinate; the empirical record still exists there but the
-# surface cannot be asked for it) and nodes where a Box-Cox index leaves
-# phi's range. n_nodes counts what remains; comparisons against the check
-# should note the (small) node-set difference.
+# decline_nodes' midpoint lattice keeps every level strictly inside (0, 1),
+# so the logit coordinate always exists; the one remaining exclusion is a
+# node where a Box-Cox index leaves phi's range (dropped and reflected in
+# n_nodes).
 #
 # Returns NULL if no node survives, else list(pct_qtr, n_nodes) with the
 # same meanings as pareto_decline_qtr's.
 surface_decline_qtr <- function(fit, data, dt = 1) {
-  gr <- pareto_grid_response(data)
-  gr <- gr[gr$acc > 0 & gr$acc < 1 & gr$tc + dt <= max(data$tc), ,
-           drop = FALSE]
-  if (!nrow(gr)) return(NULL)
+  nd <- decline_nodes(data, dt = dt)
+  if (is.null(nd) || !nrow(nd)) return(NULL)
   srf <- cost_surface(fit, data)
-  la <- qlogis(gr$acc)
-  dln <- srf$f(la, gr$tc + dt) - srf$f(la, gr$tc)
+  la <- qlogis(nd$a)
+  dln <- srf$f(la, nd$tc + dt) - srf$f(la, nd$tc)
   ok <- is.finite(dln)
   if (!any(ok)) return(NULL)
   list(pct_qtr = 100 * (1 - exp(mean(dln[ok]) / (4 * dt))),

@@ -111,16 +111,27 @@ report_scale_lr <- function(specs, d) {
     for (b in names(fa)) {
       f <- fb[[b]]
       ap <- activePar(f); cf <- coef(f); nm <- names(cf)[ap]
-      V <- vcov_robust(f)[ap, ap, drop = FALSE]
+      # A thin benchmark can leave the fit with a flat direction -- family B's
+      # time-varying scale is the usual culprit -- and the Hessian is then
+      # singular, so the sandwich cannot be built. The LR and the curvature
+      # check need no inverse, so report them with EMPTY se and correlation
+      # cells rather than halting the whole run: this table is a diagnostic,
+      # and the rows it CAN compute are exactly the ones that diagnose the
+      # problem. regression_tables.R's est_se() takes the same line.
+      V <- tryCatch(vcov_robust(f)[ap, ap, drop = FALSE],
+                    error = function(e) NULL)
       i1 <- match("beta_tc", nm); i2 <- match("logsig_tc", nm)
       ev <- min(eigen(-hessian(f)[ap, ap, drop = FALSE], symmetric = TRUE,
                       only.values = TRUE)$values)
       lr <- 2 * (as.numeric(logLik(f)) - as.numeric(logLik(fa[[b]])))
       cat(sprintf("%-6s %-6s %8.2f %7.4f %11.4f %9.4f %9.1e %+11.3f%s\n",
                   tt, b, lr, pchisq(max(lr, 0), 1, lower.tail = FALSE),
-                  cf[["logsig_tc"]], sqrt(V[i2, i2]), ev,
-                  V[i1, i2] / sqrt(V[i1, i1] * V[i2, i2]),
-                  if (ev > 0) "" else "  SADDLE"))
+                  cf[["logsig_tc"]],
+                  if (is.null(V)) NA_real_ else sqrt(V[i2, i2]), ev,
+                  if (is.null(V)) NA_real_ else
+                    V[i1, i2] / sqrt(V[i1, i1] * V[i2, i2]),
+                  paste0(if (ev > 0) "" else "  SADDLE",
+                         if (is.null(V)) "  SINGULAR" else "")))
     }
   }
   cat("\nimplied sigma_u at the first vs last observed date\n")

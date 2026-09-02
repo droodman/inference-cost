@@ -147,13 +147,12 @@ for (i in seq_len(nrow(rec_births))) {
 ## ---- cost decline at fixed frontier performance, read off the staircase alone ------------
 
 # The tables' "cost drop, %/qtr" (regression_tables.R) with no model at all:
-# at every node of the grid the fits are scored on, the record cost of the
-# node's frontier performance one YEAR later against the record now, with the
-# geometric-mean change compounded down to the quarterly rate the tables
-# print. pareto_decline_qtr() (envelope_frontier.R) documents exactly what is
-# dropped and how the grid weights the average. A benchmark observed for less
-# than a year (fm13, so far) has no measurable horizon and drops out of the
-# table. `moved` is the share of nodes whose record changed at all over the
+# at every (accuracy, date) node -- accuracy levels uniform WITHIN each
+# date's state of the art, dates uniform (decline_nodes,
+# envelope_frontier.R) -- the record cost of the node's level one YEAR later
+# against the record now, with the geometric-mean change compounded down to
+# the quarterly rate the tables print. A benchmark observed for less than a
+# year has no measurable horizon and drops out of the table. `moved` is the share of nodes whose record changed at all over the
 # year -- the average is that share's real drops diluted by zeros elsewhere.
 cat("\ncost decline at fixed frontier performance, from the staircase alone",
     "\n(measured over a year, expressed as a compound quarterly rate)\n")
@@ -209,22 +208,22 @@ for (b in names(check)) {
                     r$n_nodes))
 }
 o <- c(o, '</tbody><tfoot><tr><td colspan="4">',
-       paste("At every node of the fixed (log cost, date) grid the fitted",
-             "models are scored on, the record cost of the node's frontier",
-             "performance one YEAR later is compared with the record now;",
-             "the geometric-mean log change is compounded down to the",
-             "quarterly rate the regression tables print, so the columns are",
-             "directly comparable. Records moved is the share of nodes whose",
-             "record changed at all over the year -- the average is that",
-             "share's real drops diluted by zeros elsewhere. Nodes are",
-             "dropped where the frontier is undefined, at zero accuracy, and",
-             "within the horizon of the last run; a benchmark observed for",
-             "less than a year has no measurable horizon and no row. Levels",
-             "are weighted by the log-cost width of their staircase steps",
-             "(the grid is uniform in log cost) -- a THIRD level weighting",
-             "beside the accuracy-direction grids' cost-uniform and the",
-             "cost-direction grids' accuracy-uniform measures, which is part",
-             "of why the model columns it checks legitimately spread."),
+       paste("At every node of an (accuracy, date) lattice -- 100 accuracy",
+             "levels placed uniformly WITHIN each date's state of the art",
+             "(a midpoint lattice on (0, SOTA], shrunk per date rather than",
+             "clipped, so every date contributes equally and every node is",
+             "well-defined), 100 dates, only dates with a full year of data",
+             "ahead of them -- the record cost of the node's level one YEAR",
+             "later is compared with the record now; the geometric-mean log",
+             "change is compounded down to the quarterly rate the regression",
+             "tables print, so the columns are directly comparable. Records",
+             "moved is the share of nodes whose record changed at all over",
+             "the year -- the average is that share's real drops diluted by",
+             "zeros elsewhere. A benchmark observed for less than a year has",
+             "no measurable horizon and no row. Because each date's lattice",
+             "spans its own achieved range, a fixed node index is a rising",
+             "absolute level as the SOTA climbs; each node's change is still",
+             "a fixed-level quantity."),
        '</td></tr></tfoot></table></body></html>')
 writeLines(o, out_path("tables", "staircase_check.html"))
 cat("wrote staircase_check.html\n")

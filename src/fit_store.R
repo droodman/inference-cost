@@ -42,21 +42,22 @@ fits_once <- function(name, compute) {
   .fit_store[[name]]
 }
 
-# The store fits on its OWN copy of the data rather than any script's, so a
-# fit cannot depend on which script asked first. load_runs() is deterministic,
-# so this equals every script's local `d`.
-store_runs <- function() fits_once("runs", load_runs)
+# The data needs no entry here: load_runs() (frontier_viz.R) reads once per
+# process and hands every caller the same object, so the store and the
+# scripts cannot disagree about the sample. It used to keep a snapshot of its
+# own, which is exactly how a mid-run data change produced outputs mixing two
+# datasets.
 
 # S/A/B, linear and quadratic: the full specification grid of fit_specs.R,
 # keyed "<family>_<time>" with $fits inside, exactly as fit_all_specs returns.
 store_specs <- function() fits_once("specs", function() {
-  fit_all_specs(store_runs())
+  fit_all_specs(load_runs())
 })
 
 # paretologit / paretologitenv: list(lin = , quad = ) of per-benchmark fit
 # lists.
 store_grid <- function(key) fits_once(paste0(key, "_grid"), function() {
-  d <- store_runs()
+  d <- load_runs()
   bs <- bench_levels(d$benchmark)
   fitter <- if (key == "paretologitenv") fit_pareto_logit_env else
     fit_pareto_logit
@@ -71,14 +72,14 @@ store_grid <- function(key) fits_once(paste0(key, "_grid"), function() {
 store_bc <- function(key) fits_once(paste0("bc_", key), function() {
   seeds <- if (key == "S") list() else
     lapply(store_bc("S"), function(f) unname(attr(f, "bc_lambda"))[1:2])
-  fit_bc_by(key, store_runs(), seeds)
+  fit_bc_by(key, load_runs(), seeds)
 })
 
 # Cost-direction duals: list(lin = , quad = ) of per-benchmark fit lists,
 # through fit_cost_model (cost_frontier.R), the same recipe for figure and
 # table.
 store_cost <- function(key) fits_once(paste0(key, "_grid"), function() {
-  d <- store_runs()
+  d <- load_runs()
   bs <- bench_levels(d$benchmark)
   lapply(COST_FORMS, function(form)
     setNames(lapply(bs, function(b)
@@ -87,5 +88,5 @@ store_cost <- function(key) fits_once(paste0(key, "_grid"), function() {
 
 # Box-Cox profiles, cost direction, on the worker cluster via fit_cost_bc_by.
 store_cost_bc <- function(key) fits_once(paste0("bc_", key), function() {
-  fit_cost_bc_by(key, store_runs())
+  fit_cost_bc_by(key, load_runs())
 })

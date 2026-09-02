@@ -195,5 +195,12 @@ for (b in benches) {
   cat(sprintf("\n== %s: code %d, logLik %.2f, %d groups, %d obs, sigma_u %.2f, sigma_v %.2f\n",
               b, f$code, as.numeric(logLik(f)), attr(f, "n_groups"),
               attr(f, "n_obs"), sigma_u_hat(f), exp(coef(f)[["logsig_v"]])))
-  print(summary_robust(f))
+  # Same guard as fit_specs.R's LR table and regression_tables.R's est_se: a
+  # fit pinned at the sigma_u = 0 boundary has a flat direction, the Hessian
+  # is singular, and the sandwich cannot be built. Say so and carry on --
+  # sigma_u printed above is what diagnoses it.
+  m <- tryCatch(summary_robust(f), error = function(e) NULL)
+  if (is.null(m))
+    cat("  robust summary unavailable: singular Hessian (flat direction)\n")
+  else print(m)
 }

@@ -170,46 +170,72 @@ pareto_grid_response <- function(data, n_cost = 100, n_date = 100) {
   gr[!is.na(gr$acc), , drop = FALSE]
 }
 
+# The node set the nonparametric rate check below and its smoothed twin
+# (surface_decline_qtr, cost_frontier.R) SHARE, built once here so the two
+# cannot drift apart: at each of n_date dates with a full dt-year horizon
+# still ahead of it, n_level accuracy levels placed uniformly WITHIN the
+# state of the art at that date --
+#
+#     a_j(t) = SOTA(t) * (j - 1/2) / n_level,   j = 1..n_level
+#
+# the midpoint lattice on (0, SOTA(t)]. Shrinking the lattice to the achieved
+# range, rather than clipping a fixed one, keeps every date's node count
+# equal and makes every node well-defined by construction: no undefined
+# frontiers, no a = 0 rows (the midpoint offset keeps the lattice off both
+# endpoints, so C_a exists at the base date and, a fortiori, dt later), and
+# no exact-1 levels the fitted surfaces cannot be asked about. Dates before
+# a benchmark's first positive score contribute nothing.
+#
+# Returns a DATA FRAME of columns tc and a, or NULL when no date has a full
+# horizon.
+decline_nodes <- function(data, n_level = 100, n_date = 100, dt = 1) {
+  tgrid <- seq(min(data$tc), max(data$tc), length.out = n_date)
+  tgrid <- tgrid[tgrid + dt <= max(data$tc)]
+  if (!length(tgrid)) return(NULL)
+  do.call(rbind, lapply(tgrid, function(tk) {
+    sota <- max(data$acc[data$tc <= tk])
+    if (sota <= 0) return(NULL)
+    data.frame(tc = tk, a = sota * (seq_len(n_level) - 0.5) / n_level)
+  }))
+}
+
 # Nonparametric sense check on the fitted models' "cost drop, %/qtr" summary
 # (regression_tables.R): the same quantity read straight off the Pareto
 # staircase, with no functional form anywhere.
 #
-# At each node of objective_grid() -- the SAME grid the envelope's objective
-# and the Pareto logit's response use -- take the frontier's performance there,
-# a = P_t(c), and ask what a costs dt years on: C_a(t + dt) = min{c_i :
-# t_i <= t + dt, acc_i >= a}, the record cost iso_pareto_steps()
-# (frontier_viz.R) traces. The base is C_a(t), NOT the node's own cost: the
-# staircase is flat between jumps, so the node cost typically overpays for a by
-# the width of its step, and measuring from it would count that slack as
-# decline even over a stretch where no new model appeared. With the record at
-# both ends, each node's change is the horizontal shift of the staircase at
-# that node's level -- exactly what -b_t/b_x measures on a fitted surface.
-# The grid still sets the weighting: each level counts in proportion to the
-# log-cost width of its step, each date uniformly, the same weighting the two
-# grid-based models score on.
+# At each decline_nodes() node (a, t), ask what a costs dt years on:
+# C_a(t + dt) = min{c_i : t_i <= t + dt, acc_i >= a}, the record cost
+# iso_pareto_steps() (frontier_viz.R) traces, against the record C_a(t) now.
+# Record at BOTH ends, never the cost of a run that merely achieves a: the
+# staircase is flat between jumps, so a run's own cost typically overpays for
+# a, and measuring from it would count that slack as decline even over a
+# stretch where no new model appeared. Each node's change is the horizontal
+# shift of the staircase at that node's level -- exactly what -b_t/b_x
+# measures on a fitted surface.
+#
+# The weighting is the node set's: levels uniform in ACCURACY within each
+# date's achieved range, dates uniform. An earlier version scored the check
+# on the fits' own (log cost, date) objective grid, which weighted each level
+# by the log-cost WIDTH of its staircase step -- concentrating the average on
+# long-plateau levels pinned by single lucky cheap runs, and (it turned out)
+# on exactly the regions where fitted surfaces' misfit drifts over the
+# horizon. The price of the change: a fixed node index j is a RISING absolute
+# level as the SOTA climbs, so the aggregate averages fixed-level changes
+# under a date-varying level measure; each node's dln is still a fixed-level
+# quantity.
 #
 # Measured over a YEAR, expressed per QUARTER: at a fixed level the record is
 # a step function, and over one quarter it usually has not moved, so the
-# average is a few real drops diluted by zeros. A year of change dilutes less;
-# the geometric mean log change is then compounded down (divide by 4dt) into
-# the quarterly rate the tables print. A benchmark observed for less than dt
-# (fm13: five months, so far) has no measurable horizon and returns NULL --
-# an honest gap until its data span grows.
+# average is a few real drops diluted by zeros. A year of change dilutes
+# less; the geometric mean log change is then compounded down (divide by 4dt)
+# into the quarterly rate the tables print. A benchmark observed for less
+# than dt has no measurable horizon and returns NULL -- an honest gap until
+# its data span grows.
 #
-# Nodes are DROPPED, not imputed, in three cases:
-#   * P undefined there (cheaper and earlier than every run), as in
-#     pareto_grid_response();
-#   * a = 0: every run "achieves" at least 0, so C_0 is merely the cheapest
-#     run so far and its movement measures cheap-model arrival, not the
-#     frontier;
-#   * base dates within dt of the last run: past its last run the staircase is
-#     flat by construction, so a change measured across that boundary would be
-#     biased toward zero.
-#
-#   data    DATA FRAME, one benchmark's runs; needs acc, lncost, tc
-#   n_cost  SCALAR integer, forwarded to objective_grid(); the default matches
-#   n_date  the fits, which is the point -- same grid, same weighting
-#   dt      SCALAR, the measurement horizon in years of tc
+#   data     DATA FRAME, one benchmark's runs; needs acc, lncost, tc
+#   n_level  SCALAR integer, accuracy levels per date (decline_nodes)
+#   n_date   SCALAR integer, dates on the lattice (decline_nodes)
+#   dt       SCALAR, the measurement horizon in years of tc
 #
 # Returns NULL if no node survives, else a LIST:
 #   pct_qtr      SCALAR, 100*(1 - exp(mean(dln) / 4dt)): the geometric-mean
@@ -218,23 +244,22 @@ pareto_grid_response <- function(data, n_cost = 100, n_date = 100) {
 #   share_moved  SCALAR in [0, 1], fraction of nodes whose record moved at all
 #                over the horizon
 #   n_nodes      SCALAR integer, nodes entering the average
-pareto_decline_qtr <- function(data, n_cost = 100, n_date = 100, dt = 1) {
-  gr <- pareto_grid_response(data, n_cost, n_date)
-  gr <- gr[gr$acc > 0 & gr$tc + dt <= max(data$tc), , drop = FALSE]
-  if (!nrow(gr)) return(NULL)
+pareto_decline_qtr <- function(data, n_level = 100, n_date = 100, dt = 1) {
+  nd <- decline_nodes(data, n_level, n_date, dt)
+  if (is.null(nd) || !nrow(nd)) return(NULL)
   s <- data[order(data$lncost), ]
   # log record cost of each level at date t: cheapest run no later than t
   # scoring at least the level. Over cost-sorted runs cummax(acc) is the
   # running best, so the first index where it reaches the level is the record.
-  # Every level handed in is on the staircase at t or earlier, so a match
+  # Every level handed in is within the SOTA at its base date, so a match
   # exists at both dates and which() cannot come back empty.
   rec <- function(t, levels) {
     el <- s[s$tc <= t, ]
     m <- cummax(el$acc)
     vapply(levels, function(a) el$lncost[which(m >= a)[1]], numeric(1))
   }
-  dln <- unlist(lapply(unique(gr$tc), function(tk) {
-    a <- gr$acc[gr$tc == tk]
+  dln <- unlist(lapply(unique(nd$tc), function(tk) {
+    a <- nd$a[nd$tc == tk]
     rec(tk + dt, a) - rec(tk, a)
   }))
   list(pct_qtr     = 100 * (1 - exp(mean(dln) / (4 * dt))),
