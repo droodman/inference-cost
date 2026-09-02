@@ -48,6 +48,14 @@ if (DARK) {
   SURFACE     <- "#fcfcfb"
 }
 
+# Axis and tick ink, deliberately the brightest thing on the panel after the
+# data: pure white in the dark theme, where INK_MUTED left the scales reading
+# as background furniture rather than as the frame you navigate the plot by.
+# Not a literal "white" in the theme itself -- that would vanish on the light
+# surface if DARK is turned off -- so it follows the toggle like every other
+# colour here.
+AXIS_INK <- if (DARK) "#ffffff" else INK_PRIMARY
+
 # Display names, in the panels' order: the PRIMARY benchmarks first
 # (PRIMARY_BENCHES, prepare_data.R), the rest alphabetical -- matching
 # bench_levels(), which orders every script's loops the same way. Keys follow
@@ -347,8 +355,8 @@ frontier_theme <- function() {
       panel.grid.major = element_line(colour = GRIDLINE, linewidth = 0.3),
       panel.grid.minor = element_blank(),
       axis.line  = element_line(colour = AXIS, linewidth = 0.3),
-      axis.text  = element_text(colour = INK_MUTED, size = 8),
-      axis.title = element_text(colour = INK_SECOND, size = 9),
+      axis.text  = element_text(colour = AXIS_INK, size = 8),
+      axis.title = element_text(colour = AXIS_INK, size = 9),
       strip.text = element_text(colour = INK_PRIMARY, face = "bold", size = 10,
                                 hjust = 0),
       plot.title    = element_text(colour = INK_PRIMARY, face = "bold", size = 13),

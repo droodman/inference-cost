@@ -131,8 +131,7 @@ p <- ggplot(d, aes(releasedate, acc)) +
                "(prepare_data.R), so 0 means no better than chance. The band",
                "above 100% is label space, not attainable accuracy.")),
          strwrap, width = round(FIG_W * 18))))) +
-  frontier_theme() +
-  theme(axis.text = element_text(colour = "white"))
+  frontier_theme()
 
 f <- "accuracy_scatter.png"
 ggsave(out_path(f), p, width = FIG_W, height = FIG_H, dpi = 200,

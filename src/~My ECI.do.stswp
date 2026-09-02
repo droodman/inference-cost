@@ -24,12 +24,12 @@ mata st_matrix("myslope", exp(-st_matrix("myslope")))  // fracreg divides by slo
 * rescale
 scalar lower_anchor = [performance]_b[`="Claude 3.5 Sonnet":_model_id'._model_id]
 scalar upper_anchor = [performance]_b[`=            "GPT-5":_model_id'._model_id]
-mata S = (150 - 130) / (`=upper_anchor - lower_anchor')
-mata st_matrix("myeci"   , (st_matrix("myeci"   ) :- `=lower_anchor') * S :+ 130)
-mata st_matrix("myeci_lo", (st_matrix("myeci_lo") :- `=lower_anchor') * S :+ 130)
-mata st_matrix("myeci_hi", (st_matrix("myeci_hi") :- `=lower_anchor') * S :+ 130)
-mata st_matrix("myedi"   , (st_matrix("myedi"   ) :- `=lower_anchor') * S :+ 130)
-mata st_matrix("myslope" ,  st_matrix("myslope" )                     / S       )
+scalar S = (150 - 130) / (upper_anchor - lower_anchor)
+mata st_matrix("myeci"   , (st_matrix("myeci"   ) :- `=lower_anchor') * `=S' :+ 130)
+mata st_matrix("myeci_lo", (st_matrix("myeci_lo") :- `=lower_anchor') * `=S' :+ 130)
+mata st_matrix("myeci_hi", (st_matrix("myeci_hi") :- `=lower_anchor') * `=S' :+ 130)
+mata st_matrix("myedi"   , (st_matrix("myedi"   ) :- `=lower_anchor') * `=S' :+ 130)
+mata st_matrix("myslope" ,  st_matrix("myslope" )                     / `=S'       )
 
 * scatters of Epoch and fracreg results
 gen releasedate = date(date,"YMD")  // convert strings to dates

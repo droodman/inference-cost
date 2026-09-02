@@ -65,6 +65,12 @@ rate_rows <- do.call(rbind, lapply(bench_levels(d$benchmark), function(b) {
     # when the benchmark's history starts: how much data each rate rests on,
     # which is the first thing to check when one row disagrees with the rest
     start      = format(min(s$releasedate), "%Y-%m"),
+    # alpha_b^2, the 2PL information weight the pooled row uses. Reported for
+    # EVERY benchmark, pooled or not: it is a property of the benchmark rather
+    # than of the pool, and seeing it for the secondaries is how one judges
+    # what adding them would do -- several carry MORE information per
+    # observation than any primary does.
+    alpha2     = ALPHA[[b]]^2,
     staircase  = if (is.null(np)) NA_real_ else np$pct_qtr,
     bc_surface = if (is.null(ms)) NA_real_ else ms$pct_qtr,
     grid_ols   = cost_decline_qtr(store_cost("costgridols")$lin[[b]]),
@@ -127,6 +133,9 @@ pool_ratio <- function(fits) {
 pri <- rate_rows[match(PB, rate_rows$bench), ]
 pooled <- data.frame(
   bench = "pooled", benchmark = "Pooled, primary (ECI-weighted)", start = "",
+  # the pool's denominator: summed over the PRIMARY benchmarks only, so each
+  # primary's share of the pooled estimate is its own cell over this one
+  alpha2 = sum(ALPHA[PB]^2),
   staircase  = pool_qtr(pri$staircase),
   bc_surface = pool_qtr(pri$bc_surface),
   grid_ols   = pool_qtr(pri$grid_ols),
@@ -146,15 +155,16 @@ pc_html <- function(x) sub("^-", "&minus;", pc(x))
 
 cat("cost decline per quarter at fixed accuracy\n")
 cat("(positive = cheaper; frontier columns first, then the run-cloud pair)\n")
-cat(sprintf("%-6s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
-            "bench", "from", "staircase", "grid OLS", "BC surf", "grid+env",
-            "OLS runs", "SFA cost", "par.logit", "pl env"))
+cat(sprintf("%-6s %8s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
+            "bench", "from", "alpha^2", "staircase", "grid OLS", "BC surf",
+            "grid+env", "OLS runs", "SFA cost", "par.logit", "pl env"))
 for (i in seq_len(nrow(rate_rows) + 1)) {
   r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else pooled
   if (i > nrow(rate_rows)) cat(strrep("-", 96), "\n")
   cat(sprintf(
-    "%-6s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
-    r$bench, r$start, pc(r$staircase), pc(r$grid_ols), pc(r$bc_surface),
+    "%-6s %8s %8.4f %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
+    r$bench, r$start, r$alpha2, pc(r$staircase), pc(r$grid_ols),
+    pc(r$bc_surface),
     pc(r$grid_env), pc(r$ols_runs), pc(r$sfa_cost), pc(r$par_logit),
     pc(r$pl_env)))
 }
@@ -163,10 +173,10 @@ for (i in seq_len(nrow(rate_rows) + 1)) {
 
 dir.create(out_path("tables"), showWarnings = FALSE, recursive = TRUE)
 
-csv <- rbind(rate_rows, pooled)[, c("benchmark", "start", "staircase",
-                     "grid_ols", "bc_surface", "grid_env", "ols_runs",
-                     "sfa_cost", "par_logit", "pl_env")]
-names(csv) <- c("benchmark", "data_start", "staircase_pct_qtr",
+csv <- rbind(rate_rows, pooled)[, c("benchmark", "start", "alpha2",
+                     "staircase", "grid_ols", "bc_surface", "grid_env",
+                     "ols_runs", "sfa_cost", "par_logit", "pl_env")]
+names(csv) <- c("benchmark", "data_start", "alpha_sq", "staircase_pct_qtr",
                 "grid_ols_pct_qtr", "bc_surface_pct_qtr",
                 "grid_ols_env_pct_qtr", "ols_runs_pct_qtr",
                 "sfa_cost_pct_qtr", "pareto_logit_pct_qtr",
@@ -234,6 +244,7 @@ o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
        # column, where a centred block would drift off the column's edge.
        '<th rowspan="2">Benchmark</th>',
        '<th rowspan="2"><div class="hd">Data start</div></th>',
+       '<th rowspan="2"><div class="hd">&alpha;<sup>2</sup> weight</div></th>',
        '<th rowspan="2"><div class="hd">Non-parametric</div></th>',
        '<th colspan="5"><div class="hd">Cost models</div></th>',
        '<th colspan="2"><div class="hd">Accuracy models</div></th>',
@@ -245,13 +256,13 @@ o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
        '<th><div class="hd">Model frontier</div></th>',
        '<th><div class="hd">Model frontier, require envelopment</div></th>',
        '</tr></thead><tbody>')
-order_cells <- c("<i>Model order</i>", "", "", "Linear", "Box-Cox", "Linear",
-                 "Linear", "Linear", "Linear", "Linear")
+order_cells <- c("<i>Model order</i>", "", "", "", "Linear", "Box-Cox",
+                 "Linear", "Linear", "Linear", "Linear", "Linear")
 o <- c(o, sprintf('<tr class="order-row">%s</tr>',
                   paste0(sprintf('<td>%s</td>', order_cells), collapse = '')))
 for (i in seq_len(nrow(rate_rows) + 1)) {
   r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else pooled
-  cells <- c(esc(r$start),
+  cells <- c(esc(r$start), sprintf("%.4f", r$alpha2),
              pc_html(unlist(r[, c("staircase", "grid_ols", "bc_surface",
                                   "grid_env", "ols_runs", "sfa_cost",
                                   "par_logit", "pl_env")])))
@@ -262,7 +273,7 @@ for (i in seq_len(nrow(rate_rows) + 1)) {
                     esc(r$benchmark),
                     paste0(sprintf('<td>%s</td>', cells), collapse = '')))
 }
-o <- c(o, '</tbody><tfoot><tr><td colspan="10">',
+o <- c(o, '</tbody><tfoot><tr><td colspan="11">',
        paste("All numbers are estimates of the average quarterly drop in the cost",
              "of a given level of accuracy on a given benchmark, over the years of available data.",
              "The \"non-parametric\" values are averages over even 100&times;100 grids that span the benchmark's release date and accuracy ranges,",
@@ -282,7 +293,11 @@ o <- c(o, '</tbody><tfoot><tr><td colspan="10">',
              "The final row pools the five primary benchmarks &mdash; AIME, Chess Puzzles, FrontierMath tiers 1&ndash;3, GPQA Diamond and Mystery Game Puzzles &mdash; onto the common",
              "capability scale of Epoch's ECI (Epoch Capabilities Index), whose 2PL writes logit accuracy on benchmark b as &alpha;<sub>b</sub>(C &minus; D<sub>b</sub>) for a shared",
              "capability C. Holding accuracy fixed on a benchmark holds C fixed, so each column's rate already answers the same question and needs no rescaling; what ECI supplies is",
-             "how much each benchmark counts, and the 2PL's information weight is &alpha;<sub>b</sub><sup>2</sup>. Every column but the last two is therefore pooled as the",
+             "how much each benchmark counts, and the 2PL's information weight is &alpha;<sub>b</sub><sup>2</sup> &mdash; the &alpha;<sup>2</sup> column, shown for every",
+             "benchmark because it is a property of the benchmark and not of the pool. Each primary's share of the pooled estimate is its own &alpha;<sup>2</sup> over the final",
+             "row's, which sums &alpha;<sup>2</sup> across the five primaries alone: AIME carries 36.7% of the pool, FrontierMath tiers 1&ndash;3 21.2%, Mystery 20.9%, and Chess and",
+             "GPQA 10.6% each. Note that several SECONDARY benchmarks carry a larger &alpha;<sup>2</sup> than any primary, so they would dominate the pool if added &mdash; their",
+             "exclusion rests on their short histories, not on low information per observation. Every column but the last two is pooled as the",
              "&alpha;<sup>2</sup>-weighted mean of the annual log-cost change, converted back to a quarterly rate. Inverse-variance weighting is unavailable here because the grid and",
              "non-parametric columns carry no standard errors. The two accuracy-model rates are ratios &minus;b_t/b_x in which &alpha;<sub>b</sub> cancels within a benchmark but not",
              "across them, so they instead take the ratio of the ECI-pooled slopes, &minus;&Sigma;&alpha;b_t / &Sigma;&alpha;b_x, matching the pooled decline in the regression tables.",
