@@ -54,6 +54,23 @@ TASK_LABEL <- c(
   simpleqa                 = "SimpleQA Verified",
   swe_bench_verified       = "SWE-Bench verified")
 
+# alpha_b = estimated_slope_scaled: each benchmark's 2PL discrimination, in
+# logits per point of Epoch's ECI (Epoch Capabilities Index) scale -- the scale
+# anchored at Claude 3.5 Sonnet = 130 and GPT-5 = 150, on which the `edi`
+# column gives the benchmark's difficulty. TASK_LABEL above holds each
+# benchmark's exact name in that table, so it doubles as the join key.
+#
+# It lives here, beside the join key, because BOTH table scripts pool with it:
+# regression_tables.R across the per-benchmark coefficient columns, and
+# cost_frontier_report.R for the rate table's pooled row. Two copies of this
+# join could silently disagree about which discriminations are in force.
+#
+# data/edi_scores.csv was downloaded from https://epoch.ai/data/edi_scores.csv
+# on 2026-08-20.
+ECI <- read.csv(data_path("edi_scores.csv"), stringsAsFactors = FALSE)
+ALPHA <- setNames(ECI$estimated_slope_scaled[match(TASK_LABEL, ECI$benchmark_name)],
+                  names(TASK_LABEL))
+
 # Greedy .* so the LAST occurrence wins, matching Stata's regexcapturenamed on
 # "(?<stub>.*)-maas": the captured stub is everything before the final marker.
 clean_model_name <- function(m) {

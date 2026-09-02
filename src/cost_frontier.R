@@ -582,32 +582,50 @@ cost_surface <- function(fit, sub) {
 # no single rate describes the fit.
 cost_decline_qtr <- function(fit) 100 * (1 - exp(cost_coefs(fit)[["gt"]] / 4))
 
-# pareto_decline_qtr's aggregate (envelope_frontier.R) read off a FITTED cost
-# surface instead of the empirical record: the IDENTICAL node set (shared via
-# decline_nodes()), the same dt-year horizon and geometric-mean compounding
-# -- only the record cost ln C_a(t) is replaced by the fitted surface at the
-# node's level, so the gap between this number and the staircase check's is
-# purely what smoothing does to the aggregate. Works for any cost fit
-# cost_surface() can evaluate, curved or Box-Cox included, which is what
-# makes it the nonlinear specifications' answer to the single-coefficient
-# rate above.
+# What the FITTED cost surface says the decline rate is, averaged over
+# decline_nodes()' lattice: at each node the INSTANTANEOUS d lnC/dt the model
+# implies there, meaned, then transformed to a quarterly percentage exactly as
+# cost_decline_qtr() transforms a linear fit's single coefficient.
 #
-# decline_nodes' midpoint lattice keeps every level strictly inside (0, 1),
-# so the logit coordinate always exists; the one remaining exclusion is a
-# node where a Box-Cox index leaves phi's range (dropped and reflected in
-# n_nodes).
+# NO HORIZON IS CONSTRUCTED. Its companion pareto_decline_qtr() must difference
+# over a finite dt -- the empirical record is a step function with no
+# derivative -- but a fitted surface has a slope at every point, and that slope
+# is what the model actually claims. Differencing one over dt instead answers a
+# different question: the AVERAGE rate over the next dt years, which on a
+# surface curved in time is not the rate at t and drags the number toward
+# whatever the model says about a window the reader did not ask about. It also
+# made the statistic depend on dt in a way none of the neighbouring columns do,
+# since those are single time coefficients.
 #
-# Returns NULL if no node survives, else list(pct_qtr, n_nodes) with the
-# same meanings as pareto_decline_qtr's.
-surface_decline_qtr <- function(fit, data, dt = 1) {
-  nd <- decline_nodes(data, dt = dt)
+# Two consequences worth knowing. On a LINEAR fit this now reproduces
+# cost_decline_qtr() exactly (the derivative is gt everywhere), so the column
+# nests its neighbours instead of merely resembling them. And every date
+# qualifies -- dt = 0 into decline_nodes() keeps the lattice but drops the
+# "needs a full horizon ahead" filter -- so the late dates a horizon would
+# discard are now included, which is where the curved specifications differ
+# most from the linear ones.
+#
+# The derivative is a central difference at h = 1e-4 years (under an hour)
+# rather than an analytic formula: cost_surface() exposes f() for all three
+# specifications through one interface, and differencing it there keeps this
+# working for any specification without a per-specification derivative to
+# maintain. At that step the truncation and rounding errors are both far below
+# the precision printed.
+#
+# decline_nodes' midpoint lattice keeps every level strictly inside (0, 1), so
+# the logit coordinate always exists; the one remaining exclusion is a node
+# where a Box-Cox index leaves phi's range (dropped and reflected in n_nodes).
+#
+# Returns NULL if no node survives, else list(pct_qtr, n_nodes).
+surface_decline_qtr <- function(fit, data, h = 1e-4) {
+  nd <- decline_nodes(data, dt = 0)
   if (is.null(nd) || !nrow(nd)) return(NULL)
   srf <- cost_surface(fit, data)
   la <- qlogis(nd$a)
-  dln <- srf$f(la, nd$tc + dt) - srf$f(la, nd$tc)
+  dln <- (srf$f(la, nd$tc + h) - srf$f(la, nd$tc - h)) / (2 * h)
   ok <- is.finite(dln)
   if (!any(ok)) return(NULL)
-  list(pct_qtr = 100 * (1 - exp(mean(dln[ok]) / (4 * dt))),
+  list(pct_qtr = 100 * (1 - exp(mean(dln[ok]) / 4)),
        n_nodes = sum(ok))
 }
 
@@ -842,9 +860,30 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
   # swe_bench_verified) while sigma_v ballooned to absorb it, a frontier
   # model quietly ceasing to be one. The least-squares fits have no such term
   # to protect and keep the full doubly-transformed family.
-  sfa <- key %in% c("costsfa", "costsfab")
+  # lambda_cost is FIXED AT 0 on EVERY cost model, so phicost is exactly ln
+  # cost and the response is untransformed. This was once true only of the
+  # SFA duals, to protect the skewness that identifies their inefficiency
+  # term; the least-squares fits kept a free lambda_cost until it turned out
+  # to buy its fit with a SINGULARITY.
+  #
+  # phi(cost; lambda_cost) inverts as ln C = log(1 + lambda_cost*index) /
+  # lambda_cost, so every lambda_cost != 0 puts a pole at index =
+  # -1/lambda_cost, where d lnC/d index diverges and fitted cost runs to +Inf
+  # (lambda_cost < 0) or to 0 (lambda_cost > 0). At the profiled optima that
+  # pole sat INSIDE the grid: gpqa and aime reached fitted costs near e^20 per
+  # task against a dearest observed run of e^0.6, mystery reached e^-27, and
+  # 1% of nodes carried up to 44% of the mean decline rate. lambda_cost = 0 is
+  # the unique value with no pole -- the inverse is then the identity on log
+  # cost -- and it is the scale the whole cost analysis is defined on.
+  #
+  # The REGRESSOR-side lambdas stay free. phi(odds) and phi(time) are
+  # transforms of covariates: nothing is inverted through them, so they carry
+  # no pole and cost nothing in plausibility. The same asymmetry -- pin the
+  # response, profile the regressors -- is applied to the accuracy direction's
+  # lambda_odds in boxcox_frontier.R.
+  pin <- BC_PIN_RESPONSE || key %in% c("costsfa", "costsfab")
   neg <- function(l) {
-    if (sfa) {
+    if (pin) {
       lC <- 0; lo <- l[1]; lt <- if (lt_free) l[2] else 1
     } else {
       lC <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
@@ -856,7 +895,7 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
     if (is.null(r) || !is.finite(r$obj)) return(1e6)
     -r$obj
   }
-  if (sfa) {
+  if (pin) {
     lC <- 0
     if (lt_free) {
       opt <- optim(c(lambda_start[2], lambda_start[3]), neg,
@@ -885,7 +924,7 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
   fit <- fit_at(lC, lo, lt)$fit
   attr(fit, "bc_lambda") <- c(lambda_cost = lC, lambda_odds = lo,
                               lambda_time = lt)
-  attr(fit, "bc_lambda_free") <- c(lambda_cost = !sfa, lambda_odds = TRUE,
+  attr(fit, "bc_lambda_free") <- c(lambda_cost = !pin, lambda_odds = TRUE,
                                    lambda_time = lt_free)
   fit
 }

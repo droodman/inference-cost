@@ -149,13 +149,16 @@ for (i in seq_len(nrow(rec_births))) {
 # The tables' "cost drop, %/qtr" (regression_tables.R) with no model at all:
 # at every (accuracy, date) node -- accuracy levels uniform WITHIN each
 # date's state of the art, dates uniform (decline_nodes,
-# envelope_frontier.R) -- the record cost of the node's level one YEAR later
-# against the record now, with the geometric-mean change compounded down to
-# the quarterly rate the tables print. A benchmark observed for less than a
-# year has no measurable horizon and drops out of the table. `moved` is the share of nodes whose record changed at all over the
-# year -- the average is that share's real drops diluted by zeros elsewhere.
+# envelope_frontier.R) -- the record cost of the node's level one QUARTER
+# later against the record now, averaged geometrically. A benchmark observed
+# for less than a quarter has no measurable horizon and drops out of the
+# table. `moved` is the share of nodes whose record changed at all over the
+# quarter; over so short a horizon most levels do not move, and an unmoved
+# record enters the geometric mean as a ratio of 1, so the rate is that
+# minority's real drops averaged in with a majority of unchanged records,
+# and the two columns have to be read together.
 cat("\ncost decline at fixed frontier performance, from the staircase alone",
-    "\n(measured over a year, expressed as a compound quarterly rate)\n")
+    "\n(measured over a quarter, expressed as a quarterly rate)\n")
 cat(sprintf("%-6s %8s %8s %7s\n", "bench", "%/qtr", "moved", "nodes"))
 check <- list()
 for (b in bench_levels(d$benchmark)) {
@@ -212,15 +215,19 @@ o <- c(o, '</tbody><tfoot><tr><td colspan="4">',
              "levels placed uniformly WITHIN each date's state of the art",
              "(a midpoint lattice on (0, SOTA], shrunk per date rather than",
              "clipped, so every date contributes equally and every node is",
-             "well-defined), 100 dates, only dates with a full year of data",
-             "ahead of them -- the record cost of the node's level one YEAR",
-             "later is compared with the record now; the geometric-mean log",
-             "change is compounded down to the quarterly rate the regression",
+             "well-defined), 100 dates, only dates with a full quarter of",
+             "data ahead of them -- the record cost of the node's level one",
+             "QUARTER later is compared with the record now, and the",
+             "geometric-mean log change is the quarterly rate the regression",
              "tables print, so the columns are directly comparable. Records",
              "moved is the share of nodes whose record changed at all over",
-             "the year -- the average is that share's real drops diluted by",
-             "zeros elsewhere. A benchmark observed for less than a year has",
-             "no measurable horizon and no row. Because each date's lattice",
+             "the quarter: over so short a horizon most levels do not move,",
+             "and an unmoved record enters the geometric mean as a ratio of",
+             "1 -- an unchanged cost, not a zero one -- so the rate is that",
+             "minority's real drops averaged in with a majority of unchanged",
+             "records, and a low rate on a low share is sparse jumps rather",
+             "than a slow frontier. A benchmark observed for less than a",
+             "quarter has no measurable horizon and no row. Because each date's lattice",
              "spans its own achieved range, a fixed node index is a rising",
              "absolute level as the SOTA climbs; each node's change is still",
              "a fixed-level quantity."),

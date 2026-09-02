@@ -56,6 +56,29 @@ BC_FORM <- acc ~ phic + phit + phixt
 BC_BOX_C <- c(-1, 2)
 BC_BOX_T <- c(-2, 3)
 
+# THE ONE SWITCH. TRUE pins the RESPONSE-side Box-Cox parameter at 0 in both
+# directions -- lambda_odds here (so the link is the plain logit) and
+# lambda_cost in fit_cost_bc (so the response is ln cost) -- while leaving
+# every REGRESSOR-side lambda profiled. FALSE restores the fully
+# doubly-transformed family, profiling the response lambda too.
+#
+# Why it defaults to TRUE: a Box-Cox response has to be INVERTED to be read
+# back, and phi(y; l) inverts as ln y = log(1 + l*index)/l, which has a pole
+# at index = -1/l. Any l != 0 therefore puts a vertical asymptote at a finite
+# index, and the profile will happily walk the surface up to it: at the free
+# optima gpqa and aime reached fitted costs near e^20 per task against a
+# dearest observed run of e^0.6, mystery reached e^-27, and 1% of grid nodes
+# carried up to 44% of the mean decline rate. l = 0 is the unique value whose
+# inverse is the identity, so it is the unique value with no pole. Regressor
+# lambdas are never inverted and so carry no such risk, which is why the
+# switch is asymmetric rather than turning Box-Cox off wholesale.
+#
+# The SFA duals ignore this switch and are pinned either way, for a different
+# reason documented in fit_cost_bc: their one-sided inefficiency term is
+# identified off the residual's skewness, exactly what a response transform
+# would soak up.
+BC_PIN_RESPONSE <- TRUE
+
 # The gradient seed search (bc_lambda_paretologit) is IDENTICAL for the two
 # frontier-per-se keys -- same benchmark, same S-seeded lambda start -- and
 # store_bc() profiles the two families back-to-back in the same processes
@@ -333,8 +356,14 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
         })
       .bc_seed_memo[[mk]] <- seed
     }
+    # lambda_odds is the RESPONSE-side parameter, so BC_PIN_RESPONSE decides
+    # whether it is profiled or held at 0 (the plain logit, bit-identical to
+    # the glm path). The regressor lambdas on cost and time are profiled
+    # either way. `lz` is its slot in the parameter vector, absent when pinned.
+    lz <- if (BC_PIN_RESPONSE) integer(0) else 2L
     neg3 <- function(l) {
-      lc <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
+      lc <- l[1]; lo <- if (BC_PIN_RESPONSE) 0 else l[2]
+      lt <- if (lt_free) l[length(l)] else 1
       if (lc < BC_BOX_C[1] || lc > BC_BOX_C[2] ||
           lo < BC_BOX_C[1] || lo > BC_BOX_C[2] ||
           lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
@@ -347,11 +376,18 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
       if (key == "paretologitenv") ws$start <- coef(r$fit)
       -r$obj
     }
-    opt <- optim(c(seed[1], 0, if (lt_free) seed[2]), neg3,
-                 method = "Nelder-Mead",
-                 control = list(reltol = 1e-6, maxit = 300))
-    lam <- c(opt$par[1], if (lt_free) opt$par[3] else 1)
-    lo  <- opt$par[2]
+    p0 <- c(seed[1], rep(0, length(lz)), if (lt_free) seed[2])
+    if (length(p0) > 1) {
+      opt <- optim(p0, neg3, method = "Nelder-Mead",
+                   control = list(reltol = 1e-6, maxit = 300))
+      par <- opt$par
+    } else {
+      # optimize(), not 1-D Nelder-Mead, which optim() itself warns against
+      par <- optimize(function(x) neg3(x), interval = BC_BOX_C,
+                      tol = 1e-4)$minimum
+    }
+    lam <- c(par[1], if (lt_free) par[length(par)] else 1)
+    lo  <- if (BC_PIN_RESPONSE) 0 else par[2]
     # the canonical refit at the optimum: cold-started, so the returned
     # object is exactly what a standalone fit at these lambdas produces
     r <- bc_fit_at(key, s, off, lam[1], lam[2], lo, inv = inv)
@@ -360,7 +396,7 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
                                 lambda_odds = lo)
     attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE,
                                      lambda_time = lt_free,
-                                     lambda_odds = TRUE)
+                                     lambda_odds = !BC_PIN_RESPONSE)
     return(fit)
   }
 
@@ -371,8 +407,12 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
     # pass, so nothing that keeps A/B at two lambdas applies here. No
     # gradient seed and no warm start: S IS the cheap family every other
     # profile is seeded from.
+    # lambda_odds follows BC_PIN_RESPONSE exactly as for the frontier-per-se
+    # pair above, so S keeps the same family they do under either setting.
+    lz <- if (BC_PIN_RESPONSE) integer(0) else 2L
     neg3 <- function(l) {
-      lc <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
+      lc <- l[1]; lo <- if (BC_PIN_RESPONSE) 0 else l[2]
+      lt <- if (lt_free) l[length(l)] else 1
       if (lc < BC_BOX_C[1] || lc > BC_BOX_C[2] ||
           lo < BC_BOX_C[1] || lo > BC_BOX_C[2] ||
           lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
@@ -381,18 +421,24 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
       if (is.null(r) || !is.finite(r$obj)) return(1e6)
       -r$obj
     }
-    opt <- optim(c(lambda_start[1], 0, if (lt_free) lambda_start[2]), neg3,
-                 method = "Nelder-Mead",
-                 control = list(reltol = 1e-6, maxit = 300))
-    lam <- c(opt$par[1], if (lt_free) opt$par[3] else 1)
-    lo  <- opt$par[2]
+    p0 <- c(lambda_start[1], rep(0, length(lz)), if (lt_free) lambda_start[2])
+    if (length(p0) > 1) {
+      opt <- optim(p0, neg3, method = "Nelder-Mead",
+                   control = list(reltol = 1e-6, maxit = 300))
+      par <- opt$par
+    } else {
+      par <- optimize(function(x) neg3(x), interval = BC_BOX_C,
+                      tol = 1e-4)$minimum
+    }
+    lam <- c(par[1], if (lt_free) par[length(par)] else 1)
+    lo  <- if (BC_PIN_RESPONSE) 0 else par[2]
     r <- bc_fit_at("S", s, off, lam[1], lam[2], lo)
     fit <- r$fit
     attr(fit, "bc_lambda") <- c(lambda_cost = lam[1], lambda_time = lam[2],
                                 lambda_odds = lo)
     attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE,
                                      lambda_time = lt_free,
-                                     lambda_odds = TRUE)
+                                     lambda_odds = !BC_PIN_RESPONSE)
     return(fit)
   }
 

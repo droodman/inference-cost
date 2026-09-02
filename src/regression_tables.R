@@ -48,18 +48,10 @@ benches <- bench_levels(d$benchmark)
 
 ## ---- benchmark discriminations for pooling --------------------------------------
 #
-# alpha_b = estimated_slope_scaled: each benchmark's 2PL discrimination, in
-# logits per point of Epoch's ECI (Epoch Capabilities Index) scale -- the scale
-# anchored at Claude 3.5 Sonnet = 130 and GPT-5 = 150, on which the `edi`
-# column gives the benchmark's difficulty. TASK_LABEL (prepare_data.R) already
-# holds each benchmark's exact name in that table, so it doubles as the join
-# key.
+# ALPHA (prepare_data.R) holds each benchmark's 2PL discrimination in logits
+# per ECI point; it is defined beside TASK_LABEL, its join key, because
+# cost_frontier_report.R pools with it too.
 #
-# data/edi_scores.csv was downloaded from https://epoch.ai/data/edi_scores.csv
-# on 2026-08-20.
-ECI <- read.csv(data_path("edi_scores.csv"), stringsAsFactors = FALSE)
-ALPHA <- setNames(ECI$estimated_slope_scaled[match(TASK_LABEL, ECI$benchmark_name)],
-                  names(TASK_LABEL))
 # Only the PRIMARY benchmarks are pooled, so only they must carry an ECI
 # discrimination; a new secondary benchmark missing from the ECI file is
 # reported unpooled rather than halting the build.

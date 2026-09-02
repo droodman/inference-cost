@@ -48,22 +48,58 @@ o     <- order(d$benchmark, d$model, -d$acc)
 ds    <- d[o, ]
 peaks <- ds[!duplicated(ds[c("benchmark", "model")]), ]
 
-# Headroom for the rotated names, which run upward from their dots: the axis
-# is still labeled only to 100%, so the empty band above it reads as margin
-# rather than as accuracy above perfect. It has to grow with LABEL_SIZE, since
-# a rotated name's length is vertical: at this size the longest name in the
-# data (38 characters) spans about 0.8 of the accuracy range. The binding
-# cases are long names on near-perfect runs -- claude-sonnet-4-5 and the
-# gemini-2.5-pro previews on MATH level 5 -- which reach about 1.54; below
-# that they are truncated at the panel edge.
+# A rotated name's length runs vertically, so it competes with the panel's
+# HEIGHT -- and once width and aspect ratio are fixed, so is that height: 10
+# inches at 1:2.04 leaves 2.26in of panel, while the longest name in the data
+# (38 characters) is 2.33in at this size. Sizing every label so the worst case
+# fits would mean dropping to 1.4, below what this figure has ever used, since
+# the pinch is long names on NEAR-PERFECT runs: they start high on the axis
+# and still need their full length above them.
+#
+# So the axis is sized for the 90th percentile instead of the maximum, and the
+# panel edge clips the rest. Ten percent of names lose their tails; a name
+# reads upward from its dot, so what survives is the START of the string --
+# "claude-sonnet-4-5-2025..." is still recognisable. Trading a tenth of the
+# names' tails keeps the other 800 at full size.
 LABEL_SIZE <- 2.6
-Y_MAX      <- 1.58
+LABEL_FIT  <- 0.90   # share of names that must fit whole inside the panel
+CHAR_EM    <- 0.60   # width of a character as a fraction of the font size
 
-# Per-row height in inches. Also grown with LABEL_SIZE: the extra headroom
-# above would otherwise be taken out of the 0-100% band the dots live in,
-# which would undo half of the size increase.
-ROW_H <- 5.2
+# Canvas width in inches. This, not the pixel count, is what decides whether
+# the type survives a word processor: a document scales an image to its text
+# column (about 6.5in), shrinking every font by FIG_W/6.5. At 16in that was a
+# 2.5x reduction -- panel headings at 4pt, unreadable however many pixels back
+# them -- so the figure sits at 10in, where the reduction is 1.5x.
+FIG_W  <- 10
 
+# Held at the 16 x 32.7in plate's proportions, so narrowing the canvas shortens
+# it in step rather than leaving a 1:3.3 ribbon. Height follows from the width,
+# and the row height from the height -- which is what squeezes LABEL_SIZE above.
+ASPECT <- 32.7 / 16
+n_row  <- ceiling(nlevels(droplevels(d$panel)) / 2)
+FIG_H  <- FIG_W * ASPECT
+ROW_H  <- (FIG_H - 1.5) / n_row
+
+# How high the axis must reach for a given share of names to fit whole. A
+# name's length runs VERTICALLY, L inches; on a panel of height h spanning
+# [0, M] it covers (L/h)*M in accuracy units, so a model scoring a needs
+#
+#     a + (L/h)*M <= M   <=>   M >= a / (1 - L/h)
+#
+# Taking the LABEL_FIT quantile of that rather than the maximum is what lets
+# the labels stay large: the top decile overruns the panel and is clipped.
+# Never going below 1 keeps the whole 0-100% band on every benchmark, so
+# headroom is added only where long names sit on high scores -- a benchmark
+# topping out at 26% (Mystery) needs none and gets none, instead of carrying
+# an empty band because some other benchmark's names are long.
+y_top <- function(pk, plot_h) {
+  L <- nchar(pk$model) * LABEL_SIZE * .pt * CHAR_EM / 72.27
+  need <- pk$acc / pmax(0.02, 1 - L / plot_h)
+  max(1, unname(quantile(need, LABEL_FIT)))
+}
+
+# One y scale across all panels, so the headroom is the largest any
+# benchmark needs.
 p <- ggplot(d, aes(releasedate, acc)) +
   geom_point(colour = INK_MUTED, size = 0.5, alpha = 0.35) +
   geom_point(data = peaks, colour = PALETTE[length(PALETTE)], size = 0.7) +
@@ -72,32 +108,50 @@ p <- ggplot(d, aes(releasedate, acc)) +
   facet_wrap(~panel, scales = "free_x", ncol = 2, drop = FALSE) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y",
                expand = expansion(mult = c(0.03, 0.03))) +
-  scale_y_continuous(limits = c(0, Y_MAX), breaks = seq(0, 1, 0.25),
+  scale_y_continuous(limits = c(0, y_top(peaks, ROW_H - 0.9)),
+                     breaks = seq(0, 1, 0.25),
                      labels = scales::percent_format(accuracy = 1)) +
   labs(title = "Accuracy by model release date: every run, every benchmark",
        x = NULL, y = "Accuracy",
-       caption = pad_caption(c(
+       # pad_caption pads to CAPTION_LINES but never WRAPS, so a paragraph
+       # longer than the canvas runs off the right edge. Wrap each to what
+       # FIG_W inches of 7.5pt caption holds; three paragraphs at two lines
+       # each is exactly the six-line budget.
+       caption = pad_caption(unlist(lapply(c(
          paste("Every run in the analysis. A model's release date is the same",
                "for all its runs, so each model is a VERTICAL COLUMN of dots",
                "spanning the accuracy range its effort and token-budget sweep",
                "covers; the darker dot tops each column."),
          paste("Names label one dot per model -- its best run -- not one per",
-               "run, which would repeat each name up to sixty times. They are",
-               "placed deterministically, reading upward from the dot they",
-               "name; where a panel is crowded the names overlap, and the",
-               "plate is sized to be zoomed."),
-         paste("Accuracy is rescaled from each benchmark's guessing floor to",
-               "1 (prepare_data.R), so 0 means no better than chance. The band",
-               "above 100% is label space, not attainable accuracy.")))) +
-  frontier_theme()
+               "run, which would repeat each name up to sixty times. They read",
+               "upward from the dot they name; where a panel is crowded they",
+               "overlap, and the longest tenth are cut off at the panel top,",
+               "leaving the start of the name. Open the file at full size."),
+         paste("Accuracy is rescaled from each benchmark's guessing floor to 1",
+               "(prepare_data.R), so 0 means no better than chance. The band",
+               "above 100% is label space, not attainable accuracy.")),
+         strwrap, width = round(FIG_W * 18))))) +
+  frontier_theme() +
+  theme(axis.text = element_text(colour = "white"))
 
-n_row <- ceiling(nlevels(droplevels(d$panel)) / 2)
 f <- "accuracy_scatter.png"
-ggsave(out_path(f), p, width = 16, height = 1.5 + ROW_H * n_row, dpi = 200,
+ggsave(out_path(f), p, width = FIG_W, height = FIG_H, dpi = 200,
        limitsize = FALSE, device = ragg::agg_png)
 cat("wrote", f, "\n")
 cat(sprintf("  %d runs, %d model-benchmark labels over %d panels\n",
             nrow(d), nrow(peaks), nlevels(droplevels(d$panel))))
+# say how many names the panel edge cut, so the trade stays visible rather
+# than being something a reader has to notice for themselves
+{
+  ph   <- ROW_H - 0.9
+  L    <- nchar(peaks$model) * LABEL_SIZE * .pt * CHAR_EM / 72.27
+  need <- peaks$acc / pmax(0.02, 1 - L / ph)
+  yt   <- y_top(peaks, ph)
+  cat(sprintf("  %.1f x %.1f in (1:%.2f), axis to %.2f, %d of %d names clipped (%.0f%%)\n",
+              FIG_W, FIG_H, ASPECT, yt, sum(need > yt), nrow(peaks),
+              100 * mean(need > yt)))
+}
 for (b in bench_levels(d$benchmark))
   cat(sprintf("  %-26s %4d runs  %3d models\n", b, sum(d$benchmark == b),
               sum(peaks$benchmark == b)))
+

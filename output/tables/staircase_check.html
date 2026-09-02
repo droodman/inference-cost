@@ -16,17 +16,17 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <p class="sub">The nonparametric sense check: no model anywhere.</p>
 <table><thead><tr><th>Benchmark</th><th>Decline, %/qtr</th>
 <th>Records moved</th><th>Grid nodes</th></tr></thead><tbody>
-<tr><td>AIME (OTIS Mock)</td><td>57.5%</td><td>92.1%</td><td>7000</td></tr>
-<tr><td>Chess Puzzles</td><td>36.7%</td><td>94.4%</td><td>6800</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td>59.4%</td><td>96.8%</td><td>6300</td></tr>
-<tr><td>GPQA Diamond</td><td>50.0%</td><td>91.3%</td><td>7000</td></tr>
-<tr><td>Mystery Game Puzzles</td><td>52.6%</td><td>59.3%</td><td>6800</td></tr>
-<tr><td>FrontierMath 2025-02</td><td>57.1%</td><td>98.6%</td><td>5100</td></tr>
-<tr><td>FrontierMath, tier 4 (2025-07)</td><td>37.0%</td><td>100.0%</td><td>1600</td></tr>
-<tr><td>FrontierMath, tier 4 v2</td><td>45.8%</td><td>100.0%</td><td>2000</td></tr>
-<tr><td>MATH, level 5</td><td>59.5%</td><td>95.5%</td><td>5700</td></tr>
-<tr><td>SimpleQA Verified</td><td>31.7%</td><td>68.2%</td><td>4100</td></tr>
-<tr><td>SWE-Bench Verified</td><td>30.7%</td><td>88.2%</td><td>5200</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td>61.3%</td><td>59.4%</td><td>9200</td></tr>
+<tr><td>Chess Puzzles</td><td>35.4%</td><td>31.0%</td><td>9200</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td>67.5%</td><td>55.6%</td><td>9000</td></tr>
+<tr><td>GPQA Diamond</td><td>58.3%</td><td>55.4%</td><td>9200</td></tr>
+<tr><td>Mystery Game Puzzles</td><td>50.6%</td><td>20.3%</td><td>9200</td></tr>
+<tr><td>FrontierMath 2025-02</td><td>62.2%</td><td>55.3%</td><td>8700</td></tr>
+<tr><td>FrontierMath, tier 4 (2025-07)</td><td>37.6%</td><td>43.1%</td><td>5500</td></tr>
+<tr><td>FrontierMath, tier 4 v2</td><td>61.6%</td><td>67.0%</td><td>6900</td></tr>
+<tr><td>MATH, level 5</td><td>61.2%</td><td>57.1%</td><td>8900</td></tr>
+<tr><td>SimpleQA Verified</td><td>39.5%</td><td>34.1%</td><td>8500</td></tr>
+<tr><td>SWE-Bench Verified</td><td>30.4%</td><td>36.1%</td><td>8800</td></tr>
 </tbody><tfoot><tr><td colspan="4">
-At every node of an (accuracy, date) lattice -- 100 accuracy levels placed uniformly WITHIN each date's state of the art (a midpoint lattice on (0, SOTA], shrunk per date rather than clipped, so every date contributes equally and every node is well-defined), 100 dates, only dates with a full year of data ahead of them -- the record cost of the node's level one YEAR later is compared with the record now; the geometric-mean log change is compounded down to the quarterly rate the regression tables print, so the columns are directly comparable. Records moved is the share of nodes whose record changed at all over the year -- the average is that share's real drops diluted by zeros elsewhere. A benchmark observed for less than a year has no measurable horizon and no row. Because each date's lattice spans its own achieved range, a fixed node index is a rising absolute level as the SOTA climbs; each node's change is still a fixed-level quantity.
+At every node of an (accuracy, date) lattice -- 100 accuracy levels placed uniformly WITHIN each date's state of the art (a midpoint lattice on (0, SOTA], shrunk per date rather than clipped, so every date contributes equally and every node is well-defined), 100 dates, only dates with a full quarter of data ahead of them -- the record cost of the node's level one QUARTER later is compared with the record now, and the geometric-mean log change is the quarterly rate the regression tables print, so the columns are directly comparable. Records moved is the share of nodes whose record changed at all over the quarter: over so short a horizon most levels do not move, and an unmoved record enters the geometric mean as a ratio of 1 -- an unchanged cost, not a zero one -- so the rate is that minority's real drops averaged in with a majority of unchanged records, and a low rate on a low share is sparse jumps rather than a slow frontier. A benchmark observed for less than a quarter has no measurable horizon and no row. Because each date's lattice spans its own achieved range, a fixed node index is a rising absolute level as the SOTA climbs; each node's change is still a fixed-level quantity.
 </td></tr></tfoot></table></body></html>

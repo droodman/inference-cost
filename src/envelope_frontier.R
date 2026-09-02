@@ -224,13 +224,21 @@ decline_nodes <- function(data, n_level = 100, n_date = 100, dt = 1) {
 # under a date-varying level measure; each node's dln is still a fixed-level
 # quantity.
 #
-# Measured over a YEAR, expressed per QUARTER: at a fixed level the record is
-# a step function, and over one quarter it usually has not moved, so the
-# average is a few real drops diluted by zeros. A year of change dilutes
-# less; the geometric mean log change is then compounded down (divide by 4dt)
-# into the quarterly rate the tables print. A benchmark observed for less
-# than dt has no measurable horizon and returns NULL -- an honest gap until
-# its data span grows.
+# Measured over a QUARTER and expressed per quarter (dt = 0.25), so dividing
+# the mean log change by 4dt is the identity here and the reported number is
+# the change over the horizon itself.
+#
+# The horizon's cost, which the column beside it is there to expose: at a
+# fixed level the record is a step function, and within a single quarter it
+# often has not moved at all. Such a node has dln = 0 -- a cost RATIO of 1,
+# an unchanged record, not a zero cost -- so it enters the geometric mean as
+# a factor of 1 and pulls it toward "no decline". The average is therefore a
+# minority of real drops among a majority of unchanged records, and
+# share_moved measures that minority -- a low rate on a low
+# share_moved is sparse jumps, not a slowly falling frontier -- and the two
+# have to be read together. A longer dt dilutes less but averages over more
+# history; a benchmark observed for less than dt has no measurable horizon
+# and returns NULL.
 #
 #   data     DATA FRAME, one benchmark's runs; needs acc, lncost, tc
 #   n_level  SCALAR integer, accuracy levels per date (decline_nodes)
@@ -244,7 +252,7 @@ decline_nodes <- function(data, n_level = 100, n_date = 100, dt = 1) {
 #   share_moved  SCALAR in [0, 1], fraction of nodes whose record moved at all
 #                over the horizon
 #   n_nodes      SCALAR integer, nodes entering the average
-pareto_decline_qtr <- function(data, n_level = 100, n_date = 100, dt = 1) {
+pareto_decline_qtr <- function(data, n_level = 100, n_date = 100, dt = .25) {
   nd <- decline_nodes(data, n_level, n_date, dt)
   if (is.null(nd) || !nrow(nd)) return(NULL)
   s <- data[order(data$lncost), ]
