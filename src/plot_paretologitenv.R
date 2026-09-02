@@ -90,15 +90,16 @@ for (tt in names(TIME_FORMS)) {
 }
 
 ## ---- the Box-Cox specification ------------------------------------------------------
-# fit_bc with key "paretologitenv": the doubly-transformed family, its lambdas
+# fit_bc with key "paretologitenv": the Box-Tidwell family, its lambdas
 # profiled against this model's own objective -- the probability-scale
 # quasi-likelihood on the grid, under the envelope's constraints. The contours
 # have one branch (phi is monotone), so ISO_BRANCH_NOTE is replaced by the BC
 # note, exactly as in the parent scripts.
-NOTES_BC <- paste("Box-Cox both sides: phi(odds) -- the logit at lambda_odds",
-                  "= 0 -- is linear in phi(cost), phi(years since mid-2020)",
-                  "and their product, all three lambdas profiled against the",
-                  "constrained probability-scale quasi-likelihood.")
+NOTES_BC <- paste("Box-Tidwell: logit accuracy is linear in phi(cost),",
+                  "phi(years since mid-2020) and their product, both lambdas",
+                  "profiled against the constrained probability-scale",
+                  "quasi-likelihood. Only the REGRESSORS are transformed --",
+                  "the response keeps the plain logit link.")
 fits_bc <- store_bc("paretologitenv")
 
 curves <- frontier_curves(fits_bc, d, dates, tbar)

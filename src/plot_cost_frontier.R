@@ -176,11 +176,11 @@ for (key in names(MODELS)) {
       cat("\n")
     }
     if (tt == "bc") {
-      cat(sprintf("  %-12s BC lambdas (cost, odds, time):", key))
+      cat(sprintf("  %-12s BC lambdas (odds, time):", key))
       for (b in benches) {
         lam <- attr(fits[[b]], "bc_lambda")
-        cat(sprintf("  %s (%.2f, %.2f, %.2f)", b, lam[["lambda_cost"]],
-                    lam[["lambda_odds"]], lam[["lambda_time"]]))
+        cat(sprintf("  %s (%.2f, %.2f)", b, lam[["lambda_odds"]],
+                    lam[["lambda_time"]]))
       }
       cat("\n")
     }

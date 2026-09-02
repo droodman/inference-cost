@@ -552,19 +552,17 @@ cost_surface <- function(fit, sub) {
     cf <- coef(fit)
     names(cf) <- sub("^beta_", "", names(cf))
     lam <- attr(fit, "bc_lambda")
-    lC <- unname(lam[["lambda_cost"]])
     lo <- unname(lam[["lambda_odds"]]); lt <- unname(lam[["lambda_time"]])
     off <- (sub$year - sub$tc)[1] - BC_T0
     g0 <- cf[["(Intercept)"]]; ga <- cf[["phia"]]
     gt <- cf[["phit"]]; gat <- cf[["phiat"]]
-    # the index is phi(cost; lambda_cost); ln_bc_inv reads it back as log
-    # cost, NA where no positive cost attains it -- an honest blank in the
-    # figures. d lnC/d la keeps the index-derivative's sign (the inversion's
-    # own factor is positive in-domain).
+    # the index IS log cost, the response being untransformed -- so the
+    # surface is finite everywhere its regressor transforms are defined, and
+    # d lnC/d la is just the index derivative.
     list(f = function(la, tc) {
            pa <- bc_tf(exp(la), lo)          # odds = exp(logit)
            pt <- bc_tf(tc + off, lt)
-           ln_bc_inv(g0 + ga * pa + gt * pt + gat * pa * pt, lC)
+           g0 + ga * pa + gt * pt + gat * pa * pt
          },
          dacc = function(la, tc) ga + gat * bc_tf(tc + off, lt))
   } else {
@@ -733,44 +731,32 @@ cost_iso_curves <- function(fitset, data, tbar,
 # Coefficient standard errors are conditional on the profiled lambdas, which
 # are reported without standard errors. lambda_time is fixed at 1 where the
 # observed tau span cannot identify it (bc_lt_free), exactly as in the
-# accuracy direction -- and for the SFA duals lambda_cost is fixed at 0 (the
-# response stays ln cost): see the identification note in fit_cost_bc().
+# accuracy direction.
 
-# The DOUBLY-transformed family: the response side carries its own lambda,
+# The BOX-TIDWELL family: phi acts on the REGRESSORS, ln cost stays the
+# response,
 #
-#   phi(cost; lambda_cost) = g0 + ga*phi(odds; lambda_odds)
-#                               + gt*phi(tau; lambda_time) + gat*product
+#   ln cost = g0 + ga*phi(odds; lambda_odds)
+#                + gt*phi(tau; lambda_time) + gat*product
 #
-# nesting the single-transform version at lambda_cost = 0 (where phi(cost) is
-# ln cost) and the linear model at (0, 0, 1). This is the family that treats
-# odds and cost fully symmetrically -- closed under inversion, so its
-# accuracy-direction counterpart (fit_bc's envelope and paretologit keys)
-# estimates the same surface class and the direction choice is purely which
-# axis misfit is priced in. Fit is ASSESSED on lambda-invariant scales
-# throughout: the least-squares and SFA profiles carry the classical Box-Cox
-# Jacobian term (lambda_cost - 1)*sum(ln cost), and the envelope's objective
-# inverts the transform node by node to score mean fitted LOG COST.
-COST_BC_FORM <- phicost ~ phia + phit + phiat
+# nesting the linear model at (lambda_odds, lambda_time) = (0, 1) with no
+# product term, since phi(odds; 0) IS logit accuracy. No Box-Cox Jacobian
+# arises anywhere: that correction exists to compare objectives across a
+# RESPONSE lambda, and there is none. The accuracy direction's counterpart
+# (fit_bc) is the mirror image -- phi on cost and time, plain logit link --
+# so the direction choice is purely which axis misfit is priced in.
+COST_BC_FORM <- lncost ~ phia + phit + phiat
 
 # lambda_odds search box: odds spans roughly e^-7..e^7 here, so the same
 # considerations as BC_BOX_C apply and the same box serves.
 COST_BC_BOX_O <- BC_BOX_C
 
-# ln of the inverse transform: the fitted index read back as log cost, NA
-# where no positive cost attains the index (phi's range edge) -- the honest
-# blank the figures inherit. The lambda = 0 member is the identity.
-ln_bc_inv <- function(eta, l) {
-  if (abs(l) < 1e-8) return(eta)
-  base <- 1 + l * eta
-  out <- rep(NA_real_, length(base))
-  ok <- !is.na(base) & base > 0
-  out[ok] <- log(base[ok]) / l
-  out
-}
+# There was an ln_bc_inv() here, reading a phi(cost; lambda_cost) index back
+# as log cost. The response is no longer transformed (see frontier_viz.R), so
+# the fitted index IS log cost and the inverse is the identity.
 
 # The transformed columns, on run data carrying la (i.e. AFTER iso_runs)...
-cost_bc_augment <- function(s, lC, lo, lt, off) {
-  s$phicost <- bc_tf(s$cost, lC)
+cost_bc_augment <- function(s, lo, lt, off) {
   s$phia    <- bc_tf(exp(s$la), lo)
   s$phit    <- bc_tf(s$tc + off, lt)
   s$phiat   <- s$phia * s$phit
@@ -779,14 +765,13 @@ cost_bc_augment <- function(s, lC, lo, lt, off) {
 
 # ... and on the (la, tc) grid, for the grid OLS response and the envelope
 # objective; `off` is the benchmark's tc -> tau shift, as in bc_grid_augment.
-# The response column is transformed too where the grid carries one (the grid
-# OLS aliases its sampled record to lncost before augmenting).
-cost_bc_grid_augment <- function(lC, lo, lt, off) {
+# Only REGRESSORS are transformed: the response the grid carries is already
+# lncost, which is what COST_BC_FORM models.
+cost_bc_grid_augment <- function(lo, lt, off) {
   function(gr) {
     gr$phia  <- bc_tf(exp(gr$la), lo)
     gr$phit  <- bc_tf(gr$tc + off, lt)
     gr$phiat <- gr$phia * gr$phit
-    if ("lncost" %in% names(gr)) gr$phicost <- bc_tf(exp(gr$lncost), lC)
     gr
   }
 }
@@ -795,36 +780,30 @@ cost_bc_grid_augment <- function(lC, lo, lt, off) {
 # at the profiled optimum, carrying the same bc_lambda / bc_lambda_free
 # attributes fit_bc() stamps, so est_se_bc() and the curve builders treat
 # both directions' BC fits identically.
-fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
+fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
   s <- iso_runs(data)
   off <- (s$year - s$tc)[1] - BC_T0
   lt_free <- bc_lt_free(s$year - BC_T0)
   ws <- new.env(parent = emptyenv())
-  # The classical Box-Cox Jacobian sums, what makes transformed-scale
-  # objectives comparable across lambda_cost: sum(ln y) over each fit's own
-  # response sample -- the runs' costs for the run-level fits, the sampled
-  # record costs for the grid fit (whose node set does not move with the
-  # lambdas, so this is computed once).
-  sumlny_runs <- sum(s$lncost)
+  # No Box-Cox Jacobian term anywhere below: the classical sum(ln y)
+  # correction exists to make transformed-RESPONSE objectives comparable
+  # across the response lambda, and the response here is always ln cost.
   gr0 <- iso_grid_response(s)
-  sumlny_grid <- sum(gr0$lnC)
   # the other lambda-invariant piece, hoisted for the same reason: the Pareto
   # reduction, which doubles as the envelope constraint candidates and the
   # n_corners attribute
   bind0 <- pareto_binding(s$lncost, s$tc, s$la)
 
-  fit_at <- function(lC, lo, lt) {
-    sa <- cost_bc_augment(s, lC, lo, lt, off)
-    ga <- cost_bc_grid_augment(lC, lo, lt, off)
+  fit_at <- function(lo, lt) {
+    sa <- cost_bc_augment(s, lo, lt, off)
+    ga <- cost_bc_grid_augment(lo, lt, off)
     if (key == "costols") {
       f <- lm(COST_BC_FORM, data = sa)
-      list(fit = f, obj = -nrow(sa) / 2 * log(sum(residuals(f)^2)) +
-             (lC - 1) * sumlny_runs)
+      list(fit = f, obj = -nrow(sa) / 2 * log(sum(residuals(f)^2)))
     } else if (key == "costgridols") {
       f <- fit_lncost_grid(sa, COST_BC_FORM, grid_augment = ga,
                            gr0 = gr0, n_corners = length(bind0))
-      list(fit = f, obj = -attr(f, "n_grid") / 2 * log(sum(residuals(f)^2)) +
-             (lC - 1) * sumlny_grid)
+      list(fit = f, obj = -attr(f, "n_grid") / 2 * log(sum(residuals(f)^2)))
     } else if (key == "costgridolsenv") {
       f <- fit_lncost_grid_env(sa, COST_BC_FORM, grid_augment = ga,
                                gr0 = gr0, bind = bind0,
@@ -835,11 +814,8 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
       # the same Gaussian profile objective as costgridols: `value` is the
       # mean squared residual over the same node set, so SSR = value * n_grid
       list(fit = f, obj = -attr(f, "n_grid") / 2 *
-             log(f$value * attr(f, "n_grid")) + (lC - 1) * sumlny_grid)
+             log(f$value * attr(f, "n_grid")))
     } else {
-      # the SFA duals: lC is always 0 here (see below), so phicost IS ln cost
-      # and the response is untransformed -- no Jacobian term, the likelihood
-      # is already on the fixed ln-cost scale
       f <- fit_cost_sfa(sa, COST_BC_FORM,
                         formula_sigma = if (key == "costsfab") ~ tc else ~ 1,
                         start = ws$start)
@@ -851,81 +827,43 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 0, 1)) {
   # A failed inner fit scores -1e6: bad, not fatal, so the outer search
   # steers away from lambdas where the model cannot be fitted.
   #
-  # The SFA duals profile TWO lambdas, with lambda_cost pinned at 0 (phicost
-  # is then exactly ln cost -- the response untransformed). Deliberate, not a
-  # shortcut: a Box-Cox transform of the dependent variable is a
-  # skewness-soaking device, and the composite residual's skewness is exactly
-  # what identifies the one-sided inefficiency term -- with lambda_cost free,
-  # sigma_u collapsed to zero on two benchmarks (math_lvl5,
-  # swe_bench_verified) while sigma_v ballooned to absorb it, a frontier
-  # model quietly ceasing to be one. The least-squares fits have no such term
-  # to protect and keep the full doubly-transformed family.
-  # lambda_cost is FIXED AT 0 on EVERY cost model, so phicost is exactly ln
-  # cost and the response is untransformed. This was once true only of the
-  # SFA duals, to protect the skewness that identifies their inefficiency
-  # term; the least-squares fits kept a free lambda_cost until it turned out
-  # to buy its fit with a SINGULARITY.
+  # Two lambdas, both REGRESSOR-side: lo on odds, lt on time. There is no
+  # response lambda -- ln cost is always the response (frontier_viz.R records
+  # why the response transform was removed: its inverse has a pole at a
+  # finite index, which the profile walked into).
   #
-  # phi(cost; lambda_cost) inverts as ln C = log(1 + lambda_cost*index) /
-  # lambda_cost, so every lambda_cost != 0 puts a pole at index =
-  # -1/lambda_cost, where d lnC/d index diverges and fitted cost runs to +Inf
-  # (lambda_cost < 0) or to 0 (lambda_cost > 0). At the profiled optima that
-  # pole sat INSIDE the grid: gpqa and aime reached fitted costs near e^20 per
-  # task against a dearest observed run of e^0.6, mystery reached e^-27, and
-  # 1% of nodes carried up to 44% of the mean decline rate. lambda_cost = 0 is
-  # the unique value with no pole -- the inverse is then the identity on log
-  # cost -- and it is the scale the whole cost analysis is defined on.
-  #
-  # The REGRESSOR-side lambdas stay free. phi(odds) and phi(time) are
-  # transforms of covariates: nothing is inverted through them, so they carry
-  # no pole and cost nothing in plausibility. The same asymmetry -- pin the
-  # response, profile the regressors -- is applied to the accuracy direction's
-  # lambda_odds in boxcox_frontier.R.
-  pin <- BC_PIN_RESPONSE || key %in% c("costsfa", "costsfab")
+  # For the SFA duals this was true even before that: a transform of the
+  # dependent variable soaks up residual skewness, and the composite
+  # residual's skewness is exactly what identifies the one-sided inefficiency
+  # term. With lambda_cost free, sigma_u collapsed to zero on math_lvl5 and
+  # swe_bench_verified while sigma_v ballooned to absorb it -- a frontier
+  # model quietly ceasing to be one.
   neg <- function(l) {
-    if (pin) {
-      lC <- 0; lo <- l[1]; lt <- if (lt_free) l[2] else 1
-    } else {
-      lC <- l[1]; lo <- l[2]; lt <- if (lt_free) l[3] else 1
-    }
-    if (lC < BC_BOX_C[1] || lC > BC_BOX_C[2] ||
-        lo < COST_BC_BOX_O[1] || lo > COST_BC_BOX_O[2] ||
+    lo <- l[1]; lt <- if (lt_free) l[2] else 1
+    if (lo < COST_BC_BOX_O[1] || lo > COST_BC_BOX_O[2] ||
         lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
-    r <- tryCatch(fit_at(lC, lo, lt), error = function(e) NULL)
+    r <- tryCatch(fit_at(lo, lt), error = function(e) NULL)
     if (is.null(r) || !is.finite(r$obj)) return(1e6)
     -r$obj
   }
-  if (pin) {
-    lC <- 0
-    if (lt_free) {
-      opt <- optim(c(lambda_start[2], lambda_start[3]), neg,
-                   method = "Nelder-Mead",
-                   control = list(reltol = 1e-6, maxit = 300))
-      lo <- opt$par[1]; lt <- opt$par[2]
-    } else {
-      # optimize(), not 1-D Nelder-Mead, which optim() itself warns against
-      opt <- optimize(function(x) neg(x), interval = COST_BC_BOX_O,
-                      tol = 1e-4)
-      lo <- opt$minimum; lt <- 1
-    }
-  } else {
-    opt <- optim(c(lambda_start[1], lambda_start[2],
-                   if (lt_free) lambda_start[3]), neg,
+  if (lt_free) {
+    opt <- optim(c(lambda_start[1], lambda_start[2]), neg,
                  method = "Nelder-Mead",
                  control = list(reltol = 1e-6, maxit = 300))
-    lC <- opt$par[1]; lo <- opt$par[2]
-    lt <- if (lt_free) opt$par[3] else 1
+    lo <- opt$par[1]; lt <- opt$par[2]
+  } else {
+    # optimize(), not 1-D Nelder-Mead, which optim() itself warns against
+    opt <- optimize(function(x) neg(x), interval = COST_BC_BOX_O, tol = 1e-4)
+    lo <- opt$minimum; lt <- 1
   }
 
   # the canonical refit at the optimum: cold-started for the constrained grid
   # fit, so the returned object is exactly what a standalone fit at these
   # lambdas produces (the SFA duals keep their warm start, as before)
   ws$start_env <- NULL
-  fit <- fit_at(lC, lo, lt)$fit
-  attr(fit, "bc_lambda") <- c(lambda_cost = lC, lambda_odds = lo,
-                              lambda_time = lt)
-  attr(fit, "bc_lambda_free") <- c(lambda_cost = !pin, lambda_odds = TRUE,
-                                   lambda_time = lt_free)
+  fit <- fit_at(lo, lt)$fit
+  attr(fit, "bc_lambda") <- c(lambda_odds = lo, lambda_time = lt)
+  attr(fit, "bc_lambda_free") <- c(lambda_odds = TRUE, lambda_time = lt_free)
   fit
 }
 

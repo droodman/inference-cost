@@ -171,71 +171,36 @@ bc_inv <- function(phi, l) {
   ifelse(base > 0, base^(1 / l), NA_real_)
 }
 
-# Mean accuracy implied by a BC-transformed-odds index eta = phi(odds;
-# lambda_odds): odds = bc_inv(eta), mu = odds/(1+odds) -- the logit link at
-# lambda_odds = 0, a parametric link family elsewhere. Where eta falls outside
-# phi's range the link is extended by continuity rather than left NA: for
-# lambda > 0 the range edge is odds = 0 (mu = 0), for lambda < 0 odds = Inf
-# (mu = 1) -- so an optimiser sees a defined, bounded objective everywhere.
-# Computed via 1/(1 + odds^-1) so huge odds cannot overflow to NaN.
-bc_mu <- function(eta, lo) {
-  if (abs(lo) < 1e-8) return(plogis(eta))
-  # index assignment, not ifelse: this sits inside the Box-Cox profiles'
-  # innermost loops, where ifelse's temporaries were a measured 1/3 of the
-  # whole profile's time. Same values, NA propagation included.
-  base <- 1 + lo * eta
-  qinv <- rep(if (lo > 0) Inf else 0, length(base))
-  i <- which(base > 0)
-  qinv[i] <- base[i]^(-1 / lo)
-  qinv[is.na(base)] <- NA_real_
-  1 / (1 + qinv)
-}
-
-# d mu / d eta = mu(1-mu)/(1 + lo*eta) in-domain (1 at lo = 0 recovers the
-# logistic's mu(1-mu)); 0 outside, matching the clamped link. Index
-# assignment, not ifelse, as in bc_mu.
-bc_mu_eta <- function(eta, lo) {
-  m <- bc_mu(eta, lo)
-  if (abs(lo) < 1e-8) return(m * (1 - m))
-  base <- 1 + lo * eta
-  out <- numeric(length(eta))
-  i <- which(base > 0)
-  out[i] <- m[i] * (1 - m[i]) / base[i]
-  out[is.na(base)] <- NA_real_
-  out
-}
-
-# The doubly-transformed family's response side as a glm LINK object: the
-# index is phi(odds; lo), the logit exactly at lo = 0 (where the stock logit
-# link is returned, so the nested member is bit-identical to the plain
-# fractional logit). Fitting through glm rather than a hand-rolled optimiser
-# keeps everything downstream honest for model S: IRLS does the estimation,
-# deviance() the profile objective, and sandwich/coeftest the robust standard
-# errors, exactly as at the logit. The clamps keep IRLS finite where the
-# index leaves phi's range (mu pinned just inside (0,1), mu.eta just above
-# 0); a fit pushed hard against that wall fails to converge and the lambda
-# profile scores those lambdas as unfittable rather than trusting it.
-bc_link <- function(lo) {
-  if (abs(lo) < 1e-8) return("logit")
-  eps <- .Machine$double.eps
-  structure(list(
-    linkfun  = function(mu) bc_tf(mu / (1 - mu), lo),
-    linkinv  = function(eta) pmin(pmax(bc_mu(eta, lo), eps), 1 - eps),
-    mu.eta   = function(eta) pmax(bc_mu_eta(eta, lo), eps),
-    valideta = function(eta) TRUE,
-    name     = sprintf("bc_odds(lambda = %.4g)", lo)
-  ), class = "link-glm")
-}
+# THE RESPONSE IS NEVER TRANSFORMED. Every Box-Cox fit in this analysis is a
+# Box-TIDWELL fit: phi() is applied to the REGRESSORS (cost, time, and in the
+# cost direction odds), never to the dependent variable. The accuracy models
+# therefore always use the plain logit link and the cost models always model
+# ln cost, so nothing here needs a parametric link family.
+#
+# There used to be one: bc_mu(), bc_mu_eta() and bc_link() implemented
+# phi(odds; lambda_odds) as a glm link, with ln_bc_inv() (cost_frontier.R)
+# the cost direction's counterpart. They are deleted because a transformed
+# response has to be INVERTED to be read back, and phi(y; l) inverts as
+# ln y = log(1 + l*index)/l, which has a pole at index = -1/l. Any l != 0
+# therefore puts a vertical asymptote at a finite index, and the profile
+# walked the surface up to it: gpqa and aime reached fitted costs near e^20
+# per task against a dearest observed run of e^0.6, and 1% of grid nodes
+# carried up to 44% of the mean decline rate. l = 0 is the unique value whose
+# inverse is the identity, hence the unique one with no pole -- so rather
+# than keep a family whose interior members are unusable, the response
+# lambda is gone and the identity is hard-coded. Regressor lambdas are never
+# inverted, carry no pole, and stay profiled.
 
 # The Bernoulli quasi-log-likelihood on the PROBABILITY scale, the objective
 # the Pareto-grid fits share (fit_pareto_logit_env in envelope_frontier.R,
 # the Box-Cox profiles in boxcox_frontier.R). Not -deviance/2: the two differ
-# by the saturated log-likelihood, which is constant in the lambdas, but only
-# this form is computed identically by the glm path and the parametric-link
-# path, so profiles that mix them stay comparable. mu is clamped away from
-# 0/1 so a clamped link (bc_mu outside phi's range) cannot emit -Inf.
+# by the saturated log-likelihood, which is constant in the lambdas. mu is
+# clamped away from 0/1 so a fitted probability at the boundary cannot emit
+# -Inf.
 bc_qll <- function(y, mu) {
-  # which() + index assignment, not pmin/pmax: profile-hot (see bc_mu)
+  # which() + index assignment, not pmin/pmax: this sits in the Box-Cox
+  # profiles' innermost loop, where the temporaries pmin/pmax allocate were a
+  # measured fraction of the whole profile's time. Same values.
   lo <- which(mu < 1e-12)
   hi <- which(mu > 1 - 1e-12)
   mu[lo] <- 1e-12
@@ -258,9 +223,7 @@ bc_pieces <- function(fit) {
   lam <- attr(fit, "bc_lambda")
   list(b0 = unname(cf[["(Intercept)"]]), bx = unname(cf[["phic"]]),
        bt = unname(cf[["phit"]]), bxt = unname(cf[["phixt"]]),
-       lc = unname(lam[["lambda_cost"]]), lt = unname(lam[["lambda_time"]]),
-       lo = if ("lambda_odds" %in% names(lam))
-         unname(lam[["lambda_odds"]]) else 0)
+       lc = unname(lam[["lambda_cost"]]), lt = unname(lam[["lambda_time"]]))
 }
 
 # tau, the BC time coordinate, from a Date: years since BC_T0. Uncentered --
@@ -278,10 +241,9 @@ frontier_curves <- function(fitset, data, dates_by_bench, tbar, n_cost = 200) {
       p <- bc_pieces(fit)
       phic <- bc_tf(g$cost, p$lc)
       phit <- bc_tf(bc_tau(g$qdate), p$lt)
-      # bc_mu, not plogis: the doubly-transformed fits' index is phi(odds;
-      # lambda_odds), which is the logit exactly when lambda_odds = 0
-      g$value <- bc_mu(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit,
-                       p$lo)
+      # plogis: the index is on the logit scale, the response never being
+      # transformed. Only the regressors carry a lambda.
+      g$value <- plogis(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit)
     } else {
       co <- frontier_coefs(fit)
       g$value <- plogis(frontier_index(co, log(g$cost), as_t(g$qdate) - tbar[[b]]))
@@ -621,9 +583,9 @@ iso_acc_curves <- function(fitset, data, tbar,
       p <- bc_pieces(fit)
       phit <- bc_tf(bc_tau(g$date), p$lt)
       bb <- p$bx + p$bxt * phit
-      # the index a target accuracy must reach: phi of its odds, which is
-      # qlogis exactly when lambda_odds = 0 (bc_tf's log branch)
-      phic <- (bc_tf(g$acc / (1 - g$acc), p$lo) - p$b0 - p$bt * phit) / bb
+      # the index a target accuracy must reach: its logit, the response being
+      # untransformed
+      phic <- (qlogis(g$acc) - p$b0 - p$bt * phit) / bb
       phic[bb <= 0] <- NA_real_
       roots <- list(rising = log(bc_inv(phic, p$lc)))
       disc <- rep(NA_real_, nrow(g))

@@ -138,7 +138,7 @@ zacc_native <- function(fit, bl) {
     p <- bc_pieces(fit)
     phic <- bc_tf(exp(g$x), p$lc)
     phit <- bc_tf(g$t + bl$off, p$lt)
-    as_z(bc_mu(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit, p$lo))
+    as_z(plogis(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit))
   } else {
     as_z(plogis(frontier_index(frontier_coefs(fit), g$x, g$t)))
   }
@@ -151,7 +151,9 @@ zacc_inverted <- function(fit, bl) {
     p <- bc_pieces(fit)
     phit <- bc_tf(g$t + bl$off, p$lt)
     bb <- p$bx + p$bxt * phit
-    phic <- (bc_tf(exp(g$x), p$lo) - p$b0 - p$bt * phit) / bb
+    # g$x IS the logit, and the response is untransformed, so the index a
+    # target accuracy must reach is g$x itself
+    phic <- (g$x - p$b0 - p$bt * phit) / bb
     phic[bb <= 0] <- NA_real_
     as_z(log(bc_inv(phic, p$lc)))
   } else {
@@ -185,8 +187,9 @@ zcost_inverted <- function(fit, bl) {
     lam <- attr(fit, "bc_lambda")
     phit <- bc_tf(g$t + bl$off, lam[["lambda_time"]])
     bb <- cf[["phia"]] + cf[["phiat"]] * phit
-    phia <- (bc_tf(exp(g$x), lam[["lambda_cost"]]) - cf[["(Intercept)"]] -
-               cf[["phit"]] * phit) / bb
+    # g$x IS ln cost and the response is untransformed, so the index a
+    # target cost corresponds to is g$x itself
+    phia <- (g$x - cf[["(Intercept)"]] - cf[["phit"]] * phit) / bb
     phia[bb <= 0] <- NA_real_
     odds <- bc_inv(phia, lam[["lambda_odds"]])
     as_z(odds / (1 + odds))
@@ -453,6 +456,30 @@ COST_LAB <- dollar_log(10^(-5:1))
 # reading convention of every other 2-D figure in the repo. No colorbar: the
 # fill is per-panel normalized (see heat_anchor), so the mapping lives in
 # each strip label's bracket and a caption states the rule once.
+# The caption, spelling out what the two black staircases ARE. They are the
+# one element of these figures that is not model output, and without saying so
+# a reader has no way to tell them from a fitted contour -- nor to know that
+# the surface outside them is extrapolating rather than describing. Named for
+# the vertical variable, which differs by view: cost in the frontier view,
+# accuracy in the other two. Line breaks are manual, sized for the 10-inch
+# canvas at the theme's 7.5pt caption.
+heat_caption <- function(view) {
+  frontier <- view == "frontier"
+  extremes <- if (frontier) "cheapest and dearest run"
+              else "lowest- and highest-scoring run"
+  vert     <- if (frontier) "cost" else "accuracy"
+  paste0(
+    "Fill runs dark to bright over each panel's own bracketed range -- the ",
+    "same per-panel normalization the 3-D pages use, so equal color means ",
+    "equal value between a panel and its 3-D scene.\n",
+    "The two 50%-black staircases are NOT fitted: they trace the ", extremes,
+    " observed up to each date, each a running extreme that steps out at a ",
+    "new record and holds until the next.\n",
+    "The band between them is the range the data actually cover in ", vert,
+    "; outside it the surface is extrapolating, and values beyond the ",
+    "bracket saturate at its endpoints.")
+}
+
 heat_plot <- function(zs, xs, view, zs_ref = NULL) {
   labs_b <- heat_labels(view, zs_ref)
   hd <- heat_df(zs, xs, view, labs_b, zs_ref)
@@ -464,14 +491,7 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
     facet_wrap(~ benchmark, ncol = 2, scales = "free") +
     scale_fill_gradientn(colours = PALETTE, limits = c(0, 1),
                          na.value = SURFACE, guide = "none") +
-    labs(x = NULL,
-         caption = paste0(
-           "Fill runs dark to bright over each panel's own bracketed range ",
-           "-- the same per-panel normalization the 3-D pages use, so equal ",
-           "color means equal value between a panel\nand its 3-D scene; ",
-           "values outside the bracket saturate at the endpoints. The ",
-           "50%-black staircases bound the observed range of the vertical ",
-           "variable at each date.")) +
+    labs(x = NULL, caption = heat_caption(view)) +
     frontier_theme() +
     theme(panel.grid.major = element_blank())
   if (view == "frontier") {
@@ -593,8 +613,8 @@ decline_cost <- function(fit, bl, mask = TRUE) {
   g <- grid_lt(bl$la, bl$tc)
   urng <- range(bl$s$lncost)
   if (is_cost_bc(fit)) {
-    # d lnC/dt = (gt + gat*phia) * tau^(lt - 1) / C^lC  (the index derivative
-    # over d phi(C)/d lnC)
+    # d lnC/dt = (gt + gat*phia) * tau^(lt - 1): the index derivative, and
+    # the index IS ln cost, so no response-transform factor divides it
     cf <- coef(fit)
     names(cf) <- sub("^beta_", "", names(cf))
     lam <- attr(fit, "bc_lambda")
@@ -603,9 +623,9 @@ decline_cost <- function(fit, bl, mask = TRUE) {
     phit <- bc_tf(tau, lam[["lambda_time"]])
     eta <- cf[["(Intercept)"]] + cf[["phia"]] * phia + cf[["phit"]] * phit +
       cf[["phiat"]] * phia * phit
-    lnC <- ln_bc_inv(eta, lam[["lambda_cost"]])
-    rate <- (cf[["phit"]] + cf[["phiat"]] * phia) * tau^(lam[["lambda_time"]] - 1) /
-      exp(lam[["lambda_cost"]] * lnC)
+    lnC <- eta
+    rate <- (cf[["phit"]] + cf[["phiat"]] * phia) *
+      tau^(lam[["lambda_time"]] - 1)
   } else {
     co <- cost_coefs(fit)
     lnC <- cost_index(co, g$x, g$t)

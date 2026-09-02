@@ -303,10 +303,7 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 # monotonicity rows.
 #
 # Runs scoring zero impose nothing (logit -Inf), so they are dropped before the
-# Pareto reduction rather than letting -Inf into the constraint matrix. The
-# explicit y > 0 matters when lambda_odds > 0: phi(0 odds) is then FINITE
-# (-1/lambda), and keeping it would smuggle the zero runs back in as
-# constraints the logit version deliberately excludes.
+# Pareto reduction rather than letting -Inf into the constraint matrix.
 #
 #   data     DATA FRAME of runs, as in fit_pareto_logit_env()
 #   formula  as in fit_pareto_logit_env(); the monotonicity block keys off its
@@ -314,21 +311,19 @@ fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
 #   gr       DATA FRAME of grid nodes carrying the formula's coordinate columns.
 #            Only the RANGES of its coordinates are used here, to place the
 #            corner rows that make monotonicity hold over the whole rectangle.
-#   lambda_odds  as in fit_pareto_logit_env()
 #
 # Returns a LIST:
 #   ui, ci  the stacked system: ui %*% beta >= ci
 #   Xb, Lb  the run rows alone -- model-matrix rows and clipped levels
 #   bind    integer VECTOR of row indices into `data`, the runs behind Xb
 #   mono    the monotonicity rows alone (0 rows when the spec has none)
-envelope_constraints <- function(data, formula, gr, lambda_odds = 0,
+envelope_constraints <- function(data, formula, gr,
                                  bind = NULL) {
   mf <- model.frame(formula, data)
   y  <- model.response(mf)
   X  <- model.matrix(formula, data)
   pc <- clip_acc(y, data$n_samples)
-  L  <- if (abs(lambda_odds) < 1e-8) qlogis(pc) else
-    bc_tf(pc / (1 - pc), lambda_odds)
+  L  <- qlogis(pc)
   # `bind` may be passed in by the Box-Cox profile, which calls this hundreds
   # of times per benchmark: the O(n^2) Pareto reduction depends on L only
   # through order comparisons, and every lambda_odds transforms L
@@ -473,15 +468,6 @@ coef.envelope_frontier <- function(object, ...) object$coefficients
 #            construction, adding columns derived from its (lncost, tc)
 #            coordinates so terms like the Box-Cox trio are evaluable at grid
 #            nodes. The run data must already carry the same columns.
-#   lambda_odds  SCALAR, the response-side Box-Cox parameter of the doubly-
-#            transformed family (fit_bc): the surface's index is phi(odds;
-#            lambda_odds) rather than the logit, which is the special case
-#            lambda_odds = 0 (the default -- every non-BC caller). The run
-#            constraints become surface >= phi(odds_i) -- the same set of
-#            accuracy surfaces, reparameterized -- and the objective stays on
-#            the PROBABILITY scale via the inverse link (bc_mu), so it is
-#            comparable across lambda_odds values by construction -- what
-#            makes the Box-Cox profile well-posed.
 #
 # Returns an object of class c("pareto_logit_env", "envelope_frontier"),
 # carrying fit_pareto_logit()'s n_grid / n_corners attributes: a LIST with
@@ -516,31 +502,22 @@ coef.envelope_frontier <- function(object, ...) object$coefficients
 # than failing.
 fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
                                  n_cost = 100, n_date = 100, margin = 0.05,
-                                 grid_augment = NULL, lambda_odds = 0,
+                                 grid_augment = NULL,
                                  gr0 = NULL, bind = NULL, n_corners = NULL,
                                  start = NULL) {
   gr <- if (is.null(gr0)) pareto_grid_response(data, n_cost, n_date) else gr0
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
   Xg <- model.matrix(delete.response(terms(formula)), gr)
   P  <- gr$acc
-  cs <- envelope_constraints(data, formula, gr, lambda_odds, bind = bind)
+  cs <- envelope_constraints(data, formula, gr, bind = bind)
 
   # negative mean Bernoulli quasi-log-likelihood of the staircase values, on
-  # the probability scale whatever lambda_odds is. The score has the closed
-  # form (P - mu)/(1 + lo*eta) per node (the canonical (P - mu) at lo = 0),
-  # exactly as in fit_pareto_bclink (boxcox_frontier.R); 0 outside the
-  # clamped link's domain.
-  fn <- function(b) -bc_qll(P, bc_mu(drop(Xg %*% b), lambda_odds)) / nrow(Xg)
+  # the probability scale, with the canonical score (P - mu) per node. The
+  # link is the plain logit: the response is never Box-Cox transformed (see
+  # frontier_viz.R), so no link-shape weight enters the score.
+  fn <- function(b) -bc_qll(P, plogis(drop(Xg %*% b))) / nrow(Xg)
   gr_fn <- function(b) {
-    eta <- drop(Xg %*% b)
-    resid <- P - bc_mu(eta, lambda_odds)
-    if (abs(lambda_odds) >= 1e-8) {
-      base <- 1 + lambda_odds * eta
-      w <- numeric(length(eta))
-      i <- which(base > 0)
-      w[i] <- 1 / base[i]
-      resid <- resid * w
-    }
+    resid <- P - plogis(drop(Xg %*% b))
     -drop(crossprod(Xg, resid)) / nrow(Xg)
   }
 
