@@ -1,5 +1,5 @@
 ## Viewers
-* [Plots of cost over time of each new performance record]((https://droodman.github.io/inference-cost/viewers/record_timeline_viewer.html)
+* [Plots of cost over time of each new performance record](https://droodman.github.io/inference-cost/viewers/record_timeline_viewer.html)
 * [Plots of model fits](https://droodman.github.io/inference-cost/viewers/frontier_plot_viewer.html)
 * [Tables of model fits](https://droodman.github.io/inference-cost/viewers/regression_table_viewer.html)
 (Claude has put long notes under the tables, which I need to clean up.)
