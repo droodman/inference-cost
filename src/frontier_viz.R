@@ -356,6 +356,12 @@ frontier_theme <- function() {
       plot.caption  = element_text(colour = INK_MUTED, size = 7.5, hjust = 0),
       legend.position = "top", legend.justification = "left",
       legend.text = element_text(colour = INK_SECOND, size = 8),
+      # legend.title matched to legend.text rather than left to
+      # theme_minimal's default, which is near-black -- invisible against the
+      # dark surface. Only record_timelines.R titles a legend today (every
+      # other scale passes name = NULL), but the default was wrong for any
+      # figure that ever does.
+      legend.title = element_text(colour = INK_SECOND, size = 8),
       plot.margin = margin(12, 16, 10, 12))
 }
 

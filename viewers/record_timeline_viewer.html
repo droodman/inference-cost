@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cost Record Timelines</title>
+    <style>
+      /* Same palette as frontier_plot_viewer.html: #101014 is SURFACE in
+         frontier_viz.R (dark experiment), the colour the PNG itself is
+         painted on, so the plate sits on the page with no visible seam. If
+         DARK is turned off there, restore --bg #fcfcfb, --text #1d1d1d,
+         --muted #5e5e5e here. */
+      :root {
+        --bg: #101014;
+        --text: #f2f1ec;
+        --muted: #8f8e88;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 10px 12px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+
+      h1 {
+        margin: 0 0 4px 0;
+        font-size: 1.25em;
+        font-weight: 700;
+      }
+
+      p.sub {
+        margin: 0 0 12px 0;
+        font-size: 0.9em;
+        color: var(--muted);
+      }
+
+      /* One control, because the plate is 11 x 35 inches: "fit" scales it to
+         the window width so the whole thing is scrollable at a glance, and
+         "full" serves it at its native 2200 x 7000 so the model names are
+         readable. Fit is the default; the names are legible only at full. */
+      .bar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 0.9em;
+      }
+
+      button {
+        background: #1b1b21;
+        color: var(--text);
+        border: 1px solid #35353d;
+        border-radius: 4px;
+        padding: 4px 12px;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button[aria-pressed="true"] {
+        border-color: #6f6f7a;
+        background: #2a2a33;
+      }
+
+      img { display: block; border: 0; }
+      img.fit  { width: 100%; height: auto; }
+      img.full { width: auto; max-width: none; }
+
+      .missing {
+        color: #ff8f85;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Cost records at each accuracy record</h1>
+    <p class="sub">
+      One row per primary benchmark. Each line follows a single accuracy
+      record's cost record over time &mdash; models scoring at least that
+      record at lower cost than every predecessor. Nonparametric: nothing
+      here is fitted.
+    </p>
+
+    <div class="bar">
+      <button id="btn-fit" aria-pressed="true">Fit to width</button>
+      <button id="btn-full" aria-pressed="false">Full size</button>
+      <span class="muted" id="hint" style="color: var(--muted)">
+        Model names are readable at full size.
+      </span>
+    </div>
+
+    <img id="plate" class="fit" src="../output/record_timelines.png"
+         alt="Cost record timelines, one row per benchmark" />
+    <p class="missing" id="missing" hidden>
+      output/record_timelines.png not found &mdash; run
+      <code>Rscript src/record_timelines.R</code>.
+    </p>
+
+    <script>
+      const plate = document.getElementById("plate");
+      const btnFit = document.getElementById("btn-fit");
+      const btnFull = document.getElementById("btn-full");
+
+      function setMode(full) {
+        plate.className = full ? "full" : "fit";
+        btnFit.setAttribute("aria-pressed", String(!full));
+        btnFull.setAttribute("aria-pressed", String(full));
+      }
+      btnFit.addEventListener("click", () => setMode(false));
+      btnFull.addEventListener("click", () => setMode(true));
+
+      // Say so rather than showing a broken-image icon: the plate is built by
+      // record_timelines.R, which a fresh checkout has not run yet.
+      plate.addEventListener("error", () => {
+        plate.hidden = true;
+        document.getElementById("missing").hidden = false;
+      });
+    </script>
+  </body>
+</html>
