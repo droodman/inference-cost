@@ -139,15 +139,29 @@ o <- c(o, '</tbody><tfoot><tr><td colspan="6">',
 writeLines(o, out_path("tables", "record_timelines.html"))
 cat("wrote record_timelines.html\n")
 
-## ---- figures: one per benchmark --------------------------------------------------
+## ---- figure: one plate, one benchmark per row ------------------------------------
 #
-# The same timelines drawn on the (release date, cost) plane, one figure per
-# benchmark: each accuracy record's cost trace as a connected colored line
-# marching right and down. Labels name the models, placed by ggrepel; a run
-# that holds the cost record for several levels at once (common at the cheap
-# end) is labeled once.
+# The same timelines drawn on the (release date, cost) plane: each accuracy
+# record's cost trace as a connected colored line marching right and down.
+# Labels name the models, placed by ggrepel; a run that holds the cost record
+# for several levels at once (common at the cheap end) is labeled once.
+#
+# ONE COLUMN, one benchmark per row, stacked into a single file. Stacked with
+# gridExtra rather than facetted because each benchmark's colour scale is its
+# OWN: the levels are that benchmark's accuracy records, a different set per
+# panel, which one shared discrete scale cannot express. Stacking keeps each
+# panel's legend naming its own records -- the alternative, a continuous
+# colourbar over accuracy, is what the sibling figure in pareto_frontiers.R
+# uses and reads less well when the levels are the subject.
+#
+# The caption goes on the LAST panel only: it describes the construction,
+# which is common to all of them, and repeating it five times would cost a
+# fifth of the plate to say one thing.
+LABEL_SIZE <- 3.4   # was 2.5; these names are the point of the figure
 
-for (b in unique(timelines$bench)) {
+bs <- unique(timelines$bench)
+panels <- lapply(seq_along(bs), function(i) {
+  b <- bs[i]
   tl <- timelines[timelines$bench == b, ]
   tl$lev <- factor(fmt_lev(tl$level), levels = fmt_lev(sort(unique(tl$level))))
 
@@ -157,11 +171,12 @@ for (b in unique(timelines$bench)) {
   labs <- tl[!duplicated(tl[c("model", "date")]), ]
 
   n_lev <- nlevels(tl$lev)
-  p <- ggplot(tl, aes(date, cost)) +
+  ggplot(tl, aes(date, cost)) +
     geom_line(aes(group = lev, colour = lev), linewidth = 0.55) +
     geom_point(aes(colour = lev), size = 1.7) +
     ggrepel::geom_text_repel(
-      data = labs, aes(label = model), colour = INK_SECOND, size = 2.5,
+      data = labs, aes(label = model), colour = INK_SECOND,
+      size = LABEL_SIZE,
       segment.colour = INK_MUTED, segment.size = 0.25, min.segment.length = 0.3,
       box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1) +
     scale_y_log10(breaks = 10^(-5:2), labels = dollar_log) +
@@ -171,15 +186,16 @@ for (b in unique(timelines$bench)) {
     guides(colour = guide_legend(nrow = 1)) +
     labs(title = paste0(LABELS[[b]], ": cost records at each accuracy record"),
          x = NULL, y = "Cost per task (log scale)",
-         caption = paste(
+         caption = if (i == length(bs)) paste(
            "Each line follows one accuracy record's cost record over time:",
            "models scoring at least the record at lower cost than every",
            "predecessor.\nA model holding several levels' records at once is",
-           "labeled once.")) +
+           "labeled once. Primary benchmarks only.") else NULL) +
     frontier_theme()
+})
 
-  f <- sprintf("record_timeline_%s.png", b)
-  ggsave(out_path(f), p, width = 11, height = 7, dpi = 200,
-         device = ragg::agg_png)
-  cat("wrote", f, "\n")
-}
+f <- "record_timelines.png"
+ggsave(out_path(f), gridExtra::arrangeGrob(grobs = panels, ncol = 1),
+       width = 11, height = 7 * length(panels), dpi = 200,
+       limitsize = FALSE, device = ragg::agg_png)
+cat(sprintf("wrote %s (%d benchmarks, one per row)\n", f, length(panels)))
