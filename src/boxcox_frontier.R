@@ -35,9 +35,10 @@
 # Identification of lambda_t is weak by construction: Box-Cox shape is read off
 # deviation-from-linearity over the observed span, roughly (span)/(8*midpoint),
 # which is ~10% for benchmarks observed 2.7-6.1 years after the origin and 0.7%
-# for fm13's five months of 2026 data. So fm13's lambda_t is FIXED at 1 (any
-# value fits identically there) and everyone else's should be read as a shape
-# the data tolerates rather than demands.
+# for fm13's five months of 2026 data. So lambda_t is FIXED at 1 where the span
+# cannot identify it at all (bc_lt_free: fm13), profiled elsewhere -- and when
+# the profiled value rides a BC_BOX_T edge, non-identification in practice, the
+# fit falls back to lambda_t = 1 too (bc_lt_stuck, in bc_lambda_search).
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
 src_source("fit_specs.R")          # fit_panel_frontier via panel_frontier.R, U_GROUP, SIGMA_FORM
@@ -52,9 +53,14 @@ BC_FORM <- acc ~ phic + phit + phixt
 # Search boxes for the profile. Cost spans ~5 decades, so lambda_c much below 0
 # turns the cheapest runs into transform values of ~1e9 and the design matrix
 # into rubble; the box stops the optimiser before the arithmetic does. tau spans
-# only [2.7, 6.1], where any lambda is numerically tame.
+# only [2.7, 6.1], where any lambda is numerically tame -- but not statistically:
+# past roughly |lambda_t| = 8, phi(tau) is nearly constant over the span (its
+# relative variation ~1e-4 by -8), a near-degenerate column. The old box of
+# [-2, 3] amputated genuine interior optima in the cost-direction grid fits
+# (aime/gpqa/fm13 peak near -4..-3, chess near +4, with R2 falling away steeply
+# on both sides), which is what made those fits ride its edges.
 BC_BOX_C <- c(-1, 2)
-BC_BOX_T <- c(-2, 3)
+BC_BOX_T <- c(-8, 8)
 
 # These are BOX-TIDWELL fits: phi() acts on the REGRESSORS only. There is no
 # response-side lambda in either direction -- the accuracy models use the
@@ -75,6 +81,35 @@ if (!exists(".bc_seed_memo", inherits = FALSE))
 # distance from the origin; a ratio near 1 (fm13: 6.06/5.71 = 1.06) makes phi
 # affine in tau to within a fraction of a percent for every lambda.
 bc_lt_free <- function(tau) max(tau) / min(tau) > 1.2
+
+# Even where the span test passes, the profiled lambda_t often lands on a
+# BC_BOX_T edge -- the objective monotone across the whole box, a bound-riding
+# shape the data tolerates rather than demands. The box edges are arbitrary
+# numerical guards, so an edge value is not an estimate; bc_lambda_search()
+# treats one as non-identification and refits with lambda_t locked at 1. The
+# tolerance is loose because the penalty wall (1e6 outside the box) can stall
+# the simplex slightly short of the edge itself.
+bc_lt_stuck <- function(lt, tol = 0.05)
+  lt - BC_BOX_T[1] < tol || BC_BOX_T[2] - lt < tol
+
+# The one lambda search every profile below runs: 2-D Nelder-Mead over
+# (lambda_c, lambda_t) when lambda_t is free, falling back to the 1-D
+# optimize() over `box1` alone -- not 1-D Nelder-Mead, which optim() itself
+# warns against -- when lambda_t is fixed a priori (bc_lt_free) OR comes back
+# riding a BC_BOX_T edge (bc_lt_stuck). `neg` is the family's profiled
+# objective over l = c(lambda_c, lambda_t), smaller-better; the fallback
+# passes c(x, 1) explicitly so neg's own lt_free gate is irrelevant there.
+# Returns list(lam, lt_free): lt_free FALSE whenever the fallback decided.
+bc_lambda_search <- function(neg, start, lt_free, box1 = BC_BOX_C) {
+  if (lt_free) {
+    opt <- optim(start[1:2], neg, method = "Nelder-Mead",
+                 control = list(reltol = 1e-6, maxit = 300))
+    if (!bc_lt_stuck(opt$par[2]))
+      return(list(lam = c(opt$par[1], opt$par[2]), lt_free = TRUE))
+  }
+  opt <- optimize(function(x) neg(c(x, 1)), interval = box1, tol = 1e-4)
+  list(lam = c(opt$minimum, 1), lt_free = FALSE)
+}
 
 # d phi(x; l) / d l, the transform's own lambda-derivative, vectorised over x.
 # The closed form is 0/0 at l = 0; the series through l^2 keeps the switch at
@@ -296,15 +331,8 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
       if (key == "paretologitenv") ws$start <- coef(r$fit)
       -r$obj
     }
-    if (lt_free) {
-      opt <- optim(c(seed[1], seed[2]), neg, method = "Nelder-Mead",
-                   control = list(reltol = 1e-6, maxit = 300))
-      lam <- c(opt$par[1], opt$par[2])
-    } else {
-      # optimize(), not 1-D Nelder-Mead, which optim() itself warns against
-      opt <- optimize(function(x) neg(x), interval = BC_BOX_C, tol = 1e-4)
-      lam <- c(opt$minimum, 1)
-    }
+    sr <- bc_lambda_search(neg, seed, lt_free)
+    lam <- sr$lam; lt_free <- sr$lt_free
     # the canonical refit at the optimum: cold-started, so the returned
     # object is exactly what a standalone fit at these lambdas produces
     r <- bc_fit_at(key, s, off, lam[1], lam[2], inv = inv)
@@ -329,15 +357,8 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
       if (is.null(r) || !is.finite(r$obj)) return(1e6)
       -r$obj
     }
-    if (lt_free) {
-      opt <- optim(c(lambda_start[1], lambda_start[2]), neg,
-                   method = "Nelder-Mead",
-                   control = list(reltol = 1e-6, maxit = 300))
-      lam <- c(opt$par[1], opt$par[2])
-    } else {
-      opt <- optimize(function(x) neg(x), interval = BC_BOX_C, tol = 1e-4)
-      lam <- c(opt$minimum, 1)
-    }
+    sr <- bc_lambda_search(neg, lambda_start, lt_free)
+    lam <- sr$lam; lt_free <- sr$lt_free
     r <- bc_fit_at("S", s, off, lam[1], lam[2])
     fit <- r$fit
     attr(fit, "bc_lambda") <- c(lambda_cost = lam[1], lambda_time = lam[2])
@@ -364,16 +385,8 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
       -r$obj
     }
 
-    if (lt_free) {
-      opt <- optim(lambda_start, neg, method = "Nelder-Mead",
-                   control = list(reltol = 1e-6, maxit = 300))
-      lam <- c(opt$par[1], opt$par[2])
-    } else {
-      # optimize(), not 1-D Nelder-Mead, which optim() itself warns is
-      # unreliable
-      opt <- optimize(function(x) neg(c(x, 1)), interval = BC_BOX_C, tol = 1e-4)
-      lam <- c(opt$minimum, 1)
-    }
+    sr <- bc_lambda_search(neg, lambda_start, lt_free)
+    lam <- sr$lam; lt_free <- sr$lt_free
   }
 
   r <- bc_fit_at(key, s, off, lam[1], lam[2], start = ws$start)

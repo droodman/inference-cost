@@ -336,8 +336,12 @@ fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
   gr_fn <- function(g) 2 * drop(crossprod(Xg, drop(Xg %*% g) - yg)) / nrow(Xg)
 
   bound <- 1e5
+  # Clamp the start into the box rather than let nloptr refuse it: at extreme
+  # lambda_t, cost_feasible_start's intercept drop can land below -bound. A
+  # clamped start may begin infeasible, but SLSQP recovers from that, and the
+  # worst_slack check below still rejects a solve that never became feasible.
   solve1 <- function(x0) nloptr::nloptr(
-    x0 = x0,
+    x0 = pmin(pmax(x0, -bound), bound),
     eval_f = function(g) list(objective = fn(g), gradient = gr_fn(g)),
     eval_g_ineq = function(g) list(
       constraints = c(drop(cs$Xb %*% g) - cs$cb, -drop(cs$mono %*% g)),
@@ -730,8 +734,9 @@ cost_iso_curves <- function(fitset, data, tbar,
 # the least-squares fits, the closed-form likelihood for the SFA duals.
 # Coefficient standard errors are conditional on the profiled lambdas, which
 # are reported without standard errors. lambda_time is fixed at 1 where the
-# observed tau span cannot identify it (bc_lt_free), exactly as in the
-# accuracy direction.
+# observed tau span cannot identify it (bc_lt_free), or when its profiled
+# value rides a BC_BOX_T edge (bc_lambda_search), exactly as in the accuracy
+# direction.
 
 # The BOX-TIDWELL family: phi acts on the REGRESSORS, ln cost stays the
 # response,
@@ -810,7 +815,13 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
                                n_corners = length(bind0),
                                start = ws$start_env)
       ws$start_env <- coef(f)   # warm-start the next profile evaluation
-      if (max(abs(coef(f))) > 1e4) stop("degenerate constrained grid LS")
+      # Degeneracy check, calibrated to the solver's own +/-1e5 coefficient
+      # box (fit_lncost_grid_env): a solution pinned near that box is the
+      # flat-direction ride the box exists to stop. The old threshold of 1e4
+      # silently acted as a second lambda_t box once BC_BOX_T was widened --
+      # legitimate coefficients scale like 1/spread(phi(tau)), which passes
+      # 1e4 near lambda_t = -5 -- clipping several benchmarks' optima.
+      if (max(abs(coef(f))) > 9e4) stop("degenerate constrained grid LS")
       # the same Gaussian profile objective as costgridols: `value` is the
       # mean squared residual over the same node set, so SSR = value * n_grid
       list(fit = f, obj = -attr(f, "n_grid") / 2 *
@@ -846,22 +857,25 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
     if (is.null(r) || !is.finite(r$obj)) return(1e6)
     -r$obj
   }
-  if (lt_free) {
-    opt <- optim(c(lambda_start[1], lambda_start[2]), neg,
-                 method = "Nelder-Mead",
-                 control = list(reltol = 1e-6, maxit = 300))
-    lo <- opt$par[1]; lt <- opt$par[2]
-  } else {
-    # optimize(), not 1-D Nelder-Mead, which optim() itself warns against
-    opt <- optimize(function(x) neg(x), interval = COST_BC_BOX_O, tol = 1e-4)
-    lo <- opt$minimum; lt <- 1
-  }
+  sr <- bc_lambda_search(neg, lambda_start, lt_free, box1 = COST_BC_BOX_O)
+  lo <- sr$lam[1]; lt <- sr$lam[2]; lt_free <- sr$lt_free
 
   # the canonical refit at the optimum: cold-started for the constrained grid
   # fit, so the returned object is exactly what a standalone fit at these
-  # lambdas produces (the SFA duals keep their warm start, as before)
+  # lambdas produces (the SFA duals keep their warm start, as before). A cold
+  # refit can fail where the warm-started profile evaluation at the same
+  # lambdas passed -- the degeneracy guard, at an extreme lambda_t the short
+  # spans barely identify. That is the same non-identification bound-riding
+  # signals, so it gets the same response: lock lambda_t at 1 and reprofile.
   ws$start_env <- NULL
-  fit <- fit_at(lo, lt)$fit
+  fit <- tryCatch(fit_at(lo, lt)$fit, error = function(e) e)
+  if (inherits(fit, "error") && lt != 1) {
+    o <- optimize(function(x) neg(c(x, 1)), interval = COST_BC_BOX_O,
+                  tol = 1e-4)
+    lo <- o$minimum; lt <- 1; lt_free <- FALSE
+    ws$start_env <- NULL
+    fit <- fit_at(lo, lt)$fit
+  } else if (inherits(fit, "error")) stop(fit)
   attr(fit, "bc_lambda") <- c(lambda_odds = lo, lambda_time = lt)
   attr(fit, "bc_lambda_free") <- c(lambda_odds = TRUE, lambda_time = lt_free)
   fit
