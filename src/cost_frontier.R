@@ -41,8 +41,9 @@
 #     coordinate, and "the cost of achieving at least nothing" is just the
 #     cheapest run, which says nothing about the frontier (the same reasoning
 #     that drops a = 0 nodes from pareto_decline_qtr);
-#   * runs scoring n/n are clipped by their own sample size via clip_acc(),
-#     exactly as the accuracy envelope clips its constraints;
+#   * runs scoring n/n leave the sample too (logit(1) = +Inf), the symmetric
+#     rule; only the accuracy envelope clips them instead (clip_acc), because
+#     its surface must clear every run actually observed;
 #   * accuracy becomes a REGRESSOR, so its binomial noise is measurement
 #     error rather than response noise. For these two fits that takes the
 #     familiar form of the record's one-lucky-run fragility, already
@@ -65,24 +66,32 @@ src_source("boxcox_frontier.R")     # BC_BOX_*, bc_lt_free, for the BC cost spec
 COST_FORMS <- list(lin  = lncost ~ la + tc,
                    quad = lncost ~ la * tc + I(la^2) + I(tc^2))
 
-# Runs usable in the cost direction: logit of clipped accuracy as a
-# coordinate, zeros dropped. Every function below starts from this.
+# Runs usable in the cost direction: logit accuracy as a coordinate, zeros
+# AND ones dropped -- symmetric, unlike the accuracy envelope's clip_acc,
+# which must keep perfect scores because its surface has to clear every run.
+# Every function below starts from this.
 #
 # Since accuracy is rescaled from each benchmark's guessing floor to 1
 # (prepare_data.R), a zero here means "no better than chance", not "nothing
 # right" -- and it is a large share of the runs on the benchmarks with a high
 # floor, because a fully truncated run answers nothing and scores exactly the
-# floor. Dropping them is the same mechanical rule as before (logit 0 = -Inf)
-# and now also the right one substantively: a run at chance says nothing about
-# what capability costs.
+# floor. Dropping them is the mechanical rule (logit 0 = -Inf) and the right
+# one substantively: a run at chance says nothing about what capability costs.
+# Perfect scores used to be clipped to 1 - 1/(2n) instead (clip_acc); they are
+# now dropped under the same mechanical rule, which costs 2 runs in the whole
+# dataset (both aime, whose clipped logits sat below its best unclipped run
+# anyway) and buys symmetric treatment of the two censored tails.
 #
-#   data  DATA FRAME of one benchmark's runs; needs acc, n_samples, lncost, tc
+#   data  DATA FRAME of one benchmark's runs; needs acc, lncost, tc. A frame
+#         that already carries `la` (the pooled pseudo-benchmark, whose la is
+#         in ECI units rather than logits) keeps it: the drop-and-sort below
+#         is the only treatment applied.
 #
 # Returns the rows with finite logit accuracy, sorted by lncost, with the
 # column `la` added.
 iso_runs <- function(data) {
   s <- data
-  s$la <- qlogis(clip_acc(s$acc, s$n_samples))
+  if (is.null(s$la)) s$la <- qlogis(s$acc)
   s <- s[is.finite(s$la), , drop = FALSE]
   s[order(s$lncost), ]
 }
@@ -90,7 +99,7 @@ iso_runs <- function(data) {
 # The fixed grid the cost-direction objectives use: the full cross of
 # accuracy levels and dates, uniform over each observed range. Uniform in
 # ACCURACY -- the nodes sit at qlogis of an even sequence from the smallest
-# positive (clipped) observed accuracy to the largest clipped one, so the
+# to the largest accuracy surviving iso_runs, so the
 # ENDPOINTS are exactly the old logit-uniform grid's -- which makes the
 # objectives integrate misfit evenly over the accuracy scale, the same
 # measure the display axes use.
@@ -118,7 +127,7 @@ iso_runs <- function(data) {
 # Returns a DATA FRAME of n_level * n_date rows, columns la and tc -- la
 # because that is the scale the models' formulas use; only the SPACING is
 # accuracy-uniform.
-iso_grid <- function(data, n_level = 100, n_date = 100) {
+iso_grid <- function(data, n_level = 100, n_date = NULL) {
   s <- iso_runs(data)
   a <- seq(plogis(min(s$la)), plogis(max(s$la)), length.out = n_level)
   la <- qlogis(a)
@@ -128,7 +137,8 @@ iso_grid <- function(data, n_level = 100, n_date = 100) {
   la[1] <- min(s$la)
   la[n_level] <- max(s$la)
   expand.grid(la = la,
-              tc = seq(min(s$tc), max(s$tc), length.out = n_date))
+              tc = if (is.null(n_date)) grid_tc_seq(range(s$tc)) else
+                seq(min(s$tc), max(s$tc), length.out = n_date))
 }
 
 # ln C_a(t) = min{ ln c_i : t_i <= t, la_i >= la } at every grid node: the
@@ -138,7 +148,7 @@ iso_grid <- function(data, n_level = 100, n_date = 100) {
 # Nodes where no run had yet achieved the level are dropped, not imputed.
 #
 # Returns a DATA FRAME with columns la, tc, lnC -- the defined nodes only.
-iso_grid_response <- function(data, n_level = 100, n_date = 100) {
+iso_grid_response <- function(data, n_level = 100, n_date = NULL) {
   s <- iso_runs(data)
   gr <- iso_grid(data, n_level, n_date)
   gr$lnC <- NA_real_
@@ -172,7 +182,7 @@ iso_grid_response <- function(data, n_level = 100, n_date = 100) {
 # gr0 / n_corners: lambda-invariant precomputations the Box-Cox profile
 # passes in once per benchmark, exactly as in fit_pareto_logit()
 fit_lncost_grid <- function(data, formula = COST_FORMS$lin,
-                            n_level = 100, n_date = 100, grid_augment = NULL,
+                            n_level = 100, n_date = NULL, grid_augment = NULL,
                             gr0 = NULL, n_corners = NULL) {
   gr <- if (is.null(gr0)) iso_grid_response(data, n_level, n_date) else gr0
   gr$lncost <- gr$lnC
@@ -321,7 +331,7 @@ coef.cost_envelope_frontier <- function(object, ...) object$coefficients
 # profile's hoisted invariants and its warm start, with the same
 # fall-back-to-cold rule when a warm-started solve ends infeasible.
 fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
-                                n_level = 100, n_date = 100, margin = 0.05,
+                                n_level = 100, n_date = NULL, margin = 0.05,
                                 grid_augment = NULL, gr0 = NULL, bind = NULL,
                                 n_corners = NULL, start = NULL) {
   s <- iso_runs(data)
@@ -336,34 +346,52 @@ fit_lncost_grid_env <- function(data, formula = COST_FORMS$lin,
   gr_fn <- function(g) 2 * drop(crossprod(Xg, drop(Xg %*% g) - yg)) / nrow(Xg)
 
   bound <- 1e5
+  # COLUMN STANDARDIZATION: SLSQP is solved in units of each column's spread
+  # and the solution unscaled afterwards -- the optimum and the feasible set
+  # are unchanged, only the parameterization. Without it the solver STALLS AT
+  # ITS STARTING POINT on badly scaled designs and reports "success": the
+  # pooled Box-Cox phia column spans three orders of magnitude, and the fit
+  # came back as the feasible start itself -- value in the thousands, every
+  # slack exactly the margin. Constant columns (the intercept) keep scale 1.
+  sc <- apply(Xg, 2, sd)
+  sc[!is.finite(sc) | sc < 1e-9] <- 1
+  Xg_s   <- sweep(Xg, 2, sc, "/")
+  Xb_s   <- sweep(cs$Xb, 2, sc, "/")
+  mono_s <- sweep(cs$mono, 2, sc, "/")
+  fn_s <- function(gs) fn(gs / sc)
+  gr_fn_s <- function(gs) {
+    resid <- drop(Xg_s %*% gs) - yg
+    2 * drop(crossprod(Xg_s, resid)) / nrow(Xg_s)
+  }
+
   # Clamp the start into the box rather than let nloptr refuse it: at extreme
   # lambda_t, cost_feasible_start's intercept drop can land below -bound. A
   # clamped start may begin infeasible, but SLSQP recovers from that, and the
   # worst_slack check below still rejects a solve that never became feasible.
   solve1 <- function(x0) nloptr::nloptr(
-    x0 = pmin(pmax(x0, -bound), bound),
-    eval_f = function(g) list(objective = fn(g), gradient = gr_fn(g)),
-    eval_g_ineq = function(g) list(
-      constraints = c(drop(cs$Xb %*% g) - cs$cb, -drop(cs$mono %*% g)),
-      jacobian = rbind(cs$Xb, -cs$mono)),
+    x0 = pmin(pmax(x0 * sc, -bound), bound),
+    eval_f = function(gs) list(objective = fn_s(gs), gradient = gr_fn_s(gs)),
+    eval_g_ineq = function(gs) list(
+      constraints = c(drop(Xb_s %*% gs) - cs$cb, -drop(mono_s %*% gs)),
+      jacobian = rbind(Xb_s, -mono_s)),
     lb = rep(-bound, ncol(Xg)), ub = rep(bound, ncol(Xg)),
     opts = list(algorithm = "NLOPT_LD_SLSQP", xtol_rel = 1e-10,
                 maxeval = 5000, print_level = 0))
   r <- NULL
   if (!is.null(start) && length(start) == ncol(Xg)) {
     r <- solve1(unname(start))
-    if (min(c(cs$cb - drop(cs$Xb %*% r$solution),
-              drop(cs$mono %*% r$solution))) < -1e-8) r <- NULL
+    if (min(c(cs$cb - drop(Xb_s %*% r$solution),
+              drop(mono_s %*% r$solution))) < -1e-8) r <- NULL
   }
   if (is.null(r)) {
     b0 <- cost_feasible_start(coef(lm(formula, data = gr)), cs$Xb, cs$cb,
                               margin)
     r <- solve1(unname(b0))
   }
-  g <- setNames(r$solution, colnames(Xg))
+  g <- setNames(r$solution / sc, colnames(Xg))
 
   env_slack <- cs$cb - drop(cs$Xb %*% g)
-  fit <- structure(list(coefficients = g, value = fn(r$solution),
+  fit <- structure(list(coefficients = g, value = fn(g),
                         worst_slack = min(c(env_slack, drop(cs$mono %*% g))),
                         n_binding = length(cs$bind),
                         slack_envelope = min(env_slack),
@@ -785,7 +813,13 @@ cost_bc_grid_augment <- function(lo, lt, off) {
 # at the profiled optimum, carrying the same bc_lambda / bc_lambda_free
 # attributes fit_bc() stamps, so est_se_bc() and the curve builders treat
 # both directions' BC fits identically.
-fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
+#
+# form / gr0 / bind0 exist for the pooled pseudo-benchmark
+# (fit_pooled_cost_bc): its formula carries the bench fixed effects, its grid
+# is the stacked per-benchmark one, and its Pareto reduction runs within
+# benchmark -- none of which the per-benchmark defaults below would build.
+fit_cost_bc <- function(key, data, lambda_start = c(0, 1),
+                        form = COST_BC_FORM, gr0 = NULL, bind0 = NULL) {
   s <- iso_runs(data)
   off <- (s$year - s$tc)[1] - BC_T0
   lt_free <- bc_lt_free(s$year - BC_T0)
@@ -793,24 +827,24 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
   # No Box-Cox Jacobian term anywhere below: the classical sum(ln y)
   # correction exists to make transformed-RESPONSE objectives comparable
   # across the response lambda, and the response here is always ln cost.
-  gr0 <- iso_grid_response(s)
+  if (is.null(gr0)) gr0 <- iso_grid_response(s)
   # the other lambda-invariant piece, hoisted for the same reason: the Pareto
   # reduction, which doubles as the envelope constraint candidates and the
   # n_corners attribute
-  bind0 <- pareto_binding(s$lncost, s$tc, s$la)
+  if (is.null(bind0)) bind0 <- pareto_binding(s$lncost, s$tc, s$la)
 
   fit_at <- function(lo, lt) {
     sa <- cost_bc_augment(s, lo, lt, off)
     ga <- cost_bc_grid_augment(lo, lt, off)
     if (key == "costols") {
-      f <- lm(COST_BC_FORM, data = sa)
+      f <- lm(form, data = sa)
       list(fit = f, obj = -nrow(sa) / 2 * log(sum(residuals(f)^2)))
     } else if (key == "costgridols") {
-      f <- fit_lncost_grid(sa, COST_BC_FORM, grid_augment = ga,
+      f <- fit_lncost_grid(sa, form, grid_augment = ga,
                            gr0 = gr0, n_corners = length(bind0))
       list(fit = f, obj = -attr(f, "n_grid") / 2 * log(sum(residuals(f)^2)))
     } else if (key == "costgridolsenv") {
-      f <- fit_lncost_grid_env(sa, COST_BC_FORM, grid_augment = ga,
+      f <- fit_lncost_grid_env(sa, form, grid_augment = ga,
                                gr0 = gr0, bind = bind0,
                                n_corners = length(bind0),
                                start = ws$start_env)
@@ -827,7 +861,7 @@ fit_cost_bc <- function(key, data, lambda_start = c(0, 1)) {
       list(fit = f, obj = -attr(f, "n_grid") / 2 *
              log(f$value * attr(f, "n_grid")))
     } else {
-      f <- fit_cost_sfa(sa, COST_BC_FORM,
+      f <- fit_cost_sfa(sa, form,
                         formula_sigma = if (key == "costsfab") ~ tc else ~ 1,
                         start = ws$start)
       ws$start <- coef(f)   # warm-start the next profile evaluation
@@ -890,6 +924,222 @@ fit_cost_model <- function(key, s, form = COST_FORMS$lin) {
     costsfab       = fit_cost_sfa(s, form, formula_sigma = ~ tc),
     costgridols    = fit_lncost_grid(s, form),
     costgridolsenv = fit_lncost_grid_env(s, form))
+}
+
+## ---- pooled cost fits (ECI units) ----------------------------------------------------
+#
+# The primary benchmarks stacked into ONE cost regression. Each run's logit
+# accuracy is converted to the common ECI capability scale via the 2PL,
+#
+#   la = logit(acc) / alpha_b + D_b    (= C, anchored: Claude 3.5 Sonnet 130)
+#
+# and benchmark FIXED EFFECTS absorb cost-level differences across benchmarks
+# (a GPQA question is not an AIME question), so the shared la and tc slopes
+# are within-benchmark estimates in common units. Because D_b is
+# benchmark-constant, the fixed effects make the fit invariant to including
+# it; it is included so la IS the anchored ECI score, which grids, records
+# and any future figure can use directly.
+#
+# The pooled rows form a 12th pseudo-benchmark ("pooled"), deliberately NOT
+# added to load_runs()' frame: the accuracy-direction scripts loop over
+# bench_levels() and would otherwise fit it too. Cost-direction consumers opt
+# in through fit_pooled_cost / store_pooled_cost.
+#
+# The frontier-per-se fits keep their per-benchmark structure inside the
+# pooled fit: each primary's staircase is sampled on its OWN (la, tc) grid
+# (its own observed rectangle -- no benchmark's record is extrapolated into
+# another's history), the grids are stacked with the bench factor, and one
+# surface with fixed effects is fitted through all of them. Likewise the
+# envelope's Pareto reduction runs WITHIN benchmark: a cheap AIME run cannot
+# dominate a Chess run, since their surfaces differ by the fixed effect.
+#
+# The Box-Cox variant divides la by POOLED_BC_LA_SCALE before exp, since exp
+# of a raw ECI score (~60-165) overflows any useful lambda. The divisor is
+# NOT an extra modeling choice: phi_l(x^k) = k*phi_{kl}(x), so rescaling la
+# before exp is exactly the original family with lambda relabeled -- all the
+# divisor moves is where the fixed COST_BC_BOX_O search box lands on that
+# relabeled axis (and the arithmetic's conditioning). What the box can reach
+# is curvature: the transform's slope varies by e^(lambda * range(la)/scale)
+# across the sample. At 100 that tops out near e^2, well short of what the
+# per-benchmark fits use (their lambda_odds run 0.2-0.65 over ~10-logit
+# ranges), and the profile duly rode the box edge at lambda = 2. At 10 the
+# box spans e^-10..e^21, the per-benchmark reach, with odds still tame
+# (at most e^16.5).
+POOLED_BC_LA_SCALE <- 10
+
+pooled_cost_runs <- function(d) {
+  s <- d[d$benchmark %in% PRIMARY_BENCHES, ]
+  la <- qlogis(s$acc) / ALPHA[s$benchmark] + EDI[s$benchmark]
+  s <- s[is.finite(la), , drop = FALSE]
+  s$la <- la[is.finite(la)]
+  s$bench <- factor(s$benchmark)
+  s$benchmark <- "pooled"
+  # one reference date for the pooled sample; bench_tbar() recovers it as
+  # t - tc, exactly as for the real benchmarks
+  s$tc <- s$t - mean(s$t)
+  s
+}
+
+# The stacked grid: each primary's staircase sampled on its own rectangle,
+# carrying the bench factor the formula's fixed effects need. Node placement
+# MATCHES the per-benchmark fits exactly -- each benchmark's grid is built in
+# its own native logit coordinates (accuracy-uniform levels, iso_grid's
+# design) and only the node COORDINATES are then converted to ECI. An
+# earlier version spaced levels uniformly in capability, which is the
+# retired logit-uniform design in disguise: its tail-heavy node weighting
+# (iso_grid's documented hazard) dragged the pooled decline rate below every
+# primary's own. `la_scale` divides the converted coordinate, for the
+# Box-Cox fit's rescaled la (POOLED_BC_LA_SCALE).
+pooled_grid_response <- function(sp, n_level = 100, n_date = NULL,
+                                 la_scale = 1) {
+  do.call(rbind, lapply(levels(sp$bench), function(b) {
+    s <- sp[sp$bench == b, ]
+    s$la <- qlogis(s$acc)
+    g <- iso_grid_response(s, n_level, n_date)
+    g$la <- (g$la / ALPHA[[b]] + EDI[[b]]) / la_scale
+    g$bench <- factor(b, levels = levels(sp$bench))
+    g
+  }))
+}
+
+# Envelope candidates, Pareto-reduced WITHIN benchmark, as indices into the
+# iso_runs()-sorted pooled frame (the ordering cost_envelope_constraints
+# indexes into).
+pooled_binding <- function(si) {
+  unlist(lapply(levels(si$bench), function(b) {
+    i <- which(si$bench == b)
+    i[pareto_binding(si$lncost[i], si$tc[i], si$la[i])]
+  }))
+}
+
+# THE recipe for the pooled fit of each cost key, mirroring fit_cost_model:
+# the same fitters, with the bench fixed effects appended to the formula and
+# the grid machinery handed its stacked pooled counterparts. The SFA duals'
+# inefficiency group gains bench: one u per cost curve, as within benchmark.
+fit_pooled_cost <- function(key, d, form = COST_FORMS$lin) {
+  sp    <- pooled_cost_runs(d)
+  formp <- update(form, . ~ . + bench)
+  switch(key,
+    costols        = lm(formp, data = iso_runs(sp)),
+    costsfa        = fit_cost_sfa(sp, formp,
+                                  u_group = c("model", "effort", "bench")),
+    costsfab       = fit_cost_sfa(sp, formp,
+                                  u_group = c("model", "effort", "bench"),
+                                  formula_sigma = ~ tc),
+    costgridols    = fit_lncost_grid(sp, formp,
+                                     gr0 = pooled_grid_response(sp),
+                                     n_corners = length(pooled_binding(iso_runs(sp)))),
+    costgridolsenv = {
+      bind <- pooled_binding(iso_runs(sp))
+      fit_lncost_grid_env(sp, formp, gr0 = pooled_grid_response(sp),
+                          bind = bind, n_corners = length(bind))
+    })
+}
+
+# The pooled Box-Cox profile: fit_cost_bc on the stacked frame with la
+# rescaled (see POOLED_BC_LA_SCALE above), the bench fixed effects appended,
+# and the stacked grid / within-benchmark Pareto reduction injected. The SFA
+# keys would additionally need their u_group threaded through fit_at, so only
+# the least-squares keys are offered.
+fit_pooled_cost_bc <- function(key, d) {
+  stopifnot(key %in% c("costols", "costgridols", "costgridolsenv"))
+  sp <- pooled_cost_runs(d)
+  sp$la <- sp$la / POOLED_BC_LA_SCALE
+  fit_cost_bc(key, sp, form = update(COST_BC_FORM, . ~ . + bench),
+              gr0 = pooled_grid_response(sp,
+                                         la_scale = POOLED_BC_LA_SCALE),
+              bind0 = pooled_binding(iso_runs(sp)))
+}
+
+# The pooled surface as ONE curve per date, for the figures: the fitted
+# common surface with the benchmark fixed effects averaged (unweighted over
+# the five levels, the reference's 0 included) -- "the average primary
+# benchmark's cost" at each (capability, date). cost_surface() reads only the
+# named shared coefficients, i.e. the reference benchmark's surface, so the
+# FE mean is added here; for the BC fit the la coordinate is rescaled to the
+# units the fit was estimated in (POOLED_BC_LA_SCALE).
+# The mean benchmark fixed effect (the reference level's 0 included): what
+# the drawn "one pooled surface" adds to the shared part.
+pooled_fe_mean <- function(fit) {
+  cf <- coef(fit)
+  names(cf) <- sub("^beta_", "", names(cf))
+  mean(c(0, unname(cf[grepl("^bench", names(cf))])))
+}
+
+pooled_surface <- function(fit, sp) {
+  srf <- cost_surface(fit, sp)
+  fe <- pooled_fe_mean(fit)
+  sc <- if (is.null(attr(fit, "bc_lambda"))) 1 else POOLED_BC_LA_SCALE
+  list(f    = function(la, tc) srf$f(la / sc, tc) + fe,
+       dacc = function(la, tc) srf$dacc(la / sc, tc))
+}
+
+# Capability-versus-cost curves at each drawn date for the pooled panel: the
+# mirror of cost_frontier_curves(), with value = the ECI score itself rather
+# than plogis(la).
+pooled_frontier_curves <- function(fit, sp, dates, n_la = 200) {
+  srf <- pooled_surface(fit, sp)
+  su <- iso_runs(sp)
+  urng <- range(sp$lncost)
+  tbar <- (sp$t - sp$tc)[1]
+  g <- expand.grid(la = seq(min(su$la), max(su$la), length.out = n_la),
+                   qdate = dates)
+  tc <- as_t(g$qdate) - tbar
+  u <- srf$f(g$la, tc)
+  u[srf$dacc(g$la, tc) <= 0] <- NA_real_
+  u[u < urng[1] | u > urng[2]] <- NA_real_
+  out <- data.frame(cost = exp(u), value = g$la, qdate = g$qdate,
+                    benchmark = "pooled", year = 2023 + as_t(g$qdate))
+  out[!is.na(out$cost), , drop = FALSE]
+}
+
+# Iso-capability contours off the pooled surface: the mirror of
+# cost_iso_curves(), levels in ECI points, same cap-and-birth blanking
+# against the pooled staircase.
+pooled_iso_curves <- function(fit, sp, levels, n_date = 300,
+                              cost_cap = NULL) {
+  srf <- pooled_surface(fit, sp)
+  urng <- range(sp$lncost)
+  tbar <- (sp$t - sp$tc)[1]
+  dts <- seq(min(sp$releasedate), max(sp$releasedate), length.out = n_date)
+  g <- expand.grid(date = dts, acc = levels)
+  u <- srf$f(g$acc, as_t(g$date) - tbar)
+  cap_u <- rep(Inf, nrow(g))
+  birth <- rep(-Inf, nrow(g))
+  if (!is.null(cost_cap)) {
+    lv <- unique(cost_cap$acc)
+    i <- match(g$acc, lv)
+    cap_u <- log(vapply(lv, function(a) max(cost_cap$cost[cost_cap$acc == a]),
+                        numeric(1)))[i]
+    birth <- vapply(lv, function(a)
+      as.numeric(min(cost_cap$date[cost_cap$acc == a])), numeric(1))[i]
+    cap_u[is.na(cap_u)] <- -Inf
+    birth[is.na(birth)] <- Inf
+  }
+  bad <- !is.na(u) & (u < urng[1] | u > urng[2] |
+                        !(u <= cap_u | as.numeric(g$date) >= birth))
+  u[bad] <- NA_real_
+  g$cost <- exp(u)
+  g$branch <- "rising"
+  g$disc <- NA_real_
+  g$benchmark <- "pooled"
+  iso_segments(g)
+}
+
+# What the pooled BC surface says the decline rate is, averaged over the
+# stacked grid's defined nodes -- the pooled mirror of surface_decline_qtr,
+# whose decline_nodes lattice is accuracy-based and so does not exist here.
+# The rate is bench-free: the fixed effects are additive in ln cost, so
+# d lnC/dt = (gt + gat*phia) * tau^(lt-1) at every node regardless of bench.
+pooled_bc_decline_qtr <- function(fit, sp) {
+  lam <- attr(fit, "bc_lambda")
+  cf  <- coef(fit)
+  gr  <- pooled_grid_response(sp, la_scale = POOLED_BC_LA_SCALE)
+  off <- (sp$year - sp$tc)[1] - BC_T0
+  phia <- bc_tf(exp(gr$la), lam[["lambda_odds"]])
+  dln  <- (cf[["phit"]] + cf[["phiat"]] * phia) *
+    (gr$tc + off)^(lam[["lambda_time"]] - 1)
+  100 * (1 - exp(mean(dln[is.finite(dln)]) / 4))
 }
 
 # All benchmarks of one cost key's Box-Cox profile, on the shared worker

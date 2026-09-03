@@ -49,6 +49,51 @@ iso_ranges <- do.call(rbind, lapply(benches, function(b) {
   data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
 }))
 
+## ---- the pooled pseudo-benchmark, sixth panel ----------------------------------------
+#
+# The five primaries pooled on the anchored ECI scale with benchmark fixed
+# effects (pooled_cost_runs, cost_frontier.R), drawn as a sixth panel. The
+# staircase machinery is generic in (cost, acc), so handing it la as `acc`
+# yields ECI-unit staircases; the untouched-acc copy keeps the iso view's
+# dots coloured by each run's own-benchmark accuracy on the shared 0-1 scale.
+# The iso view's CONTOURS cannot ride that shared accuracy colour scale --
+# their levels are ECI scores -- so the pooled panel draws them in a fixed
+# neutral colour, labelled in place with their ECI values.
+sp  <- pooled_cost_runs(d)
+spx <- sp
+spx$acc <- spx$la
+LB <- append(LABELS, c(pooled = "Pooled primaries (ECI scale)"),
+             after = match("mystery", names(LABELS)))
+pool_dates <- {
+  g <- grid_dates(min(d$releasedate), max(d$releasedate))
+  g[g >= min(sp$releasedate)]
+}
+pool_levels <- {
+  pr <- pretty(range(sp$la), 5)
+  pr[pr > min(sp$la) & pr < max(sp$la)]
+}
+pool_steps     <- pareto_curves(spx, setNames(list(pool_dates), "pooled"))
+pool_iso_steps <- iso_pareto_curves(spx, pool_levels)
+PC <- c("benchmark", "cost", "acc", "year")           # frontier-view point columns
+IC <- c("benchmark", "releasedate", "cost", "acc")    # iso-view point columns
+pts_frontier <- rbind(d[, PC], spx[, PC])
+pts_iso      <- rbind(d[, IC], sp[, IC])
+axis_ranges_p <- rbind(axis_ranges, data.frame(
+  benchmark = "pooled", cost = range(sp$cost), value = range(sp$la)))
+iso_ranges_p <- rbind(iso_ranges, data.frame(
+  benchmark = "pooled", date = range(sp$releasedate), cost = range(sp$cost)))
+POOL_NOTE <- paste(
+  "Sixth panel: the five primaries pooled on the anchored ECI capability",
+  "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
+  "benchmark fixed effects; its value axis is in ECI points and its curves",
+  "trace the fitted surface at the fixed effects' mean.")
+POOL_ISO_NOTE <- paste(
+  "Sixth panel: the pooled primaries; contours are ECI capability levels",
+  "from the pooled fit at the benchmark fixed effects' mean, labelled in ECI",
+  "points and shaded by position within the pooled capability range on the",
+  "shared ramp; dashes their record staircases; dots keep each run's",
+  "own-benchmark accuracy colour.")
+
 # One caption line saying what kind of surface each model's is; the rest of
 # each caption is shared. The fitting recipes live in fit_cost_model
 # (cost_frontier.R) and the fits come from the shared store, so the tables use
@@ -114,18 +159,32 @@ for (key in names(MODELS)) {
   m <- MODELS[[key]]
   for (tt in c("lin", "quad", "bc")) {
     fits <- if (tt == "bc") store_cost_bc(key) else store_cost(key)[[tt]]
+    # the pooled companion fit for the sixth panel: lin and quad for every
+    # key, Box-Cox for the least-squares keys only (fit_pooled_cost_bc); the
+    # SFA duals' BC figures keep their five panels
+    pf <- if (tt == "bc") {
+      if (key %in% c("costols", "costgridols", "costgridolsenv"))
+        store_pooled_cost_bc(key) else NULL
+    } else store_pooled_cost(key)[[tt]]
+    lbs <- if (is.null(pf)) LABELS else LB
 
     # frontier view: the surface swept along accuracy at each drawn date
     curves <- cost_frontier_curves(fits, d, dates, tbar)
+    if (!is.null(pf))
+      curves <- rbind(curves, pooled_frontier_curves(pf, sp, pool_dates))
     p <- frontier_plot(
-      curves, d, ranges = axis_ranges,
+      curves, if (is.null(pf)) d else pts_frontier,
+      ranges = if (is.null(pf)) axis_ranges else axis_ranges_p,
+      labels = lbs, free_value = !is.null(pf),
       ylab = "Fitted accuracy (cost fit inverted)",
       notes = c(
         paste("Solid: the fitted cost surface traced over the observed",
               "accuracy range at each drawn date -- the inverted view; the",
               "iso-accuracy figure is this model's native one."),
-        PARETO_STEP_NOTE, SPEC_NOTE[[tt]], m$note)) +
-      pareto_step_layer(steps)
+        PARETO_STEP_NOTE, SPEC_NOTE[[tt]], m$note,
+        if (!is.null(pf)) POOL_NOTE)) +
+      pareto_step_layer(if (is.null(pf)) steps else rbind(steps, pool_steps),
+                        labels = lbs)
     f <- sprintf("%s_%s.png", key, tt)
     ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
            device = ragg::agg_png)
@@ -135,7 +194,9 @@ for (key in names(MODELS)) {
     iso <- cost_iso_curves(fits, d, tbar, levels = LEVELS,
                            cost_cap = iso_steps)
     p_iso <- iso_acc_plot(
-      iso, d, ranges = iso_ranges,
+      iso, if (is.null(pf)) d else pts_iso,
+      ranges = if (is.null(pf)) iso_ranges else iso_ranges_p,
+      labels = lbs,
       notes = c(
         paste("Contours are accuracy targets from 10% to 90% read DIRECTLY",
               "off the fitted cost surface -- the native view of a model of",
@@ -146,8 +207,18 @@ for (key in names(MODELS)) {
               "dearest, so each contour reaches its record's start or cost",
               "ceiling, whichever is more generous. Never-achieved levels",
               "show no contour."),
-        ISO_SPEC_NOTE[[tt]], m$note)) +
-      iso_pareto_layer(iso_steps)
+        ISO_SPEC_NOTE[[tt]], m$note,
+        if (!is.null(pf)) POOL_ISO_NOTE)) +
+      iso_pareto_layer(iso_steps, labels = lbs)
+    if (!is.null(pf)) {
+      # contours at ECI capability levels, shaded by position within the
+      # pooled capability range on the shared ramp (pooled_iso_layers,
+      # frontier_viz.R), each labelled in place with its ECI value
+      p_iso <- p_iso +
+        pooled_iso_layers(pooled_iso_curves(pf, sp, pool_levels,
+                                            cost_cap = pool_iso_steps),
+                          crng = range(sp$la), steps = pool_iso_steps)
+    }
     fi <- sprintf("isoaccuracy_%s_%s.png", key, tt)
     ggsave(out_path(fi), p_iso, width = 10, height = fig_height(length(benches)), dpi = 200,
            device = ragg::agg_png)
@@ -157,6 +228,7 @@ for (key in names(MODELS)) {
       cat(sprintf("  %-12s per-quarter cost change at fixed accuracy:", key))
       for (b in benches)
         cat(sprintf("  %s %+.1f%%", b, -cost_decline_qtr(fits[[b]])))
+      if (!is.null(pf)) cat(sprintf("  pooled %+.1f%%", -cost_decline_qtr(pf)))
       cat("\n")
     }
     if (tt == "quad") {
@@ -173,6 +245,15 @@ for (key in names(MODELS)) {
                         max(cost_dtime(co, cg$la, cg$tc)) <= 1e-6) "mono"
                     else "NON-MONO"))
       }
+      if (!is.null(pf)) {
+        si <- iso_runs(sp)
+        co <- cost_coefs(pf)
+        cg <- expand.grid(la = range(si$la), tc = range(si$tc))
+        cat(sprintf("  pooled [%s]",
+                    if (min(cost_dacc(co, cg$la, cg$tc)) >= -1e-6 &&
+                        max(cost_dtime(co, cg$la, cg$tc)) <= 1e-6) "mono"
+                    else "NON-MONO"))
+      }
       cat("\n")
     }
     if (tt == "bc") {
@@ -180,6 +261,11 @@ for (key in names(MODELS)) {
       for (b in benches) {
         lam <- attr(fits[[b]], "bc_lambda")
         cat(sprintf("  %s (%.2f, %.2f)", b, lam[["lambda_odds"]],
+                    lam[["lambda_time"]]))
+      }
+      if (!is.null(pf)) {
+        lam <- attr(pf, "bc_lambda")
+        cat(sprintf("  pooled (%.2f, %.2f)", lam[["lambda_odds"]],
                     lam[["lambda_time"]]))
       }
       cat("\n")

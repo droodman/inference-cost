@@ -346,10 +346,14 @@ fmt_p <- function(p) {
 # like the rest of those tables.
 pooled_col <- function(key, tt, fitlist) {
   # PRIMARY benchmarks only (PRIMARY_BENCHES, prepare_data.R): the newer
-  # benchmarks are reported in their own columns but kept out of the pool
+  # benchmarks are reported in their own columns but kept out of the pool.
+  # The pooling weight is alpha^2 * observed history in years (bench_spans,
+  # frontier_viz.R): information about the shared capability times the time
+  # base the benchmark's slopes are estimated over.
   fitlist <- fitlist[intersect(PRIMARY_BENCHES, names(fitlist))]
   cv <- lapply(fitlist, coef_vcov)
   bs <- names(fitlist)
+  TS <- bench_spans(d)[bs]
   disp <- vapply(TERMS, function(x) x$t, character(1))
   present <- disp[disp %in% unique(unlist(lapply(cv, function(x) names(x$b))))]
 
@@ -360,8 +364,12 @@ pooled_col <- function(key, tt, fitlist) {
       k %in% names(cv[[b]]$b) && is.finite(cv[[b]]$b[[k]]), logical(1))]
     if (!length(use)) return(NULL)
     a  <- ALPHA[use]
-    cc <- if (grepl("^logsig_", k)) a^2 / sum(a^2) else a / sum(a^2)
-    off <- if (k == "logsig_(Intercept)") -sum(a^2 / sum(a^2) * log(a)) else 0
+    w  <- a^2 * TS[use]
+    # regular terms pool the ECI-converted slope b/alpha with weight w, so
+    # the coefficient on the RAW slope is a*T/sum(a^2*T); the logsig terms
+    # pool the already-converted quantity directly
+    cc <- if (grepl("^logsig_", k)) w / sum(w) else (w / a) / sum(w)
+    off <- if (k == "logsig_(Intercept)") -sum(w / sum(w) * log(a)) else 0
     est <- sum(cc * vapply(use, function(b) cv[[b]]$b[[k]], numeric(1))) + off
     haveV <- all(vapply(use, function(b)
       !is.null(cv[[b]]$V) && k %in% rownames(cv[[b]]$V), logical(1)))
@@ -378,9 +386,10 @@ pooled_col <- function(key, tt, fitlist) {
     b2 <- setNames(es$est[match(need, es$term)], need)
     V2 <- NULL
     if (all(vapply(bs, function(b) !is.null(cv[[b]]$V), logical(1)))) {
-      W  <- sum(ALPHA[bs]^2)
+      W  <- sum(ALPHA[bs]^2 * TS)
       V2 <- matrix(0, 2, 2, dimnames = list(need, need))
-      for (b in bs) V2 <- V2 + (ALPHA[[b]] / W)^2 * cv[[b]]$V[need, need]
+      for (b in bs)
+        V2 <- V2 + (ALPHA[[b]] * TS[[b]] / W)^2 * cv[[b]]$V[need, need]
     }
     decline <- decline_from(b2, V2)
   }
@@ -406,22 +415,23 @@ pooled_col <- function(key, tt, fitlist) {
 # but the estimand this table exists for is the time slope), and the intercept
 # has no common meaning.
 pooled_col_cost <- function(fitlist) {
-  # PRIMARY benchmarks only, as in pooled_col()
+  # PRIMARY benchmarks only, as in pooled_col(), and the same
+  # alpha^2 * history weights. (This replaced inverse-variance weighting: the
+  # time coefficient is already in common units, but half the cost models
+  # carry no covariance at all, and one weighting rule across every pooled
+  # figure beats a per-column mixture.)
   fitlist <- fitlist[intersect(PRIMARY_BENCHES, names(fitlist))]
   cv <- lapply(fitlist, coef_vcov)
+  bs <- names(fitlist)
+  w <- ALPHA[bs]^2 * bench_spans(d)[bs]
+  w <- w / sum(w)
   gts <- vapply(cv, function(x) x$b[["tc"]], numeric(1))
   ses <- vapply(cv, function(x) {
     if (is.null(x$V) || !"tc" %in% rownames(x$V)) NA_real_ else
       sqrt(x$V["tc", "tc"])
   }, numeric(1))
-  if (all(is.finite(ses))) {
-    w <- (1 / ses^2) / sum(1 / ses^2)
-    est <- sum(w * gts)
-    se <- sqrt(sum(w^2 * ses^2))   # = 1/sqrt(sum 1/se^2); fits are independent
-  } else {
-    est <- mean(gts)
-    se <- NA_real_
-  }
+  est <- sum(w * gts)
+  se <- if (all(is.finite(ses))) sqrt(sum(w^2 * ses^2)) else NA_real_
   list(bench = "pooled", spec = "lin", head = "Pooled, primary (log $)",
        es = data.frame(term = "tc", est = est, se = se,
                        stringsAsFactors = FALSE),
@@ -489,6 +499,33 @@ build_model_cost <- function(key) {
            decline = if (tt == "lin") cost_decline_dual(f) else NULL,
            test = tst)
     })
+    # The pooled-DATA column, placed sixth (right after the primaries it
+    # stacks): one fit over the stacked primaries in anchored ECI units with
+    # benchmark fixed effects (fit_pooled_cost / fit_pooled_cost_bc,
+    # cost_frontier.R). Its accuracy slope is per ECI POINT, not per logit
+    # (roughly alpha_b logits per point), so it is not comparable cell for
+    # cell with the la row's other columns; the fixed-effect coefficients
+    # are estimated but not displayed (they are not in TERMS). BC exists for
+    # the least-squares keys only.
+    pfit <- if (tt == "bc") {
+      if (key %in% c("costols", "costgridols", "costgridolsenv"))
+        store_pooled_cost_bc(key) else NULL
+    } else store_pooled_cost(key)[[tt]]
+    if (!is.null(pfit)) {
+      pcol <- list(
+        bench = "p.runs", spec = tt, head = "Pooled runs (ECI pts, FE)",
+        es = if (tt == "bc") est_se_bc(pfit) else est_se(pfit),
+        n = if (key %in% c("costgridols", "costgridolsenv"))
+          attr(pfit, "n_grid") else nrow(iso_runs(pooled_cost_runs(d))),
+        decline = if (tt == "lin") cost_decline_dual(pfit) else NULL,
+        test = if (tt == "quad")
+          cost_quad_test(key, store_pooled_cost(key)$lin, pfit)
+        else if (tt == "bc")
+          cost_bc_test(key, store_pooled_cost(key)$lin, pfit)
+        else NULL)
+      cols <- append(cols, list(pcol),
+                     after = length(intersect(PRIMARY_BENCHES, benches)))
+    }
     if (tt == "lin") {
       pooled <- pooled_col_cost(fits$lin)
       pooled$n <- sum(vapply(
@@ -528,6 +565,44 @@ build_model <- function(key) {
            decline = if (tt == "lin") cost_decline(f) else NULL,
            test = tst)
     })
+    # The pooled-DATA column, sixth, for the non-SFA families: one fit over
+    # the stacked primaries with alpha_b-scaled capability terms and
+    # benchmark fixed effects (fit_pooled_acc / fit_pooled_acc_bc,
+    # envelope_frontier.R). Term names are mapped onto the standard rows;
+    # NOTE the units: the coefficients are ECI capability per unit regressor
+    # (roughly a per-logit slope divided by alpha_b), so the cells are not
+    # comparable one for one with the per-benchmark columns. The decline
+    # ratio -b_t/b_x IS unit-free and comparable. No quad/BC tests: the
+    # pooled column reports point estimates only.
+    if (key %in% c("S", "paretologit", "paretologitenv")) {
+      pfit <- if (tt == "bc") store_pooled_acc_bc(key)
+              else store_pooled_acc(key)[[tt]]
+      pes <- if (tt == "bc") est_se_bc(pfit) else est_se(pfit)
+      map <- c(xc = "lncost", xt = "tc", xcc = "I(lncost^2)",
+               xtt = "I(tc^2)", xct = "lncost:tc",
+               xphic = "phic", xphit = "phit", xphixt = "phixt")
+      pes$term <- ifelse(pes$term %in% names(map),
+                         unname(map[pes$term]), pes$term)
+      pdec <- NULL
+      if (tt == "lin") {
+        cv <- coef_vcov(pfit)
+        b2 <- c(lncost = unname(cv$b[["xc"]]), tc = unname(cv$b[["xt"]]))
+        V2 <- NULL
+        if (!is.null(cv$V) && all(c("xc", "xt") %in% rownames(cv$V))) {
+          V2 <- cv$V[c("xc", "xt"), c("xc", "xt")]
+          dimnames(V2) <- list(c("lncost", "tc"), c("lncost", "tc"))
+        }
+        pdec <- decline_from(b2, V2)
+      }
+      pcol <- list(
+        bench = "p.runs", spec = tt, head = "Pooled runs (ECI pts, FE)",
+        es = pes,
+        n = if (key == "S") nrow(pooled_acc_runs(d)) else
+          attr(pfit, "n_grid"),
+        decline = pdec, test = NULL)
+      cols <- append(cols, list(pcol),
+                     after = length(intersect(PRIMARY_BENCHES, benches)))
+    }
     if (tt != "bc") cols <- c(cols, list(pooled_col(key, tt, grid[[tt]])))
     out[[tt]] <- cols
   }
@@ -841,8 +916,8 @@ notes_cost <- function(key, tt) {
     "This model fits LN COST as the response, linear in logit accuracy and time (years,",
     "centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the",
     "benchmark's reference date. Runs scoring zero -- that is, no better than guessing, since",
-    "accuracy is rescaled from each benchmark's guessing floor -- are excluded, logit 0 being",
-    "unusable as a coordinate, and runs scoring n/n are clipped by their own sample size. Accuracy is a",
+    "accuracy is rescaled from each benchmark's guessing floor -- and runs scoring n/n are both",
+    "excluded, logit 0 and logit 1 being unusable as coordinates. Accuracy is a",
     "REGRESSOR here, so its sampling noise is measurement error, which attenuates the",
     "logit-accuracy slope.")
   se <- switch(key,
@@ -912,9 +987,10 @@ notes_cost <- function(key, tt) {
                                   "sum of squares with the Box-Cox Jacobian term), subject to the cost",
                                   "envelope's constraints,"),
            "against the likelihood (no Jacobian: the response is untransformed),"),
-    "and are reported without standard errors; a lambda of exactly 3 or -2 sits on the edge of",
-    "the search box, the flat profile having run to the wall. fm13's lambda_time is fixed at 1",
-    "(its five months of data identify no time curvature).",
+    "and are reported without standard errors. A lambda_time whose profile runs to the edge of",
+    "its search box ([-8, 8]) is treated as unidentified and locked at 1, and fm13's is fixed at",
+    "1 a priori (its short span identifies no time curvature); the pooled-runs column's lambda_odds",
+    "transforms exp(C/10) in place of the odds, a pure relabeling of lambda.",
     if (key %in% c("costsfa", "costsfab"))
       "The BC LR row tests the nesting restrictions, one df per free lambda plus the product term."
     else "")
@@ -924,15 +1000,25 @@ notes_cost <- function(key, tt) {
                            collapse = ", ")),
     "The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per",
     "year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is",
-    "needed. It is pooled by inverse-variance weights where every benchmark carries a covariance,",
-    "and by an unweighted mean otherwise (a mechanical average, as for the accuracy tables'",
-    "envelope and Pareto-grid columns). The other coefficients are in each benchmark's own logit",
-    "units and are not pooled. Pooled N sums the primary benchmark columns. The pooled pair covers",
-    "the linear specification only.")
+    "needed. It is pooled with weights alpha_b^2 x years of observed history -- the 2PL's",
+    "information about the shared capability times the time base the rate is estimated over,",
+    "the same rule as every pooled figure in the repo -- with the standard error from the",
+    "weighted combination where every benchmark carries a covariance. The other coefficients",
+    "are in each benchmark's own logit",
+    "units and are not pooled. Pooled N sums the primary benchmark columns. The final pooled",
+    "column covers the linear specification only.")
+  pruns <- paste(
+    "Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries'",
+    "runs stacked with logit accuracy converted to the anchored ECI capability scale (2PL:",
+    "C = logit(a)/alpha_b + D_b) and one fit taken with benchmark fixed effects (estimated, not",
+    "shown) absorbing cost-level differences. Its accuracy slope is log dollars per ECI POINT --",
+    "roughly alpha_b times a per-logit slope -- so it is not comparable cell for cell with the",
+    "other columns' accuracy rows; its time coefficient is in the same units as every other",
+    "column's.")
   switch(tt,
-         lin  = paste(dir, se, extra, decl, pool),
-         quad = paste(dir, se, extra, tst),
-         bc   = paste(dir, se, extra, bc))
+         lin  = paste(dir, se, extra, decl, pruns, pool),
+         quad = paste(dir, se, extra, tst, pruns),
+         bc   = paste(dir, se, extra, bc, pruns))
 }
 
 notes_plain <- function(key, kind, tt = "lin") {
@@ -969,8 +1055,10 @@ notes_plain <- function(key, kind, tt = "lin") {
     sprintf("(%s), mapping them", paste(pb, collapse = ", ")),
     "onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which",
     "logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same",
-    "capability-scale slope, and the pooled coefficient is their information-weighted (w = alpha^2) average,",
-    "sum(alpha b) / sum(alpha^2), in ECI points per unit regressor. The discriminations (estimated_slope_scaled",
+    "capability-scale slope, and the pooled coefficient is their weighted average with",
+    "w = alpha_b^2 x years of observed history -- information about the shared capability times the",
+    "time base the slopes are estimated over -- i.e. sum(alpha T b) / sum(alpha^2 T), in ECI points",
+    "per unit regressor. The discriminations (estimated_slope_scaled",
     sprintf("in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are %s,",
             paste(sprintf("%s %.3f", pb, ALPHA[pb]), collapse = ", ")),
     sprintf("so one logit is worth %.1f-%.1f ECI points and pooled slopes read several times larger than the",
@@ -1029,17 +1117,26 @@ notes_plain <- function(key, kind, tt = "lin") {
       "The BC specification nests the linear one (lambda_cost = 0, lambda_time = 1, no product term) but not the quadratic.",
     "fm13's five months of data sit 5.7-6.1 years from the origin, over which every lambda_time fits alike, so",
     "lambda_time is fixed at 1 there rather than estimated; elsewhere it is weakly identified and best read as",
-    "a shape the data tolerates rather than demands -- a lambda_time of exactly 3 or -2 sits on the edge of the",
-    "search box, the flat profile having run to the wall. This table has no pooled column: per-benchmark",
-    "lambdas put the BC slopes on different transforms, leaving no common scale for the alpha-weighted",
-    "average to land on.")
+    "a shape the data tolerates rather than demands -- a lambda_time whose profile runs to the edge of its",
+    "search box ([-8, 8]) is treated as unidentified and locked at 1. This table has no alpha-weighted pooled",
+    "column: per-benchmark lambdas put the BC slopes on different transforms, leaving no common scale for the",
+    "average to land on. The pooled-runs column fits its own lambdas to the stacked data instead.")
+  pruns <- if (key %in% c("S", "paretologit", "paretologitenv")) paste(
+    "Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries' runs are",
+    "stacked under one logit-link fit whose capability terms are each pre-scaled by the benchmark's alpha_b",
+    "-- the 2PL index alpha_b (C(ln cost, time) - D_b), with alpha_b and D_b imported as known -- plus",
+    "benchmark fixed effects (estimated, not shown). Equivalently, a heteroskedastic logit with known",
+    "benchmark scales 1/alpha_b. Its coefficients are in ECI capability points per unit regressor, roughly a",
+    "per-logit slope over alpha_b, so cells are larger than the per-benchmark columns'; the cost-drop ratio",
+    "is unit-free and directly comparable. The pooled-runs column reports point estimates without quadratic",
+    "or Box-Cox tests.") else ""
   intro <- paste("Time is measured in years and centered within benchmark, so the intercept is the",
                  "frontier at each benchmark's own reference date.")
   # one table per specification now, so each carries only its own paragraphs
   switch(tt,
-         lin  = paste(intro, decl, se, pool),
-         quad = paste(intro, se, tst, pool),
-         bc   = paste(se, bc))
+         lin  = paste(intro, decl, se, pruns, pool),
+         quad = paste(intro, se, tst, pruns, pool),
+         bc   = paste(se, bc, pruns))
 }
 
 notes_html <- function(key, kind, tt) {

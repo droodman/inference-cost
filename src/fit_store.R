@@ -90,3 +90,30 @@ store_cost <- function(key) fits_once(paste0(key, "_grid"), function() {
 store_cost_bc <- function(key) fits_once(paste0("bc_", key), function() {
   fit_cost_bc_by(key, load_runs())
 })
+
+# The pooled (ECI-units, benchmark-fixed-effects) cost fits: list(lin = ,
+# quad = ) of single fits over the stacked primary benchmarks, through
+# fit_pooled_cost (cost_frontier.R).
+store_pooled_cost <- function(key) fits_once(paste0(key, "_pooled"), function() {
+  d <- load_runs()
+  lapply(COST_FORMS, function(form) fit_pooled_cost(key, d, form))
+})
+
+# Its Box-Cox profile (least-squares keys only), la rescaled by
+# POOLED_BC_LA_SCALE -- see the pooled section of cost_frontier.R.
+store_pooled_cost_bc <- function(key) fits_once(paste0("bc_", key, "_pooled"),
+  function() fit_pooled_cost_bc(key, load_runs()))
+
+# The pooled accuracy fits (S / paretologit / paretologitenv; the SFA
+# families are deliberately not pooled -- envelope_frontier.R's pooled
+# section records why): list(lin =, quad =) of single fits, plus the Box-Cox
+# profile separately.
+store_pooled_acc <- function(key) fits_once(paste0(key, "_pooledacc"),
+  function() {
+    d <- load_runs()
+    lapply(c(lin = "lin", quad = "quad"),
+           function(tt) fit_pooled_acc(key, d, tt))
+  })
+
+store_pooled_acc_bc <- function(key) fits_once(paste0("bc_", key, "_pooledacc"),
+  function() fit_pooled_acc_bc(key, load_runs()))

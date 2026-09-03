@@ -1,7 +1,6 @@
 # Run every output-producing script in the analysis.
 #
-#     Rscript src/run_all.R                     everything, animations included
-#     Rscript src/run_all.R --skip-animations   everything except the mp4s
+#     Rscript src/run_all.R
 #
 # The scripts run in THIS process, each sourced into its own private
 # environment. One process, because the scripts draw their fits from the
@@ -38,14 +37,10 @@ SCRIPTS <- c(
   "plot_cost_frontier.R",  # cost-direction dual figures, both views
   "plot_surfaces_3d.R",    # interactive 3-D surfaces for the Pareto-grid pair
   "cost_frontier_report.R",# cost-direction dual fits: rate comparison (table)
-  "regression_tables.R",   # HTML + RTF tables in output/tables/
-  "animate_frontiers.R"    # semiannual-accumulation movies (slow; skippable)
+  "regression_tables.R"    # HTML + RTF tables in output/tables/
 )
 
 source(if (file.exists("src/paths.R")) "src/paths.R" else "paths.R")
-
-if ("--skip-animations" %in% commandArgs(trailingOnly = TRUE))
-  SCRIPTS <- setdiff(SCRIPTS, "animate_frontiers.R")
 
 # Each script's opening bootstrap (`source(if (file.exists("src/paths.R"))
 # ... else "paths.R")`) only resolves from the root or from src/. Pin the

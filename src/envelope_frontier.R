@@ -96,17 +96,35 @@ pareto_binding <- function(cost, t, L) {
 # both, so "the two models use the same grid" is true by construction rather
 # than by two seq() calls staying in sync.
 #
+# One TIME RESOLUTION for every grid, common across benchmarks and both
+# directions: a node every GRID_TIME_STEP years, endpoints pinned to the
+# observed range. Formerly every grid took the same 100 date columns over its
+# own span, so a short history was sampled more densely per unit time than a
+# long one. Within one benchmark's fit that is nearly invisible (the
+# estimates barely feel lattice density), but it silently equalized node
+# counts across benchmarks -- and in the POOLED fits node counts are weights,
+# where a benchmark's time dimension should count in proportion to the
+# history actually observed. 1/28 year (~13 days) gives the longest current
+# history (~3.5 years) about the 100 columns every grid used before.
+GRID_TIME_STEP <- 1 / 28
+grid_tc_seq <- function(rng)
+  seq(rng[1], rng[2],
+      length.out = max(2L, round(diff(rng) / GRID_TIME_STEP) + 1L))
+
 #   data    DATA FRAME with numeric columns lncost and tc; only their RANGES are
 #           used, so any superset of columns serves
 #   n_cost  SCALAR integer, number of nodes in log cost
-#   n_date  SCALAR integer, number of nodes in tc
+#   n_date  SCALAR integer, nodes in tc; NULL (the default, and what every
+#           standing caller uses) takes the common GRID_TIME_STEP resolution
 #
 # Returns a DATA FRAME of n_cost * n_date rows, numeric columns lncost and tc:
 # the full cross of two uniform sequences over the observed ranges, lncost
 # varying fastest.
-objective_grid <- function(data, n_cost = 100, n_date = 100) {
+objective_grid <- function(data, n_cost = 100, n_date = NULL) {
+  tc <- if (is.null(n_date)) grid_tc_seq(range(data$tc)) else
+    seq(min(data$tc), max(data$tc), length.out = n_date)
   expand.grid(lncost = seq(min(data$lncost), max(data$lncost), length.out = n_cost),
-              tc     = seq(min(data$tc),     max(data$tc),     length.out = n_date))
+              tc     = tc)
 }
 
 ## ---- companion model: logit fitted to the Pareto frontier on that grid ----------------
@@ -152,7 +170,7 @@ objective_grid <- function(data, n_cost = 100, n_date = 100) {
 # where P is undefined dropped. Split out of fit_pareto_logit() so the Box-Cox
 # lambda search (boxcox_frontier.R) can compute it ONCE per benchmark -- the
 # staircase does not depend on the lambdas, only the regressor columns do.
-pareto_grid_response <- function(data, n_cost = 100, n_date = 100) {
+pareto_grid_response <- function(data, n_cost = 100, n_date = NULL) {
   gr <- objective_grid(data, n_cost, n_date)
   s  <- data[order(data$lncost), ]
   gr$acc <- NA_real_
@@ -172,30 +190,35 @@ pareto_grid_response <- function(data, n_cost = 100, n_date = 100) {
 
 # The node set the nonparametric rate check below and its smoothed twin
 # (surface_decline_qtr, cost_frontier.R) SHARE, built once here so the two
-# cannot drift apart: at each of n_date dates with a full dt-year horizon
-# still ahead of it, n_level accuracy levels placed uniformly WITHIN the
-# state of the art at that date --
-#
-#     a_j(t) = SOTA(t) * (j - 1/2) / n_level,   j = 1..n_level
-#
-# the midpoint lattice on (0, SOTA(t)]. Shrinking the lattice to the achieved
-# range, rather than clipping a fixed one, keeps every date's node count
-# equal and makes every node well-defined by construction: no undefined
-# frontiers, no a = 0 rows (the midpoint offset keeps the lattice off both
-# endpoints, so C_a exists at the base date and, a fortiori, dt later), and
-# no exact-1 levels the fitted surfaces cannot be asked about. Dates before
-# a benchmark's first positive score contribute nothing.
+# cannot drift apart: at each GRID_TIME_STEP date with a full dt-year horizon
+# still ahead of it, a FIXED accuracy-uniform level lattice truncated to the
+# state of the art at that date -- see the block inside for the design and
+# what it replaced. Every surviving node is well-defined by construction (a
+# level at or below SOTA(t) has a record at t and, a fortiori, dt later),
+# and the node count per date grows as the record climbs, exactly as the
+# objective grids' defined-node counts do.
 #
 # Returns a DATA FRAME of columns tc and a, or NULL when no date has a full
 # horizon.
-decline_nodes <- function(data, n_level = 100, n_date = 100, dt = 1) {
-  tgrid <- seq(min(data$tc), max(data$tc), length.out = n_date)
+decline_nodes <- function(data, n_level = 100, dt = 1) {
+  tgrid <- grid_tc_seq(range(data$tc))
   tgrid <- tgrid[tgrid + dt <= max(data$tc)]
   if (!length(tgrid)) return(NULL)
+  # A FIXED level lattice over the benchmark's achieved range, TRUNCATED to
+  # the state of the art at each date -- the same defined-where-achieved rule
+  # the objective grids apply, so this node set and theirs weight the
+  # (level, date) plane the same way. It replaces a per-date rescaling,
+  # a_j(t) = SOTA(t) * (j - 1/2) / n_level, which held every date's node
+  # count equal by moving the levels themselves. Midpoints of the range, so
+  # no node sits at zero or exactly at the maximum before it is achieved;
+  # the floor is the smallest positive accuracy observed, as in iso_grid.
+  amax <- max(data$acc)
+  amin <- min(data$acc[data$acc > 0])
+  lev <- amin + (amax - amin) * (seq_len(n_level) - 0.5) / n_level
   do.call(rbind, lapply(tgrid, function(tk) {
-    sota <- max(data$acc[data$tc <= tk])
-    if (sota <= 0) return(NULL)
-    data.frame(tc = tk, a = sota * (seq_len(n_level) - 0.5) / n_level)
+    keep <- lev <= max(data$acc[data$tc <= tk])
+    if (!any(keep)) return(NULL)
+    data.frame(tc = tk, a = lev[keep])
   }))
 }
 
@@ -213,8 +236,10 @@ decline_nodes <- function(data, n_level = 100, n_date = 100, dt = 1) {
 # shift of the staircase at that node's level -- exactly what -b_t/b_x
 # measures on a fitted surface.
 #
-# The weighting is the node set's: levels uniform in ACCURACY within each
-# date's achieved range, dates uniform. An earlier version scored the check
+# The weighting is the node set's: a fixed accuracy-uniform level lattice
+# truncated to each date's state of the art, dates every GRID_TIME_STEP --
+# so dates weigh in proportion to how much of the range was achieved by
+# then, matching the objective grids. An earlier version scored the check
 # on the fits' own (log cost, date) objective grid, which weighted each level
 # by the log-cost WIDTH of its staircase step -- concentrating the average on
 # long-plateau levels pinned by single lucky cheap runs, and (it turned out)
@@ -252,8 +277,8 @@ decline_nodes <- function(data, n_level = 100, n_date = 100, dt = 1) {
 #   share_moved  SCALAR in [0, 1], fraction of nodes whose record moved at all
 #                over the horizon
 #   n_nodes      SCALAR integer, nodes entering the average
-pareto_decline_qtr <- function(data, n_level = 100, n_date = 100, dt = .25) {
-  nd <- decline_nodes(data, n_level, n_date, dt)
+pareto_decline_qtr <- function(data, n_level = 100, dt = .25) {
+  nd <- decline_nodes(data, n_level, dt)
   if (is.null(nd) || !nrow(nd)) return(NULL)
   s <- data[order(data$lncost), ]
   # log record cost of each level at date t: cheapest run no later than t
@@ -282,7 +307,7 @@ pareto_decline_qtr <- function(data, n_level = 100, n_date = 100, dt = .25) {
 # transform), and together they were a measured third of the profile's time.
 # Left NULL (every one-shot caller), behavior is unchanged.
 fit_pareto_logit <- function(data, formula = acc ~ lncost + tc,
-                             n_cost = 100, n_date = 100, grid_augment = NULL,
+                             n_cost = 100, n_date = NULL, grid_augment = NULL,
                              gr0 = NULL, n_corners = NULL) {
   gr <- if (is.null(gr0)) pareto_grid_response(data, n_cost, n_date) else gr0
   if (!is.null(grid_augment)) gr <- grid_augment(gr)
@@ -359,7 +384,32 @@ envelope_constraints <- function(data, formula, gr,
   # sweeping cost at a single date leaves the surface free to slope backwards at
   # another. e() returns a zero vector for an absent term, so this one block
   # covers every specification -- linear, cost-quadratic, time-quadratic, full.
-  if ("phic" %in% nmv) {
+  if ("xc" %in% nmv || "xphic" %in% nmv) {
+    # Pooled (ECI-units) terms (pooled_acc_runs): the index is
+    # alpha_b * C(ln c, tc) + FE_b, every capability term pre-scaled by its
+    # run's alpha_b (xc = alpha*lncost, ..., xphic = alpha*phic). alpha_b > 0
+    # divides out of each derivative's sign, so monotonicity of the SHARED
+    # capability surface -- at the corners of the stacked grid's raw
+    # bounding rectangle, a conservative superset of every benchmark's own
+    # -- enforces it for every benchmark:
+    #   dC/d ln c = b_xc + 2*b_xcc*ln c + b_xct*tc >= 0   (lin/quad)
+    #   dC/dphic  = b_xphic + b_xphixt*phit        >= 0   (Box-Cox)
+    mono <- if ("xphic" %in% nmv) rbind(
+      t(vapply(range(gr$phit), function(p) e("xphic") + p * e("xphixt"),
+               numeric(ncol(X)))),
+      t(vapply(range(gr$phic), function(p) e("xphit") + p * e("xphixt"),
+               numeric(ncol(X)))))
+    else {
+      corners <- expand.grid(lc0 = range(gr$lncost), tc0 = range(gr$tc))
+      rbind(
+        t(mapply(function(lc0, tc0)
+          e("xc") + 2 * lc0 * e("xcc") + tc0 * e("xct"),
+          corners$lc0, corners$tc0)),
+        t(mapply(function(lc0, tc0)
+          e("xt") + 2 * tc0 * e("xtt") + lc0 * e("xct"),
+          corners$lc0, corners$tc0)))
+    }
+  } else if ("phic" %in% nmv) {
     # Box-Cox terms (boxcox_frontier.R): z = b0 + bx*phic + bt*phit +
     # bxt*phic*phit, and phi is strictly increasing in its argument whatever
     # lambda is, so monotonicity in cost and date IS monotonicity in phic and
@@ -403,9 +453,10 @@ envelope_constraints <- function(data, formula, gr,
 #   margin  SCALAR, logit units of clearance above the tightest run
 feasible_start <- function(b0, Xb, Lb, margin) {
   b0[is.na(b0)] <- 0   # an aliased column would otherwise poison the lift
-  for (nm in c("I(lncost^2)", "I(tc^2)", "lncost:tc", "phixt"))
+  for (nm in c("I(lncost^2)", "I(tc^2)", "lncost:tc", "phixt",
+               "xcc", "xtt", "xct", "xphixt"))
     if (nm %in% names(b0)) b0[[nm]] <- 0
-  for (nm in c("lncost", "tc", "phic", "phit"))
+  for (nm in c("lncost", "tc", "phic", "phit", "xc", "xt", "xphic", "xphit"))
     if (nm %in% names(b0)) b0[[nm]] <- max(b0[[nm]], 0.05)
   b0[1] <- b0[1] + max(0, max(Lb - drop(Xb %*% b0))) + margin
   b0
@@ -501,7 +552,7 @@ coef.envelope_frontier <- function(object, ...) object$coefficients
 # warm-started solve that ends infeasible falls back to the cold start rather
 # than failing.
 fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
-                                 n_cost = 100, n_date = 100, margin = 0.05,
+                                 n_cost = 100, n_date = NULL, margin = 0.05,
                                  grid_augment = NULL,
                                  gr0 = NULL, bind = NULL, n_corners = NULL,
                                  start = NULL) {
@@ -554,4 +605,222 @@ fit_pareto_logit_env <- function(data, formula = acc ~ lncost + tc,
   attr(fit, "n_corners") <- if (is.null(n_corners))
     length(pareto_binding(data$lncost, data$tc, data$acc)) else n_corners
   fit
+}
+
+## ---- pooled accuracy fits (ECI units) --------------------------------------------------
+#
+# The accuracy-direction mirror of the pooled cost fits (cost_frontier.R):
+# the five primaries stacked under ONE logit-link model. The 2PL writes
+# logit E(a) = alpha_b * (C(ln c, t) - D_b) with C the shared capability
+# surface; with alpha_b and D_b imported as known (ALPHA / EDI,
+# prepare_data.R) rather than estimated, that is an ORDINARY fractional
+# logit whose capability terms are pre-scaled by alpha_b -- xc = alpha *
+# lncost and so on, one alpha on every term of C, NOT (alpha*lncost)^2 --
+# and whose benchmark fixed effects absorb alpha_b*(C-intercept - D_b). The
+# latent-variable reading is a heteroskedastic logit with KNOWN benchmark
+# error scales 1/alpha_b; nothing is estimated beyond the shared surface and
+# the fixed effects, and each benchmark's information about the shared
+# coefficients is automatically proportional to alpha_b^2 -- the same weight
+# the estimate-pooling applies by hand. The response is untouched: only the
+# index changes.
+#
+# The frontier-per-se fits keep their per-benchmark structure exactly as the
+# pooled cost fits do: each primary's staircase sampled on its own grid,
+# stacked with the bench factor; Pareto reduction within benchmark; the
+# monotonicity block's pooled branch in envelope_constraints() above.
+#
+# The SFA families (A/B) are deliberately NOT pooled: their one-sided u would
+# need a known alpha_b-proportional scale (an offset in ln sigma_u), a real
+# change to the likelihood that those fits have not earned.
+POOLED_ACC_FORMS <- list(
+  lin  = acc ~ xc + xt + bench,
+  quad = acc ~ xc + xt + xcc + xtt + xct + bench)
+
+# The alpha-scaled capability terms, added to runs and grid rows alike; the
+# quad terms are alpha * lncost^2 etc., one alpha per term of C.
+pooled_acc_scale <- function(x) {
+  x$xc  <- x$alpha * x$lncost
+  x$xt  <- x$alpha * x$tc
+  x$xcc <- x$alpha * x$lncost^2
+  x$xtt <- x$alpha * x$tc^2
+  x$xct <- x$alpha * x$lncost * x$tc
+  x
+}
+
+pooled_acc_runs <- function(d) {
+  s <- d[d$benchmark %in% PRIMARY_BENCHES, ]
+  s$bench <- factor(s$benchmark)
+  s$alpha <- unname(ALPHA[s$benchmark])
+  s$benchmark <- "pooled"
+  # one reference date for the pooled sample, recoverable as t - tc
+  s$tc <- s$t - mean(s$t)
+  pooled_acc_scale(s)
+}
+
+# The stacked grid: each primary's staircase on its own (lncost, tc)
+# rectangle, carrying bench and the scaled terms.
+pooled_acc_grid <- function(sa, n_cost = 100, n_date = NULL) {
+  do.call(rbind, lapply(levels(sa$bench), function(b) {
+    g <- pareto_grid_response(sa[sa$bench == b, ], n_cost, n_date)
+    g$bench <- factor(b, levels = levels(sa$bench))
+    g$alpha <- unname(ALPHA[[b]])
+    pooled_acc_scale(g)
+  }))
+}
+
+# Envelope candidates, Pareto-reduced WITHIN benchmark (surfaces differ by
+# the fixed effect, so no run can dominate across benchmarks), as indices
+# into the pooled frame.
+pooled_acc_binding <- function(sa) {
+  unlist(lapply(levels(sa$bench), function(b) {
+    i <- which(sa$bench == b)
+    L <- qlogis(clip_acc(sa$acc[i], sa$n_samples[i]))
+    pos <- which(is.finite(L) & sa$acc[i] > 0)
+    i[pos[pareto_binding(sa$lncost[i][pos], sa$tc[i][pos], L[pos])]]
+  }))
+}
+
+# THE recipe for the pooled fit of each accuracy key (S, paretologit,
+# paretologitenv), lin and quad; the Box-Cox variant is fit_pooled_acc_bc
+# (boxcox_frontier.R).
+fit_pooled_acc <- function(key, d, tt = "lin") {
+  sa <- pooled_acc_runs(d)
+  form <- POOLED_ACC_FORMS[[tt]]
+  if (key == "S")
+    return(glm(form, data = sa, family = quasibinomial(link = "logit")))
+  gr <- pooled_acc_grid(sa)
+  bind <- pooled_acc_binding(sa)
+  if (key == "paretologit")
+    fit_pareto_logit(sa, form, gr0 = gr, n_corners = length(bind))
+  else
+    fit_pareto_logit_env(sa, form, gr0 = gr, bind = bind,
+                         n_corners = length(bind))
+}
+
+# Anchored display constant for the pooled capability surface: the fixed
+# effect for bench b is alpha_b*(C0 - D_b) folded with the intercept, so C0
+# is recovered per benchmark and averaged -- the additive constant that puts
+# the drawn surface on the anchored ECI scale (Claude 3.5 Sonnet = 130).
+pooled_acc_c0 <- function(fit, sa) {
+  cf <- coef(fit)
+  names(cf) <- sub("^beta_", "", names(cf))
+  bs <- levels(sa$bench)
+  g <- vapply(bs, function(b) {
+    nm <- paste0("bench", b)
+    unname(cf[["(Intercept)"]]) + if (nm %in% names(cf)) unname(cf[[nm]]) else 0
+  }, 0)
+  mean(g / ALPHA[bs] + EDI[bs])
+}
+
+# Capability-versus-cost curves at each drawn date for the pooled panel: the
+# fitted shared surface C(ln c, t) plus the anchored constant, in ECI points.
+pooled_acc_frontier_curves <- function(fit, sa, dates, n_cost = 200) {
+  cf <- coef(fit)
+  gv <- function(nm) if (nm %in% names(cf) && is.finite(cf[[nm]]))
+    unname(cf[[nm]]) else 0
+  c0 <- pooled_acc_c0(fit, sa)
+  tbar <- (sa$t - sa$tc)[1]
+  lam <- attr(fit, "bc_lambda")
+  g <- expand.grid(lncost = seq(min(sa$lncost), max(sa$lncost),
+                                length.out = n_cost),
+                   qdate = dates)
+  tc <- as_t(g$qdate) - tbar
+  val <- if (!is.null(lam)) {
+    off <- (sa$year - sa$tc)[1] - BC_T0
+    phic <- bc_tf(exp(g$lncost), lam[["lambda_cost"]])
+    phit <- bc_tf(tc + off, lam[["lambda_time"]])
+    c0 + gv("xphic") * phic + gv("xphit") * phit + gv("xphixt") * phic * phit
+  } else {
+    c0 + gv("xc") * g$lncost + gv("xt") * tc + gv("xcc") * g$lncost^2 +
+      gv("xtt") * tc^2 + gv("xct") * g$lncost * tc
+  }
+  data.frame(cost = exp(g$lncost), value = val, qdate = g$qdate,
+             benchmark = "pooled", year = 2023 + as_t(g$qdate))
+}
+
+# Everything a figure script needs to draw the pooled sixth panel, built
+# once: the pooled frame, its runs re-expressed as anchored ECI capabilities
+# (C = logit(a)/alpha_b + D_b, non-finite dropped) for points and staircases,
+# pretty ECI contour levels, the pooled date grid, and the two staircase
+# overlays. The staircase machinery is generic in (cost, acc), so handing it
+# C as `acc` yields ECI-unit staircases.
+pooled_acc_display <- function(d, dates_grid, levels_n = 5) {
+  sa <- pooled_acc_runs(d)
+  spx <- sa
+  spx$acc <- qlogis(spx$acc) / spx$alpha + EDI[as.character(spx$bench)]
+  spx <- spx[is.finite(spx$acc), , drop = FALSE]
+  lv <- pretty(range(spx$acc), levels_n)
+  lv <- lv[lv > min(spx$acc) & lv < max(spx$acc)]
+  dts <- dates_grid[dates_grid >= min(sa$releasedate)]
+  list(sa = sa, spx = spx, levels = lv, dates = dts,
+       steps = pareto_curves(spx, setNames(list(dts), "pooled")),
+       iso_steps = iso_pareto_curves(spx, lv))
+}
+
+# Iso-capability contours for the pooled panel: iso_acc_curves() with the
+# pooled coefficient names, the target level entering RAW (it is already an
+# index value, in ECI points -- no qlogis), and the same two-root fold,
+# clip, and cap machinery.
+pooled_acc_iso_curves <- function(fit, sa, levels, n_date = 300,
+                                  min_slope = 0.05, cost_cap = NULL) {
+  cf <- coef(fit)
+  gv <- function(nm) if (nm %in% names(cf) && is.finite(cf[[nm]]))
+    unname(cf[[nm]]) else 0
+  c0 <- pooled_acc_c0(fit, sa)
+  urng <- range(sa$lncost)
+  dts <- seq(min(sa$releasedate), max(sa$releasedate), length.out = n_date)
+  g <- expand.grid(date = dts, acc = levels)
+  tbar <- (sa$t - sa$tc)[1]
+  tc <- as_t(g$date) - tbar
+  lam <- attr(fit, "bc_lambda")
+  if (!is.null(lam)) {
+    off <- (sa$year - sa$tc)[1] - BC_T0
+    phit <- bc_tf(tc + off, lam[["lambda_time"]])
+    bb <- gv("xphic") + gv("xphixt") * phit
+    phic <- (g$acc - c0 - gv("xphit") * phit) / bb
+    phic[bb <= 0] <- NA_real_
+    roots <- list(rising = log(bc_inv(phic, lam[["lambda_cost"]])))
+    disc <- rep(NA_real_, nrow(g))
+  } else {
+    aa <- gv("xcc")
+    bb <- gv("xc") + gv("xct") * tc
+    cc <- c0 + gv("xt") * tc + gv("xtt") * tc^2 - g$acc
+    if (abs(aa) < 1e-10) {
+      u <- -cc / bb
+      u[bb < min_slope] <- NA_real_
+      roots <- list(rising = u)
+      disc <- rep(NA_real_, nrow(g))
+    } else {
+      disc <- bb^2 - 4 * aa * cc
+      slope <- sqrt(pmax(disc, 0))
+      roots <- list(rising  = (-bb + slope) / (2 * aa),
+                    falling = (-bb - slope) / (2 * aa))
+      roots <- lapply(roots, function(u) { u[disc < 0] <- NA_real_; u })
+    }
+  }
+  cap_u <- rep(Inf, nrow(g))
+  birth <- rep(-Inf, nrow(g))
+  if (!is.null(cost_cap)) {
+    lv <- unique(cost_cap$acc)
+    i <- match(g$acc, lv)
+    cap_u <- log(vapply(lv, function(a) max(cost_cap$cost[cost_cap$acc == a]),
+                        numeric(1)))[i]
+    birth <- vapply(lv, function(a)
+      as.numeric(min(cost_cap$date[cost_cap$acc == a])), numeric(1))[i]
+    cap_u[is.na(cap_u)] <- -Inf
+    birth[is.na(birth)] <- Inf
+  }
+  both <- do.call(rbind, lapply(names(roots), function(br) {
+    u <- roots[[br]]
+    u[is.finite(u) &
+        (u < urng[1] | u > urng[2] |
+           !(u <= cap_u | as.numeric(g$date) >= birth))] <- NA_real_
+    h <- g
+    h$cost <- exp(u)
+    h$branch <- br
+    h$disc <- disc
+    h
+  }))
+  both$benchmark <- "pooled"
+  iso_segments(both)
 }

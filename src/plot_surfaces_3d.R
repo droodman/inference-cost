@@ -32,6 +32,12 @@
 # where the surface bends back or the transform has no preimage -- holes, not
 # folds, exactly as the 2-D figures blank.
 #
+# Every page and heatmap also carries the POOLED pseudo-benchmark as a sixth
+# panel (after the primaries it stacks): the pooled fits drawn at their
+# benchmark fixed effects' mean, the level axis in anchored ECI capability
+# points, and the empirical surfaces the pooled records in those units --
+# see the pooled sections of cost_frontier.R and envelope_frontier.R.
+#
 # A third view, surface3d_<key>_<spec>_decline.html (12 more files), plots the
 # INSTANTANEOUS RATE OF COST DECLINE at fixed accuracy -- d ln C / dt read off
 # each fitted surface, as a quarterly percentage -- over (accuracy, date); see
@@ -63,13 +69,24 @@ tbar <- bench_tbar(d)
 ACC_KEYS <- c("paretologit", "paretologitenv")
 
 # All from the shared store (fit_store.R): under run_all.R these are the same
-# objects the 2-D figure scripts and the tables already fitted.
+# objects the 2-D figure scripts and the tables already fitted. Each spec's
+# per-benchmark list gains the pooled fit under "pooled", so the scene/facet
+# loops below can treat it as a sixth panel.
 fits <- list()
 for (key in c(ACC_KEYS, "costgridols", "costgridolsenv")) {
   grid <- if (key %in% ACC_KEYS) store_grid(key) else store_cost(key)
   fits[[key]] <- c(grid, list(
     bc = if (key %in% ACC_KEYS) store_bc(key) else store_cost_bc(key)))
+  pooled <- if (key %in% ACC_KEYS) store_pooled_acc(key) else
+    store_pooled_cost(key)
+  for (tt in c("lin", "quad"))
+    fits[[key]][[tt]][["pooled"]] <- pooled[[tt]]
+  fits[[key]]$bc[["pooled"]] <- if (key %in% ACC_KEYS)
+    store_pooled_acc_bc(key) else store_pooled_cost_bc(key)
 }
+
+# The panel set: primaries, the pooled pseudo-benchmark sixth, secondaries.
+panels <- append(benches, "pooled", after = length(PRIMARY_BENCHES))
 
 ## ---- per-benchmark lattices and empirical surfaces --------------------------------
 #
@@ -119,6 +136,45 @@ bundle <- function(b) {
        zrng_cost = range(s$lncost) + c(-0.5, 0.5))
 }
 bundles <- setNames(lapply(benches, bundle), benches)
+
+# The pooled pseudo-benchmark's bundle, same field names so the loops below
+# need no special cases beyond the evaluators: la holds the ANCHORED ECI
+# capability C (uniform lattice -- accuracy-uniform spacing saturates at
+# these values), P the best capability achieved at cost <= node by each date,
+# R the record cost of capability >= node. The runs frame is the cost-side
+# pooled one (pooled_cost_runs: la = C, zeros and ones dropped); the
+# accuracy-side frame rides along as `sa` because the two demean time over
+# slightly different row sets, so each direction's evaluator uses its own
+# reference (tb_cost / tb_acc).
+pooled_bundle <- function() {
+  s  <- pooled_cost_runs(d)
+  sa <- pooled_acc_runs(d)
+  tb_cost <- (s$t - s$tc)[1]
+  tb_acc  <- (sa$t - sa$tc)[1]
+  lnc <- seq(min(s$lncost), max(s$lncost), length.out = N_X)
+  la  <- seq(min(s$la), max(s$la), length.out = N_X)
+  tc  <- seq(min(s$tc), max(s$tc), length.out = N_T)
+  so <- s[order(s$lncost), ]
+  P <- matrix(NA_real_, N_T, N_X)
+  R <- matrix(NA_real_, N_T, N_X)
+  for (k in seq_len(N_T)) {
+    el <- so[so$tc <= tc[k], ]
+    if (!nrow(el)) next
+    m <- cummax(el$la)
+    idx <- findInterval(lnc, el$lncost)
+    P[k, ] <- ifelse(idx >= 1, m[pmax(idx, 1)], NA_real_)
+    R[k, ] <- vapply(la, function(a) {
+      j <- which(m >= a)[1]
+      if (is.na(j)) NA_real_ else el$lncost[j]
+    }, numeric(1))
+  }
+  list(s = s, sa = sa, off = tb_cost + 2023 - BC_T0,
+       tb_cost = tb_cost, tb_acc = tb_acc,
+       lnc = lnc, la = la, tc = tc, year = tc + tb_cost + 2023, P = P, R = R,
+       zrng_cost = range(s$lncost) + c(-0.5, 0.5),
+       zrng_eci = range(s$la) + c(-2, 2))
+}
+bundles[["pooled"]] <- pooled_bundle()
 
 ## ---- fitted surfaces on each lattice ----------------------------------------------
 #
@@ -209,6 +265,105 @@ zcost_inverted <- function(fit, bl) {
   }
 }
 
+## ---- the pooled panel's evaluators --------------------------------------------------
+#
+# The pooled fits carry benchmark fixed effects and (accuracy direction)
+# alpha-scaled term names, so the per-benchmark evaluators above cannot read
+# them; these mirrors draw ONE surface at the fixed effects' mean, in
+# anchored ECI units on the capability axis. The accuracy direction's
+# evaluators convert the bundle's cost-frame tc to the accuracy frame's
+# (tb_cost vs tb_acc, pooled_bundle).
+
+# named-coefficient getter tolerant of absent terms (lin has no xcc etc.)
+pgv <- function(fit) {
+  cf <- coef(fit)
+  names(cf) <- sub("^beta_", "", names(cf))
+  function(nm) if (nm %in% names(cf) && is.finite(cf[[nm]]))
+    unname(cf[[nm]]) else 0
+}
+
+# pooled accuracy fit: capability C over (lnc, tc) -- native (z in ECI points)
+pz_acc_native <- function(fit, bl) {
+  gv <- pgv(fit)
+  c0 <- pooled_acc_c0(fit, bl$sa)
+  g <- grid_lt(bl$lnc, bl$tc)
+  lam <- attr(fit, "bc_lambda")
+  v <- if (!is.null(lam)) {
+    phic <- bc_tf(exp(g$x), lam[["lambda_cost"]])
+    phit <- bc_tf(g$t + bl$off, lam[["lambda_time"]])
+    c0 + gv("xphic") * phic + gv("xphit") * phit + gv("xphixt") * phic * phit
+  } else {
+    ta <- g$t + bl$tb_cost - bl$tb_acc
+    c0 + gv("xc") * g$x + gv("xt") * ta + gv("xcc") * g$x^2 +
+      gv("xtt") * ta^2 + gv("xct") * g$x * ta
+  }
+  as_z(v)
+}
+
+# pooled accuracy fit inverted: ln cost over (C, tc)
+pz_acc_inverted <- function(fit, bl) {
+  gv <- pgv(fit)
+  c0 <- pooled_acc_c0(fit, bl$sa)
+  g <- grid_lt(bl$la, bl$tc)
+  lam <- attr(fit, "bc_lambda")
+  u <- if (!is.null(lam)) {
+    phit <- bc_tf(g$t + bl$off, lam[["lambda_time"]])
+    bb <- gv("xphic") + gv("xphixt") * phit
+    phic <- (g$x - c0 - gv("xphit") * phit) / bb
+    phic[bb <= 0] <- NA_real_
+    log(bc_inv(phic, lam[["lambda_cost"]]))
+  } else {
+    ta <- g$t + bl$tb_cost - bl$tb_acc
+    aa <- gv("xcc")
+    bb <- gv("xc") + gv("xct") * ta
+    cc <- c0 + gv("xt") * ta + gv("xtt") * ta^2 - g$x
+    if (abs(aa) < 1e-10) {
+      out <- -cc / bb; out[bb < 0.05] <- NA_real_; out
+    } else {
+      disc <- bb^2 - 4 * aa * cc
+      out <- (-bb + sqrt(pmax(disc, 0))) / (2 * aa)   # rising branch
+      out[disc < 0] <- NA_real_; out
+    }
+  }
+  as_z(u)
+}
+
+# pooled cost fit: ln cost over (C, tc) -- native; pooled_surface handles the
+# fixed-effect mean and the Box-Cox la rescaling
+pz_cost_native <- function(fit, bl) {
+  srf <- pooled_surface(fit, bl$s)
+  g <- grid_lt(bl$la, bl$tc)
+  as_z(srf$f(g$x, g$t))
+}
+
+# pooled cost fit inverted: capability C over (lnc, tc)
+pz_cost_inverted <- function(fit, bl) {
+  g <- grid_lt(bl$lnc, bl$tc)
+  fe <- pooled_fe_mean(fit)
+  if (is_cost_bc(fit)) {
+    cf <- coef(fit); names(cf) <- sub("^beta_", "", names(cf))
+    lam <- attr(fit, "bc_lambda")
+    phit <- bc_tf(g$t + bl$off, lam[["lambda_time"]])
+    bb <- cf[["phia"]] + cf[["phiat"]] * phit
+    phia <- (g$x - cf[["(Intercept)"]] - fe - cf[["phit"]] * phit) / bb
+    phia[bb <= 0] <- NA_real_
+    as_z(POOLED_BC_LA_SCALE * log(bc_inv(phia, lam[["lambda_odds"]])))
+  } else {
+    co <- cost_coefs(fit)
+    aa <- co[["gaa"]]
+    bb <- co[["ga"]] + co[["gat"]] * g$t
+    cc <- co[["g0"]] + fe + co[["gt"]] * g$t + co[["gtt"]] * g$t^2 - g$x
+    u <- if (abs(aa) < 1e-10) {
+      out <- -cc / bb; out[bb < 0.05] <- NA_real_; out
+    } else {
+      disc <- bb^2 - 4 * aa * cc
+      out <- (-bb + sqrt(pmax(disc, 0))) / (2 * aa)   # rising branch
+      out[disc < 0] <- NA_real_; out
+    }
+    as_z(u)
+  }
+}
+
 ## ---- assembly ----------------------------------------------------------------------
 
 SURFACE  <- "#101014"; INK <- "#f2f1ec"; MUTED <- "#8f8e88"; GRID <- "#26262c"
@@ -259,14 +414,14 @@ CAMERA <- list(eye = list(x = -1.2, y = -1.2, z = 0.7))
 # The "decline" view has no empirical counterpart (pass zs_emp = NULL): the
 # fitted rate surface is drawn filled, over (accuracy, year).
 page <- function(zs_emp, zs_fit, xs, view) {
-  # Full-bleed cells, two across and however many rows the benchmark count
+  # Full-bleed cells, two across and however many rows the panel count
   # needs (mirroring the 2-D figures' N x 2 facets): scenes carry generous
   # internal padding of their own, so explicit gutters between the domains
   # only compound the dead space; the benchmark titles sit on the seams. The
   # page's pixel height scales with the row count so each scene keeps a
   # usable size, and the viewer's iframe scrolls.
-  n_rows <- ceiling(length(benches) / 2)
-  doms <- lapply(seq_along(benches), function(i) {
+  n_rows <- ceiling(length(panels) / 2)
+  doms <- lapply(seq_along(panels), function(i) {
     r <- ceiling(i / 2)
     c0 <- (i - 1) %% 2
     list(x = c(0.5 * c0, 0.5 * c0 + 0.5),
@@ -276,8 +431,8 @@ page <- function(zs_emp, zs_fit, xs, view) {
   lay <- list(paper_bgcolor = SURFACE, font = list(color = INK),
               showlegend = FALSE, margin = list(l = 0, r = 0, t = 22, b = 0))
   ann <- list()
-  for (i in seq_along(benches)) {
-    b <- benches[i]
+  for (i in seq_along(panels)) {
+    b <- panels[i]
     bl <- bundles[[b]]
     sc <- if (i == 1) "scene" else paste0("scene", i)
     if (is.null(zs_emp)) {
@@ -297,14 +452,18 @@ page <- function(zs_emp, zs_fit, xs, view) {
                        contours = list(x = mesh(xr), y = mesh(yr)),
                        name = "fitted")
     }
+    # the pooled scene's accuracy axes are ECI capability scores -- plain
+    # numeric, its own range -- where the benchmark scenes use percent
+    pooled <- b == "pooled"
     zx <- if (view == "frontier")
       list(xaxis = ax_cost(range(xs[[b]])),
-           zaxis = c(ax("accuracy"), list(range = c(0, 1))))
+           zaxis = if (pooled) c(ax("ECI score"), list(range = bl$zrng_eci))
+                   else c(ax("accuracy"), list(range = c(0, 1))))
     else if (view == "isoaccuracy")
-      list(xaxis = ax_prob(range(xs[[b]])),
+      list(xaxis = if (pooled) ax("ECI score") else ax_prob(range(xs[[b]])),
            zaxis = c(ax_cost(bl$zrng_cost), list(range = bl$zrng_cost)))
     else
-      list(xaxis = ax_prob(range(xs[[b]])),
+      list(xaxis = if (pooled) ax("ECI score") else ax_prob(range(xs[[b]])),
            zaxis = ax("cost drop, %/qtr"))
     lay[[sc]] <- c(list(domain = doms[[i]], yaxis = ax("year"),
                         aspectmode = "cube", camera = CAMERA), zx)
@@ -313,7 +472,7 @@ page <- function(zs_emp, zs_fit, xs, view) {
     # anchored ones read as captions of the plot above; the corner is where
     # the neighbouring scene's centred cube leaves the most clearance, and it
     # matches the 2-D facet labels (left-aligned, frontier_theme).
-    ann[[i]] <- list(text = LABELS[[b]], x = doms[[i]]$x[1] + 0.01,
+    ann[[i]] <- list(text = LABELS_POOLED[[b]], x = doms[[i]]$x[1] + 0.01,
                      y = doms[[i]]$y[2] - 0.01, xanchor = "left",
                      yanchor = "top", xref = "paper", yref = "paper",
                      showarrow = FALSE, font = list(color = INK, size = 14))
@@ -376,7 +535,12 @@ heat_anchor <- function(view, b, zs_ref = NULL) {
   if (r[1] == r[2]) r + c(-0.5, 0.5) else r
 }
 
-fmt_anchor <- function(view, r) {
+# The pooled panel's frontier-view fill is capability in ECI points, not
+# accuracy, so its bracket says so; the other two views' units (dollars,
+# %/qtr) are common to every panel including the pooled one.
+fmt_anchor <- function(view, r, b = "") {
+  if (view == "frontier" && b == "pooled")
+    return(sprintf("[%.0f, %.0f ECI]", r[1], r[2]))
   switch(view,
          frontier    = sprintf("[%.0f%%, %.0f%%]", 100 * r[1], 100 * r[2]),
          isoaccuracy = sprintf("[%s, %s]", dollar_log(exp(r[1])),
@@ -385,9 +549,9 @@ fmt_anchor <- function(view, r) {
 }
 
 heat_labels <- function(view, zs_ref = NULL) {
-  setNames(vapply(benches, function(b)
-    sprintf("%s  %s", LABELS[[b]],
-            fmt_anchor(view, heat_anchor(view, b, zs_ref))), ""), benches)
+  setNames(vapply(panels, function(b)
+    sprintf("%s  %s", LABELS_POOLED[[b]],
+            fmt_anchor(view, heat_anchor(view, b, zs_ref), b)), ""), panels)
 }
 
 # The long data frame geom_raster wants, from a benchmark-keyed list of
@@ -395,7 +559,7 @@ heat_labels <- function(view, zs_ref = NULL) {
 # Column-major as.vector makes the date index vary fastest, matching
 # rep(x, each = N_T).
 heat_df <- function(zs, xs, view, labs_b, zs_ref = NULL) {
-  do.call(rbind, lapply(benches, function(b) {
+  do.call(rbind, lapply(panels, function(b) {
     bl <- bundles[[b]]
     a <- heat_anchor(view, b, zs_ref)
     zn <- (zs[[b]] - a[1]) / (a[2] - a[1])
@@ -426,7 +590,7 @@ frontier_steps <- function(view, labs_b) {
     data.frame(x = rep(xk, each = 2),
                year = as.vector(rbind(yk, c(yk[-1], ymax))))
   }
-  do.call(rbind, lapply(benches, function(b) {
+  do.call(rbind, lapply(panels, function(b) {
     bl <- bundles[[b]]
     if (view == "frontier") {
       s <- bl$s[order(bl$s$tc), ]
@@ -434,7 +598,9 @@ frontier_steps <- function(view, labs_b) {
     } else {
       s <- iso_runs(bl$s)
       s <- s[order(s$tc), ]
-      v <- plogis(s$la)   # the accuracy axes plot plain accuracy
+      # the accuracy axes plot plain accuracy; the pooled panel's la IS its
+      # axis variable (anchored ECI capability), no transform
+      v <- if (b == "pooled") s$la else plogis(s$la)
     }
     ymax <- max(bl$year)
     out <- rbind(cbind(one_run(v, s$year, ymax, cummin), side = "lo"),
@@ -498,16 +664,23 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
     p + scale_y_continuous(name = "Cost per task (log scale)",
                            breaks = COST_BRK, labels = COST_LAB)
   } else {
-    p + scale_y_continuous(name = "Accuracy",
-                           breaks = seq(0, 1, 0.25),
-                           labels = sprintf("%d%%", seq(0, 100, 25)))
+    # the pooled panel's vertical axis is capability in ECI points (~60-165)
+    # under the same free facet scales; percent breaks would fall outside its
+    # range and leave it unlabelled, so breaks and labels both branch on the
+    # panel's own limits
+    p + scale_y_continuous(
+      name = "Accuracy / ECI score",
+      breaks = function(l) if (l[2] > 1.5) scales::extended_breaks()(l)
+               else seq(0, 1, 0.25),
+      labels = function(v) ifelse(v > 1.5, sprintf("%g", v),
+                                  sprintf("%d%%", round(100 * v))))
   }
 }
 
 save_heatmap <- function(zs, xs, view, key, spec, zs_ref = NULL) {
   fh <- sprintf("heatmap_%s_%s_%s.png", key, spec, view)
   ggsave(out_path(fh), heat_plot(zs, xs, view, zs_ref), width = 10,
-         height = fig_height(length(benches)), dpi = 200,
+         height = fig_height(length(panels)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fh, "\n")
 }
@@ -517,19 +690,29 @@ for (spec in c("lin", "quad", "bc")) {
   for (key in names(fits)) {
     fset <- fits[[key]][[spec]]
     for (view in VIEWS) {
+      # the pooled panel's level axis is the anchored ECI capability itself
       xs <- lapply(bundles, function(bl)
-        if (view == "frontier") bl$lnc else plogis(bl$la))
+        if (view == "frontier") bl$lnc
+        else if (is.null(bl$sa)) plogis(bl$la) else bl$la)
       zs_emp <- lapply(bundles, function(bl) if (view == "frontier") bl$P else bl$R)
-      zs_fit <- setNames(lapply(benches, function(b) {
+      zs_fit <- setNames(lapply(panels, function(b) {
         bl <- bundles[[b]]
-        if (key %in% ACC_KEYS) {
+        if (b == "pooled") {
+          if (key %in% ACC_KEYS) {
+            if (view == "frontier") pz_acc_native(fset[[b]], bl)
+            else pz_acc_inverted(fset[[b]], bl)
+          } else {
+            if (view == "frontier") pz_cost_inverted(fset[[b]], bl)
+            else pz_cost_native(fset[[b]], bl)
+          }
+        } else if (key %in% ACC_KEYS) {
           if (view == "frontier") zacc_native(fset[[b]], bl)
           else zacc_inverted(fset[[b]], bl)
         } else {
           if (view == "frontier") zcost_inverted(fset[[b]], bl)
           else zcost_native(fset[[b]], bl)
         }
-      }), benches)
+      }), panels)
       w <- page(zs_emp, zs_fit, xs, view)
       f <- sprintf("surface3d_%s_%s_%s.html", key, spec, view)
       # a DETERMINISTIC element id: saveWidget otherwise stamps a random
@@ -639,15 +822,79 @@ decline_cost <- function(fit, bl, mask = TRUE) {
   z
 }
 
+# The pooled panel's decline surfaces, over (ECI capability, date): the same
+# quantities off the pooled fits, at the fixed effects' mean (which the
+# time-derivative is free of -- the effects are additive in ln cost).
+pdecline_cost <- function(fit, bl, mask = TRUE) {
+  g <- grid_lt(bl$la, bl$tc)
+  urng <- range(bl$s$lncost)
+  fe <- pooled_fe_mean(fit)
+  if (is_cost_bc(fit)) {
+    cf <- coef(fit)
+    names(cf) <- sub("^beta_", "", names(cf))
+    lam <- attr(fit, "bc_lambda")
+    tau <- g$t + bl$off
+    phia <- bc_tf(exp(g$x / POOLED_BC_LA_SCALE), lam[["lambda_odds"]])
+    phit <- bc_tf(tau, lam[["lambda_time"]])
+    lnC <- cf[["(Intercept)"]] + fe + cf[["phia"]] * phia +
+      cf[["phit"]] * phit + cf[["phiat"]] * phia * phit
+    rate <- (cf[["phit"]] + cf[["phiat"]] * phia) *
+      tau^(lam[["lambda_time"]] - 1)
+  } else {
+    co <- cost_coefs(fit)
+    lnC <- cost_index(co, g$x, g$t) + fe
+    rate <- cost_dtime(co, g$x, g$t)
+  }
+  rate[is.na(lnC)] <- NA_real_
+  if (mask) rate[lnC < urng[1] | lnC > urng[2]] <- NA_real_
+  z <- as_z(100 * (1 - exp(rate / 4)))
+  if (mask) z[is.na(bl$R)] <- NA_real_
+  z[!is.finite(z)] <- NA_real_
+  z
+}
+
+pdecline_acc <- function(fit, bl, mask = TRUE) {
+  u <- pz_acc_inverted(fit, bl)             # ln cost over (C, tc)
+  if (mask) {
+    urng <- range(bl$s$lncost)
+    u[u < urng[1] | u > urng[2]] <- NA_real_
+  }
+  gv <- pgv(fit)
+  tcm <- matrix(bl$tc, N_T, N_X)
+  lam <- attr(fit, "bc_lambda")
+  if (!is.null(lam)) {
+    cost <- exp(u)
+    tau <- tcm + bl$off
+    den <- (gv("xphic") + gv("xphixt") * bc_tf(tau, lam[["lambda_time"]])) *
+      cost^lam[["lambda_cost"]]
+    num <- (gv("xphit") + gv("xphixt") * bc_tf(cost, lam[["lambda_cost"]])) *
+      tau^(lam[["lambda_time"]] - 1)
+    rate <- -num / ifelse(den > 0, den, NA_real_)
+  } else {
+    ta <- tcm + bl$tb_cost - bl$tb_acc
+    den <- gv("xc") + 2 * gv("xcc") * u + gv("xct") * ta
+    num <- gv("xt") + 2 * gv("xtt") * ta + gv("xct") * u
+    rate <- -num / ifelse(den > 0.05, den, NA_real_)
+  }
+  if (mask) rate[is.na(bl$R)] <- NA_real_
+  z <- 100 * (1 - exp(rate / 4))
+  z[!is.finite(z)] <- NA_real_
+  z
+}
+
 for (spec in c("lin", "quad", "bc")) {
   for (key in names(fits)) {
     fset <- fits[[key]][[spec]]
-    zs <- setNames(lapply(benches, function(b) {
+    zs <- setNames(lapply(panels, function(b) {
       bl <- bundles[[b]]
-      if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl)
+      if (b == "pooled") {
+        if (key %in% ACC_KEYS) pdecline_acc(fset[[b]], bl)
+        else pdecline_cost(fset[[b]], bl)
+      } else if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl)
       else decline_cost(fset[[b]], bl)
-    }), benches)
-    xs <- lapply(bundles, function(bl) plogis(bl$la))
+    }), panels)
+    xs <- lapply(bundles, function(bl)
+      if (is.null(bl$sa)) plogis(bl$la) else bl$la)
     w <- page(NULL, zs, xs, "decline")
     f <- sprintf("surface3d_%s_%s_decline.html", key, spec)
     w$elementId <- sub("\\.html$", "", f)   # deterministic ids, as above
@@ -658,11 +905,14 @@ for (spec in c("lin", "quad", "bc")) {
     # the heatmap twin: UNMASKED (the frontier band is drawn over it
     # instead), with each panel's colors anchored to its masked variant's
     # range -- exactly the range its 3-D scene colors span
-    zs_full <- setNames(lapply(benches, function(b) {
+    zs_full <- setNames(lapply(panels, function(b) {
       bl <- bundles[[b]]
-      if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl, mask = FALSE)
+      if (b == "pooled") {
+        if (key %in% ACC_KEYS) pdecline_acc(fset[[b]], bl, mask = FALSE)
+        else pdecline_cost(fset[[b]], bl, mask = FALSE)
+      } else if (key %in% ACC_KEYS) decline_acc(fset[[b]], bl, mask = FALSE)
       else decline_cost(fset[[b]], bl, mask = FALSE)
-    }), benches)
+    }), panels)
     save_heatmap(zs_full, xs, "decline", key, spec, zs_ref = zs)
   }
 }

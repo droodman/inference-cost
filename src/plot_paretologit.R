@@ -115,15 +115,48 @@ axis_ranges <- do.call(rbind, lapply(benches, function(b) {
 steps <- pareto_curves(d, dates)
 iso_steps <- iso_pareto_curves(d, LEVELS)
 
+## ---- the pooled pseudo-benchmark, sixth panel ----------------------------------------
+# The five primaries pooled on the anchored ECI scale with benchmark fixed
+# effects (pooled_acc_runs / fit_pooled_acc, envelope_frontier.R), drawn as a
+# sixth panel: its value axis is in ECI points, its dots and staircases are
+# the runs' own capabilities C = logit(a)/alpha_b + D_b. The iso view's
+# pooled contours are ECI levels, shaded by position within the pooled
+# capability range (pooled_iso_layers, frontier_viz.R) and labelled in place.
+pd <- pooled_acc_display(d, grid_dates(min(d$releasedate), max(d$releasedate)))
+axis_ranges_p <- rbind(axis_ranges, data.frame(
+  benchmark = "pooled", cost = range(pd$sa$cost), value = range(pd$spx$acc)))
+iso_ranges_p <- rbind(iso_ranges, data.frame(
+  benchmark = "pooled", date = range(pd$sa$releasedate),
+  cost = range(pd$sa$cost)))
+PC <- c("benchmark", "cost", "acc", "year")
+IC <- c("benchmark", "releasedate", "cost", "acc")
+pts_frontier <- rbind(d[, PC], pd$spx[, PC])
+pts_iso      <- rbind(d[, IC], pd$sa[, IC])
+POOL_NOTE <- paste(
+  "Sixth panel: the five primaries pooled on the anchored ECI capability",
+  "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
+  "benchmark fixed effects; its value axis is in ECI points and its curve is",
+  "the shared capability surface at the fixed effects' anchored mean.")
+POOL_ISO_NOTE <- paste(
+  "Sixth panel: the pooled primaries; contours are ECI capability levels,",
+  "labelled in ECI points and shaded by position within the pooled",
+  "capability range on the shared ramp; dashes their record staircases; dots",
+  "keep each run's own-benchmark accuracy colour.")
+pool_iso_layers <- function(pool_iso)
+  pooled_iso_layers(pool_iso, crng = range(pd$spx$acc), steps = pd$iso_steps)
+
 for (tt in names(TIME_FORMS)) {
   fits <- fits_by_spec[[tt]]
+  pf <- store_pooled_acc("paretologit")[[tt]]
 
-  curves <- frontier_curves(fits, d, dates, tbar)
+  curves <- rbind(frontier_curves(fits, d, dates, tbar),
+                  pooled_acc_frontier_curves(pf, pd$sa, pd$dates))
   p <- frontier_plot(
-    curves, d, ranges = axis_ranges,
+    curves, pts_frontier, ranges = axis_ranges_p,
+    labels = LABELS_POOLED, free_value = TRUE,
     ylab = "Fitted frontier accuracy",
-    notes = NOTES_FRONTIER) +
-    pareto_step_layer(steps)
+    notes = c(NOTES_FRONTIER, POOL_NOTE)) +
+    pareto_step_layer(rbind(steps, pd$steps), labels = LABELS_POOLED)
 
   f <- sprintf("paretologit_%s.png", tt)
   ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
@@ -132,9 +165,11 @@ for (tt in names(TIME_FORMS)) {
 
   iso <- iso_acc_curves(fits, d, tbar, levels = LEVELS, cost_cap = iso_steps)
   pi <- iso_acc_plot(
-    iso, d, ranges = iso_ranges,
-    notes = NOTES_ISO) +
-    iso_pareto_layer(iso_steps)
+    iso, pts_iso, ranges = iso_ranges_p, labels = LABELS_POOLED,
+    notes = c(NOTES_ISO, POOL_ISO_NOTE)) +
+    iso_pareto_layer(iso_steps, labels = LABELS_POOLED) +
+    pool_iso_layers(pooled_acc_iso_curves(pf, pd$sa, pd$levels,
+                                          cost_cap = pd$iso_steps))
 
   fi <- sprintf("isoaccuracy_paretologit_%s.png", tt)
   ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
@@ -153,22 +188,27 @@ NOTES_BC <- paste("Box-Tidwell: logit accuracy is linear in phi(cost),",
                   "Only the REGRESSORS are transformed -- the response keeps",
                   "the plain logit link.")
 fits_bc <- store_bc("paretologit")
+pf_bc <- store_pooled_acc_bc("paretologit")
 
-curves <- frontier_curves(fits_bc, d, dates, tbar)
+curves <- rbind(frontier_curves(fits_bc, d, dates, tbar),
+                pooled_acc_frontier_curves(pf_bc, pd$sa, pd$dates))
 p <- frontier_plot(
-  curves, d, ranges = axis_ranges,
+  curves, pts_frontier, ranges = axis_ranges_p,
+  labels = LABELS_POOLED, free_value = TRUE,
   ylab = "Fitted frontier accuracy",
-  notes = c(NOTES_FRONTIER, NOTES_BC)) +
-  pareto_step_layer(steps)
+  notes = c(NOTES_FRONTIER, NOTES_BC, POOL_NOTE)) +
+  pareto_step_layer(rbind(steps, pd$steps), labels = LABELS_POOLED)
 ggsave(out_path("paretologit_bc.png"), p, width = 10, height = fig_height(length(benches)), dpi = 200,
        device = ragg::agg_png)
 cat("wrote paretologit_bc.png\n")
 
 iso <- iso_acc_curves(fits_bc, d, tbar, levels = LEVELS, cost_cap = iso_steps)
 pi <- iso_acc_plot(
-  iso, d, ranges = iso_ranges,
-  notes = c(head(NOTES_ISO, -1), NOTES_BC)) +
-  iso_pareto_layer(iso_steps)
+  iso, pts_iso, ranges = iso_ranges_p, labels = LABELS_POOLED,
+  notes = c(head(NOTES_ISO, -1), NOTES_BC, POOL_ISO_NOTE)) +
+  iso_pareto_layer(iso_steps, labels = LABELS_POOLED) +
+  pool_iso_layers(pooled_acc_iso_curves(pf_bc, pd$sa, pd$levels,
+                                        cost_cap = pd$iso_steps))
 ggsave(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = fig_height(length(benches)),
        dpi = 200, device = ragg::agg_png)
 cat("wrote isoaccuracy_paretologit_bc.png\n")

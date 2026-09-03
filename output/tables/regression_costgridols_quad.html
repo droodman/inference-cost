@@ -25,6 +25,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <th colspan="1" class="grp"><div class="hd">FrontierMath, tiers 1-3</div></th>
 <th colspan="1" class="grp"><div class="hd">GPQA Diamond</div></th>
 <th colspan="1" class="grp"><div class="hd">Mystery Game Puzzles</div></th>
+<th colspan="1" class="grp"><div class="hd">Pooled runs (ECI pts, FE)</div></th>
 <th colspan="1" class="grp"><div class="hd">FrontierMath 2025-02</div></th>
 <th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 (2025-07)</div></th>
 <th colspan="1" class="grp"><div class="hd">FrontierMath, tier 4 v2</div></th>
@@ -38,6 +39,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">-0.574</td>
 <td class="grp">-7.211</td>
 <td class="grp">4.488</td>
+<td class="grp">12.012</td>
 <td class="grp">2.564</td>
 <td class="grp">2.106</td>
 <td class="grp">2.616</td>
@@ -51,6 +53,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">2.400</td>
 <td class="grp">1.988</td>
 <td class="grp">4.460</td>
+<td class="grp">-0.509</td>
 <td class="grp">3.107</td>
 <td class="grp">-0.268</td>
 <td class="grp">1.807</td>
@@ -64,6 +67,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">-3.403</td>
 <td class="grp">-1.871</td>
 <td class="grp">-1.738</td>
+<td class="grp">1.185</td>
 <td class="grp">-4.768</td>
 <td class="grp">-2.056</td>
 <td class="grp">-7.288</td>
@@ -77,6 +81,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">0.196</td>
 <td class="grp">0.192</td>
 <td class="grp">0.368</td>
+<td class="grp">0.003</td>
 <td class="grp">0.248</td>
 <td class="grp">-0.492</td>
 <td class="grp">0.041</td>
@@ -90,6 +95,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">1.260</td>
 <td class="grp">1.136</td>
 <td class="grp">-0.025</td>
+<td class="grp">0.500</td>
 <td class="grp">3.673</td>
 <td class="grp">0.154</td>
 <td class="grp">0.008</td>
@@ -103,6 +109,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">-0.434</td>
 <td class="grp">-0.387</td>
 <td class="grp">0.130</td>
+<td class="grp">-0.022</td>
 <td class="grp">-0.500</td>
 <td class="grp">-0.264</td>
 <td class="grp">-1.825</td>
@@ -116,6 +123,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">3702</td>
 <td class="grp">6028</td>
 <td class="grp">4746</td>
+<td class="grp">21443</td>
 <td class="grp">4712</td>
 <td class="grp">3500</td>
 <td class="grp">3422</td>
@@ -123,5 +131,5 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">7163</td>
 <td class="grp">6875</td>
 </tr>
-</tbody><tfoot><tr><td colspan="12">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero -- that is, no better than guessing, since accuracy is rescaled from each benchmark's guessing floor -- are excluded, logit 0 being unusable as a coordinate, and runs scoring n/n are clipped by their own sample size. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: the response is the record cost ln C_a(t) sampled on a uniform (logit accuracy, date) grid -- the mirror of the accuracy-direction fits' (cost, date) grid -- and grid nodes are not observations. N is the nodes at which a level is defined; they resample a few dozen staircase corners, so N measures resolution, not information.  No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling distribution to appeal to.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="13">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero -- that is, no better than guessing, since accuracy is rescaled from each benchmark's guessing floor -- and runs scoring n/n are both excluded, logit 0 and logit 1 being unusable as coordinates. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: the response is the record cost ln C_a(t) sampled on a uniform (logit accuracy, date) grid -- the mirror of the accuracy-direction fits' (cost, date) grid -- and grid nodes are not observations. N is the nodes at which a level is defined; they resample a few dozen staircase corners, so N measures resolution, not information.  No quadratic or Box-Cox tests: there is no likelihood behind this fit and no sampling distribution to appeal to. Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries' runs stacked with logit accuracy converted to the anchored ECI capability scale (2PL: C = logit(a)/alpha_b + D_b) and one fit taken with benchmark fixed effects (estimated, not shown) absorbing cost-level differences. Its accuracy slope is log dollars per ECI POINT -- roughly alpha_b times a per-logit slope -- so it is not comparable cell for cell with the other columns' accuracy rows; its time coefficient is in the same units as every other column's.</td></tr></tfoot></table>
 </body></html>

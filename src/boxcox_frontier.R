@@ -396,6 +396,83 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
   fit
 }
 
+# The pooled (ECI-units, benchmark-fixed-effects) accuracy Box-Cox profile,
+# for S and the frontier-per-se pair -- the accuracy mirror of
+# fit_pooled_cost_bc (cost_frontier.R). phi acts on each run's own cost and
+# tau exactly as per benchmark; the transformed terms are then alpha_b-scaled
+# (xphic = alpha * phic, ...) so the index is alpha_b * C(phi_c, phi_t) plus
+# the fixed effects, and envelope_constraints()'s pooled branch supplies the
+# monotonicity rows. No SFA keys, as for the other pooled accuracy fits.
+fit_pooled_acc_bc <- function(key, d, lambda_start = c(0, 1)) {
+  stopifnot(key %in% c("S", "paretologit", "paretologitenv"))
+  sa <- pooled_acc_runs(d)
+  off <- (sa$year - sa$tc)[1] - BC_T0
+  lt_free <- bc_lt_free(sa$year - BC_T0)
+  form <- acc ~ xphic + xphit + xphixt + bench
+  gr0 <- if (key == "S") NULL else pooled_acc_grid(sa)
+  bind <- if (key == "S") NULL else pooled_acc_binding(sa)
+  ws <- new.env(parent = emptyenv())
+  aug_runs <- function(x, lc, lt) {
+    x <- bc_augment_runs(x, lc, lt)
+    x$xphic  <- x$alpha * x$phic
+    x$xphit  <- x$alpha * x$phit
+    x$xphixt <- x$alpha * x$phixt
+    x
+  }
+  aug_grid <- function(gr, lc, lt) {
+    gr$phic   <- bc_tf(exp(gr$lncost), lc)
+    gr$phit   <- bc_tf(gr$tc + off, lt)
+    gr$phixt  <- gr$phic * gr$phit
+    gr$xphic  <- gr$alpha * gr$phic
+    gr$xphit  <- gr$alpha * gr$phit
+    gr$xphixt <- gr$alpha * gr$phixt
+    gr
+  }
+  fit_at <- function(lc, lt) {
+    sr <- aug_runs(sa, lc, lt)
+    if (key == "S") {
+      f <- suppressWarnings(glm(form, data = sr,
+                                family = quasibinomial(link = "logit")))
+      if (!f$converged) stop("IRLS did not converge")
+      return(list(fit = f, obj = -deviance(f) / 2))
+    }
+    ga <- aug_grid(gr0, lc, lt)
+    if (key == "paretologit") {
+      f <- fit_pareto_logit(sr, form, gr0 = ga, n_corners = length(bind))
+      list(fit = f, obj = -deviance(f) / 2)
+    } else {
+      f <- fit_pareto_logit_env(sr, form, gr0 = ga, bind = bind,
+                                n_corners = length(bind), start = ws$start)
+      ws$start <- coef(f)   # warm-start the next profile evaluation
+      # value is the mean negative quasi-ll over the grid; larger obj better
+      list(fit = f, obj = -f$value * attr(f, "n_grid"))
+    }
+  }
+  neg <- function(l) {
+    lc <- l[1]; lt <- if (lt_free) l[2] else 1
+    if (lc < BC_BOX_C[1] || lc > BC_BOX_C[2] ||
+        lt < BC_BOX_T[1] || lt > BC_BOX_T[2]) return(1e6)
+    r <- tryCatch(fit_at(lc, lt), error = function(e) NULL)
+    if (is.null(r) || !is.finite(r$obj)) return(1e6)
+    -r$obj
+  }
+  sr <- bc_lambda_search(neg, lambda_start, lt_free)
+  lam <- sr$lam; lt_free <- sr$lt_free
+  # canonical refit, cold-started, with the same degenerate-refit fallback to
+  # lambda_time = 1 as fit_cost_bc
+  ws$start <- NULL
+  fit <- tryCatch(fit_at(lam[1], lam[2])$fit, error = function(e) e)
+  if (inherits(fit, "error") && lam[2] != 1) {
+    o <- optimize(function(x) neg(c(x, 1)), interval = BC_BOX_C, tol = 1e-4)
+    lam <- c(o$minimum, 1); lt_free <- FALSE
+    ws$start <- NULL
+    fit <- fit_at(lam[1], lam[2])$fit
+  } else if (inherits(fit, "error")) stop(fit)
+  attr(fit, "bc_lambda") <- c(lambda_cost = lam[1], lambda_time = lam[2])
+  attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE, lambda_time = lt_free)
+  fit
+}
+
 # All benchmarks of one family, on the shared worker cluster when one is
 # available (fit_cluster() in paths.R) -- the profiles are independent across
 # benchmarks, so the wall clock is the slowest one rather than the sum.

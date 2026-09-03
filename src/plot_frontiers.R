@@ -66,12 +66,47 @@ NOTES_BC <- paste("Box-Cox: phi(odds) -- profiled for S, the logit for the",
                   "mid-2020) and their product, with the transform parameters",
                   "profiled per benchmark; monotone in cost at every date.")
 
-frontier_fig <- function(fits, fam, fname, extra_notes) {
+## ---- the pooled pseudo-benchmark, S family's sixth panel ------------------------------
+# The five primaries pooled on the anchored ECI scale with benchmark fixed
+# effects (fit_pooled_acc, envelope_frontier.R), drawn as a sixth panel on
+# the S figures only -- the SFA families are not pooled (see the pooled
+# section of envelope_frontier.R for why).
+pd <- pooled_acc_display(d, grid_dates(min(d$releasedate), max(d$releasedate)))
+axis_ranges_all <- do.call(rbind, lapply(benches, function(b) {
+  s <- d[d$benchmark == b, ]
+  data.frame(benchmark = b, cost = range(s$cost), value = c(0, 1))
+}))
+axis_ranges_p <- rbind(axis_ranges_all, data.frame(
+  benchmark = "pooled", cost = range(pd$sa$cost), value = range(pd$spx$acc)))
+PC <- c("benchmark", "cost", "acc", "year")
+IC <- c("benchmark", "releasedate", "cost", "acc")
+pts_frontier <- rbind(d[, PC], pd$spx[, PC])
+pts_iso      <- rbind(d[, IC], pd$sa[, IC])
+POOL_NOTE <- paste(
+  "Sixth panel: the five primaries pooled on the anchored ECI capability",
+  "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
+  "benchmark fixed effects; its value axis is in ECI points and its curve is",
+  "the shared capability surface at the fixed effects' anchored mean.")
+POOL_ISO_NOTE <- paste(
+  "Sixth panel: the pooled primaries; contours are ECI capability levels,",
+  "labelled in ECI points and shaded by position within the pooled",
+  "capability range on the shared ramp; dots keep each run's own-benchmark",
+  "accuracy colour.")
+pool_iso_layers <- function(pool_iso)
+  pooled_iso_layers(pool_iso, crng = range(pd$spx$acc))
+
+frontier_fig <- function(fits, fam, fname, extra_notes, pooled = NULL) {
   curves <- frontier_curves(fits, d, dates, tbar)
+  if (!is.null(pooled))
+    curves <- rbind(curves,
+                    pooled_acc_frontier_curves(pooled, pd$sa, pd$dates))
   p <- frontier_plot(
-    curves, d,
+    curves, if (is.null(pooled)) d else pts_frontier,
+    labels = if (is.null(pooled)) LABELS else LABELS_POOLED,
+    free_value = !is.null(pooled),
+    ranges = if (is.null(pooled)) NULL else axis_ranges_p,
     ylab = if (fam == "S") "Fitted accuracy" else "Frontier accuracy",
-    notes = c(NOTES_BASE, extra_notes))
+    notes = c(NOTES_BASE, extra_notes, if (!is.null(pooled)) POOL_NOTE))
   ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fname, "\n")
@@ -80,11 +115,14 @@ frontier_fig <- function(fits, fam, fname, extra_notes) {
 for (k in names(specs)) {
   sp <- specs[[k]]
   frontier_fig(sp$fits, sp$family, sprintf("frontier_progression_%s.png", k),
-               if (sp$time == "quad") NOTES_QUAD)
+               if (sp$time == "quad") NOTES_QUAD,
+               pooled = if (sp$family == "S")
+                 store_pooled_acc("S")[[sp$time]])
 }
 for (fam in names(bc_fits))
   frontier_fig(bc_fits[[fam]], fam,
-               sprintf("frontier_progression_%s_bc.png", fam), NOTES_BC)
+               sprintf("frontier_progression_%s_bc.png", fam), NOTES_BC,
+               pooled = if (fam == "S") store_pooled_acc_bc("S"))
 
 ## ---- iso-accuracy figures -------------------------------------------------------------
 
@@ -108,10 +146,19 @@ ISO_NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2,",
 # The BC contours have ONE branch (phi is monotone, so the inversion has one
 # root), so ISO_BRANCH_NOTE does not apply and NOTES_BC takes its place.
 
-iso_fig <- function(fits, fname, extra_notes) {
+iso_ranges_p <- rbind(iso_ranges, data.frame(
+  benchmark = "pooled", date = range(pd$sa$releasedate),
+  cost = range(pd$sa$cost)))
+
+iso_fig <- function(fits, fname, extra_notes, pooled = NULL) {
   curves <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
-  p <- iso_acc_plot(curves, d, notes = c(ISO_NOTES_BASE, extra_notes),
-                    ranges = iso_ranges)
+  p <- iso_acc_plot(curves, if (is.null(pooled)) d else pts_iso,
+                    labels = if (is.null(pooled)) LABELS else LABELS_POOLED,
+                    notes = c(ISO_NOTES_BASE, extra_notes,
+                              if (!is.null(pooled)) POOL_ISO_NOTE),
+                    ranges = if (is.null(pooled)) iso_ranges else iso_ranges_p)
+  if (!is.null(pooled))
+    p <- p + pool_iso_layers(pooled_acc_iso_curves(pooled, pd$sa, pd$levels))
   ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fname, "\n")
@@ -120,10 +167,12 @@ iso_fig <- function(fits, fname, extra_notes) {
 for (k in names(specs)) {
   sp <- specs[[k]]
   iso_fig(sp$fits, sprintf("isoaccuracy_%s.png", k),
-          if (sp$time == "quad") c(ISO_NOTES_QUAD, ISO_BRANCH_NOTE))
+          if (sp$time == "quad") c(ISO_NOTES_QUAD, ISO_BRANCH_NOTE),
+          pooled = if (sp$family == "S") store_pooled_acc("S")[[sp$time]])
 }
 for (fam in names(bc_fits))
-  iso_fig(bc_fits[[fam]], sprintf("isoaccuracy_%s_bc.png", fam), NOTES_BC)
+  iso_fig(bc_fits[[fam]], sprintf("isoaccuracy_%s_bc.png", fam), NOTES_BC,
+          pooled = if (fam == "S") store_pooled_acc_bc("S"))
 
 ## ---- does each fitted curve actually envelope the data? -------------------------------
 # For S this is a sanity check, not a criticism: a conditional mean SHOULD have

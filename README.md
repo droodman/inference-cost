@@ -30,7 +30,7 @@ $$C_t(a) = \min\limits_{i | a_i \ge a, t_i \le t} c_i$$
 Everything is in `src/`. `run_all.R` sources the output scripts into one process so the heavy fits are computed once and shared.
 
 Driver:
-* `run_all.R` — runs every output script in order; `--skip-animations` skips the mp4s.
+* `run_all.R` — runs every output script in order.
 
 Libraries (sourced, never run directly):
 * `paths.R` — path resolution and `src_source()`, so scripts work from the repo root or `src/`.
@@ -55,6 +55,5 @@ Output scripts:
 * `plot_surfaces_3d.R` — interactive 3-D surfaces for the Pareto-grid pair.
 * `cost_frontier_report.R` — cost-decline rate comparison table.
 * `regression_tables.R` — HTML and RTF regression tables.
-* `animate_frontiers.R` — semiannual-accumulation movies (slow; skippable).
 
 [GitHub repo](https://github.com/droodman/inference-cost)

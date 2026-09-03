@@ -1,7 +1,7 @@
 # Shared plotting machinery for the frontier figures.
 #
-# Sourced by plot_frontiers.R (parametric SFA + plain fractional logit),
-# pareto_frontiers.R (nonparametric running maximum) and animate_frontiers.R.
+# Sourced by plot_frontiers.R (parametric SFA + plain fractional logit) and
+# pareto_frontiers.R (nonparametric running maximum).
 # Each caller supplies curves and points; everything about how a frontier figure
 # LOOKS lives here, so the figures cannot drift apart.
 
@@ -73,6 +73,14 @@ LABELS <- c(
   math_lvl5                = "MATH, level 5",
   simpleqa                 = "SimpleQA Verified",
   swe_bench_verified       = "SWE-Bench Verified")
+
+# The panel set extended by the pooled pseudo-benchmark, SIXTH -- right
+# after the primaries it stacks. Deliberately a SEPARATE constant: adding
+# pooled to LABELS itself would draw an empty sixth panel in every figure
+# that never fits it (facet_wrap drop = FALSE). Scripts that draw a pooled
+# panel pass this as frontier_plot()/iso_acc_plot()'s `labels`.
+LABELS_POOLED <- append(LABELS, c(pooled = "Pooled primaries (ECI scale)"),
+                        after = match("mystery", names(LABELS)))
 
 # Benchmark facets are laid out two across, however many benchmarks the data
 # carries; figure height follows the row count. 3 inches per row plus 1.5 for
@@ -293,24 +301,31 @@ pad_caption <- function(notes) {
 
 # `curves` needs cost, value, qdate, benchmark, year; `pts` needs cost, acc, year,
 # benchmark. `step = TRUE` draws staircases (Pareto), FALSE draws lines (fitted).
-# `ranges` (benchmark, cost, value) pins each panel's axes via an invisible layer.
-# Needed whenever a frame may hold little or no data -- an animation's opening
-# frame has none at all, and with scales = "free_x" a panel's range would
-# otherwise be read off whatever happens to be present, so the axes would drift
-# from frame to frame.
+# `ranges` (benchmark, cost, value) pins each panel's axes via an invisible
+# layer, so a panel with sparse data cannot have its axes read off whatever
+# happens to be present.
 # `title`/`subtitle` default to NULL and the static quartets pass neither: the
 # viewer's controls and the filename already say which figure this is, and the
-# vertical space goes to the panels instead. The animations still pass a
-# subtitle -- it is their date ticker, the only clock a movie frame has.
+# vertical space goes to the panels instead.
+# `labels` lets a caller extend the panel set beyond the data's benchmarks --
+# plot_cost_frontier.R appends the pooled pseudo-benchmark in the sixth slot
+# -- without touching the global LABELS, whose unused level would otherwise
+# draw an empty panel in every other figure (drop = FALSE).
+# `free_value` frees the value axis per panel: the pooled panel's value is an
+# ECI capability score (~60-165), not a share, so a fixed 0-1 percent axis
+# cannot hold both. Each real panel is still pinned to 0-1 through `ranges`,
+# and the axis labeller formats each panel's own breaks -- percents at or
+# below 1, plain ECI points above.
 frontier_plot <- function(curves, pts, title = NULL, subtitle = NULL, ylab,
                           notes = character(0), step = FALSE,
-                          colour_limits = NULL, ranges = NULL) {
-  curves$benchmark <- factor(LABELS[curves$benchmark], levels = LABELS)
-  pts$benchmark    <- factor(LABELS[pts$benchmark],    levels = LABELS)
+                          colour_limits = NULL, ranges = NULL,
+                          labels = LABELS, free_value = FALSE) {
+  curves$benchmark <- factor(labels[curves$benchmark], levels = labels)
+  pts$benchmark    <- factor(labels[pts$benchmark],    levels = labels)
   if (is.null(colour_limits)) colour_limits <- range(curves$year)
   blank_layer <- NULL
   if (!is.null(ranges)) {
-    ranges$benchmark <- factor(LABELS[ranges$benchmark], levels = LABELS)
+    ranges$benchmark <- factor(labels[ranges$benchmark], levels = labels)
     blank_layer <- geom_blank(data = ranges, aes(cost, value), inherit.aes = FALSE)
   }
 
@@ -331,10 +346,15 @@ frontier_plot <- function(curves, pts, title = NULL, subtitle = NULL, ylab,
     geom_point(data = pts, aes(cost, acc, colour = year), size = 0.35, alpha = 0.3,
                inherit.aes = FALSE) +
     geom_curve_layer +
-    facet_wrap(~benchmark, scales = "free_x", ncol = 2, drop = FALSE) +
+    facet_wrap(~benchmark, scales = if (free_value) "free" else "free_x",
+               ncol = 2, drop = FALSE) +
     scale_x_log10(breaks = 10^(-5:1), labels = dollar_log) +
-    scale_y_continuous(limits = c(0, 1),
-                       labels = scales::percent_format(accuracy = 1)) +
+    (if (free_value)
+      scale_y_continuous(labels = function(v)
+        ifelse(v > 1.5, sprintf("%.0f", v),
+               scales::percent(v, accuracy = 1)))
+     else scale_y_continuous(limits = c(0, 1),
+                             labels = scales::percent_format(accuracy = 1))) +
     scale_colour_gradientn(
       colours = PALETTE, name = NULL, breaks = 2023:2026, limits = colour_limits,
       guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
@@ -418,8 +438,8 @@ pareto_curves <- function(data, dates_by_bench) {
 # rather than described in prose in each script, so every figure that shows a
 # fitted curve against the empirical frontier shows it identically -- same dash,
 # same weight, same colour scale.
-pareto_step_layer <- function(steps) {
-  steps$benchmark <- factor(LABELS[steps$benchmark], levels = LABELS)
+pareto_step_layer <- function(steps, labels = LABELS) {
+  steps$benchmark <- factor(labels[steps$benchmark], levels = labels)
   geom_step(data = steps, aes(cost, value, group = qdate, colour = year),
             direction = "hv", linewidth = 0.4, linetype = "22",
             inherit.aes = FALSE)
@@ -500,8 +520,8 @@ iso_pareto_curves <- function(data, levels) {
 # frontier_plot(): same dash, same weight, and coloured by the same accuracy
 # scale as the fitted contours, so each staircase reads against the contour at
 # its own level.
-iso_pareto_layer <- function(steps) {
-  steps$benchmark <- factor(LABELS[steps$benchmark], levels = LABELS)
+iso_pareto_layer <- function(steps, labels = LABELS) {
+  steps$benchmark <- factor(labels[steps$benchmark], levels = labels)
   geom_step(data = steps, aes(date, cost, group = interaction(benchmark, acc),
                               colour = acc),
             direction = "hv", linewidth = 0.4, linetype = "22",
@@ -511,6 +531,40 @@ iso_pareto_layer <- function(steps) {
 ISO_PARETO_NOTE <- paste(
   "Dashed: the minimum cost at which accuracy at least each contour's level had",
   "been achieved by each date -- the Pareto staircase read as cost against date.")
+
+# The pooled panel's iso-view layers: contours at ECI capability levels,
+# SHADED like the accuracy contours -- each level mapped to its position
+# within the pooled capability range `crng` and coloured on the figures'
+# shared 0-1 ramp (the percent legend describes the accuracy panels; the
+# pooled mapping is positional and each contour carries its ECI value as an
+# in-place label). `steps`, when given, adds the pooled record staircases,
+# shaded the same way.
+pooled_iso_layers <- function(pool_iso, crng, labels = LABELS_POOLED,
+                              steps = NULL) {
+  shade <- function(x) {
+    x$benchmark <- factor(labels[x$benchmark], levels = labels)
+    x$lvl <- pmin(pmax((x$acc - crng[1]) / diff(crng), 0), 1)
+    x
+  }
+  # a fit can blank every pooled contour point (the envelope BC has); the
+  # label frame must then stay an empty data.frame, not collapse to NULL
+  ok <- pool_iso[is.finite(pool_iso$cost), , drop = FALSE]
+  lab <- if (nrow(ok)) do.call(rbind, lapply(split(ok, ok$acc), function(s)
+    s[which.max(s$date), ])) else ok
+  c(if (!is.null(steps)) list(
+      geom_step(data = shade(steps),
+                aes(date, cost, group = acc, colour = lvl),
+                direction = "hv", linewidth = 0.4, linetype = "22",
+                inherit.aes = FALSE)),
+    list(
+      geom_path(data = shade(pool_iso),
+                aes(date, cost, group = interaction(acc, seg), colour = lvl),
+                linewidth = 0.6, na.rm = TRUE, inherit.aes = FALSE),
+      geom_text(data = shade(lab),
+                aes(date, cost, label = sprintf("%g", acc)),
+                colour = INK_SECOND, size = 2.6, hjust = 1, vjust = -0.6,
+                inherit.aes = FALSE)))
+}
 
 ## ---- iso-accuracy cost contours ------------------------------------------------
 #
@@ -736,13 +790,16 @@ iso_segments <- function(g) {
 # `pts` are the observed runs, placed at (release date, cost) and coloured by the
 # accuracy they achieved -- the same scale as the contours, so a run's colour can
 # be read against the contour it sits on.
+# `labels` as in frontier_plot(): the caller may extend the panel set (the
+# pooled pseudo-benchmark) without touching the global LABELS.
 iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
-                          notes = character(0), ranges = NULL) {
-  curves$benchmark <- factor(LABELS[curves$benchmark], levels = LABELS)
-  pts$benchmark    <- factor(LABELS[pts$benchmark],    levels = LABELS)
+                          notes = character(0), ranges = NULL,
+                          labels = LABELS) {
+  curves$benchmark <- factor(labels[curves$benchmark], levels = labels)
+  pts$benchmark    <- factor(labels[pts$benchmark],    levels = labels)
   blank_layer <- NULL
   if (!is.null(ranges)) {
-    ranges$benchmark <- factor(LABELS[ranges$benchmark], levels = LABELS)
+    ranges$benchmark <- factor(labels[ranges$benchmark], levels = labels)
     blank_layer <- geom_blank(data = ranges, aes(date, cost), inherit.aes = FALSE)
   }
 
@@ -836,6 +893,17 @@ load_runs <- function() {
 # tc was assigned, shifting the plotted curves off the model that produced them.
 bench_tbar <- function(d) {
   tapply(d$t - d$tc, d$benchmark, function(x) x[1])
+}
+
+# Observed history per benchmark, in years: first run to last. The pooling
+# weight is ALPHA^2 * this span -- alpha^2 is the 2PL's information per
+# observation about the shared capability, while a benchmark's precision
+# about its own RATE grows with the time base it is estimated over; the
+# product discounts short histories instead of leaving their exclusion
+# informal. (The spans, not "years since start": a benchmark that stopped
+# being tested should not keep gaining weight.)
+bench_spans <- function(d) {
+  tapply(d$t, d$benchmark, function(x) diff(range(x)))
 }
 
 # ONE global semiannual grid, anchored to the latest run across all benchmarks;

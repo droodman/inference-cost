@@ -35,6 +35,9 @@ deleteat!(df, isinf.(df.logitacc))
 cost_frontier(df, accgrid, tgrid) =
   [minimum(r.lncost for r ∈ eachrow(df) if r.logitacc≥a && r.releaseyear≤t; init=Inf) |> (x->isinf(x) ? missing : x) for a∈accgrid, t∈tgrid]
 
+SOTA_frontier(df, tgrid) =
+  [maximum(r.acc for r ∈ eachrow(df) if r.releaseyear≤t; init=-Inf) for t∈tgrid]
+
 # return dataframe with cost frontier that ranges between extrema of logitacc and release year in a provided dataframe
 function cost_frontier_df(df)
   accgrid = range(extrema(skipmissing(df.logitacc))...; length=100)

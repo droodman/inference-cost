@@ -70,6 +70,14 @@ TASK_LABEL <- c(
 ECI <- read.csv(data_path("edi_scores.csv"), stringsAsFactors = FALSE)
 ALPHA <- setNames(ECI$estimated_slope_scaled[match(TASK_LABEL, ECI$benchmark_name)],
                   names(TASK_LABEL))
+# D_b, the same table's `edi` difficulty column, in ECI points. The 2PL writes
+# logit(a) = alpha_b*(C - D_b), so logit(a)/alpha_b + D_b recovers the model's
+# capability C on the anchored ECI scale (Claude 3.5 Sonnet = 130, GPT-5 =
+# 150). pooled_cost_runs (cost_frontier.R) uses it to place pooled logits on
+# that scale; its benchmark fixed effects absorb the shift, so the fits are
+# invariant to including D_b -- it buys interpretable units, nothing else.
+EDI <- setNames(ECI$edi[match(TASK_LABEL, ECI$benchmark_name)],
+                names(TASK_LABEL))
 
 # Greedy .* so the LAST occurrence wins, matching Stata's regexcapturenamed on
 # "(?<stub>.*)-maas": the captured stub is everything before the final marker.
