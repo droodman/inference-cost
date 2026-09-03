@@ -26,4 +26,35 @@ $$C_t(a) = \min\limits_{i | a_i \ge a, t_i \le t} c_i$$
 * Quadratic: Adds time², (log cost)² and time × log cost.
 * Box-Cox: Drops linear and quadratic terms in favor of [Box-Cox transforms](https://en.wikipedia.org/wiki/Power_transform#Box%E2%80%93Cox_transformation) of time and cost, with time expressed as years since the release of GPT3 in mid-2020. Each is allowed its own exponent (where 0=log and 1=linear). The product of these two is also included, with the same exponents. 
 
+## Code
+Everything is in `src/`. `run_all.R` sources the output scripts into one process so the heavy fits are computed once and shared.
+
+Driver:
+* `run_all.R` — runs every output script in order; `--skip-animations` skips the mp4s.
+
+Libraries (sourced, never run directly):
+* `paths.R` — path resolution and `src_source()`, so scripts work from the repo root or `src/`.
+* `prepare_data.R` — builds the analysis dataset from the source CSVs.
+* `frontier_viz.R` — shared figure machinery; also loads the runs and defines the time coordinate.
+* `fit_specs.R` — the parametric specification grid: inefficiency (A/B/S) × controls (lin/quad/bc).
+* `fractional_frontier.R` — stochastic frontier with a fractional-logit response and half-normal or truncated-normal inefficiency.
+* `panel_frontier.R` — the same, with inefficiency as a group-level (model × effort) effect.
+* `envelope_frontier.R` — accuracy-direction frontier fits: the Pareto staircase sampled on a grid, logit fitted through it, with and without envelope constraints.
+* `cost_frontier.R` — cost-direction duals of those fits, pricing misfit in cost rather than accuracy.
+* `boxcox_frontier.R` — the Box-Cox specification and the λ profile searches.
+* `fit_store.R` — computes each heavy fit once and hands the same object to every consumer.
+
+Output scripts:
+* `plot_accuracy_scatter.R` — raw accuracy-vs-date scatter plate, no fits.
+* `pareto_frontiers.R` — nonparametric staircase figure.
+* `record_timelines.R` — cost-record timelines (HTML + CSV).
+* `plot_frontiers.R` — stochastic-frontier and plain-logit figures, both views, plus fit diagnostics.
+* `plot_paretologit.R` — Pareto-frontier logit figures, both views.
+* `plot_paretologitenv.R` — the envelope-constrained variant, both views.
+* `plot_cost_frontier.R` — cost-direction dual figures, both views.
+* `plot_surfaces_3d.R` — interactive 3-D surfaces for the Pareto-grid pair.
+* `cost_frontier_report.R` — cost-decline rate comparison table.
+* `regression_tables.R` — HTML and RTF regression tables.
+* `animate_frontiers.R` — semiannual-accumulation movies (slow; skippable).
+
 [GitHub repo](https://github.com/droodman/inference-cost)
