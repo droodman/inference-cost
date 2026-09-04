@@ -34,7 +34,8 @@
 #
 # Every page and heatmap also carries the POOLED pseudo-benchmark as a sixth
 # panel (after the primaries it stacks): the pooled fits drawn at their
-# benchmark fixed effects' mean, the level axis in anchored ECI capability
+# most favorable benchmark copy (max fixed effect in capability, min in
+# cost), the level axis in anchored ECI capability
 # points, and the empirical surfaces the pooled records in those units --
 # see the pooled sections of cost_frontier.R and envelope_frontier.R.
 #
@@ -339,7 +340,7 @@ pz_cost_native <- function(fit, bl) {
 # pooled cost fit inverted: capability C over (lnc, tc)
 pz_cost_inverted <- function(fit, bl) {
   g <- grid_lt(bl$lnc, bl$tc)
-  fe <- pooled_fe_mean(fit)
+  fe <- pooled_fe_draw(fit)
   if (is_cost_bc(fit)) {
     cf <- coef(fit); names(cf) <- sub("^beta_", "", names(cf))
     lam <- attr(fit, "bc_lambda")
@@ -535,23 +536,11 @@ heat_anchor <- function(view, b, zs_ref = NULL) {
   if (r[1] == r[2]) r + c(-0.5, 0.5) else r
 }
 
-# The pooled panel's frontier-view fill is capability in ECI points, not
-# accuracy, so its bracket says so; the other two views' units (dollars,
-# %/qtr) are common to every panel including the pooled one.
-fmt_anchor <- function(view, r, b = "") {
-  if (view == "frontier" && b == "pooled")
-    return(sprintf("[%.0f, %.0f ECI]", r[1], r[2]))
-  switch(view,
-         frontier    = sprintf("[%.0f%%, %.0f%%]", 100 * r[1], 100 * r[2]),
-         isoaccuracy = sprintf("[%s, %s]", dollar_log(exp(r[1])),
-                               dollar_log(exp(r[2]))),
-         sprintf("[%.0f, %.0f %%/qtr]", r[1], r[2]))
-}
-
+# Strip labels are the plain benchmark names; the per-panel fill anchors
+# (heat_anchor) still govern the colors but are no longer printed in the
+# labels -- the caption states the normalization rule.
 heat_labels <- function(view, zs_ref = NULL) {
-  setNames(vapply(panels, function(b)
-    sprintf("%s  %s", LABELS_POOLED[[b]],
-            fmt_anchor(view, heat_anchor(view, b, zs_ref), b)), ""), panels)
+  setNames(vapply(panels, function(b) LABELS_POOLED[[b]], ""), panels)
 }
 
 # The long data frame geom_raster wants, from a benchmark-keyed list of
@@ -635,15 +624,15 @@ heat_caption <- function(view) {
               else "lowest- and highest-scoring run"
   vert     <- if (frontier) "cost" else "accuracy"
   paste0(
-    "Fill runs dark to bright over each panel's own bracketed range -- the ",
-    "same per-panel normalization the 3-D pages use, so equal color means ",
-    "equal value between a panel and its 3-D scene.\n",
+    "Fill runs dark to bright over each panel's own range -- the range of ",
+    "that panel's colored surface on its 3-D page, the same per-panel ",
+    "normalization, so equal color means equal value between a panel and ",
+    "its 3-D scene; values beyond that range saturate at the endpoints.\n",
     "The two 50%-black staircases are NOT fitted: they trace the ", extremes,
     " observed up to each date, each a running extreme that steps out at a ",
     "new record and holds until the next.\n",
     "The band between them is the range the data actually cover in ", vert,
-    "; outside it the surface is extrapolating, and values beyond the ",
-    "bracket saturate at its endpoints.")
+    "; outside it the surface is extrapolating.")
 }
 
 heat_plot <- function(zs, xs, view, zs_ref = NULL) {
@@ -828,7 +817,7 @@ decline_cost <- function(fit, bl, mask = TRUE) {
 pdecline_cost <- function(fit, bl, mask = TRUE) {
   g <- grid_lt(bl$la, bl$tc)
   urng <- range(bl$s$lncost)
-  fe <- pooled_fe_mean(fit)
+  fe <- pooled_fe_draw(fit)
   if (is_cost_bc(fit)) {
     cf <- coef(fit)
     names(cf) <- sub("^beta_", "", names(cf))

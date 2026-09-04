@@ -699,8 +699,14 @@ fit_pooled_acc <- function(key, d, tt = "lin") {
 
 # Anchored display constant for the pooled capability surface: the fixed
 # effect for bench b is alpha_b*(C0 - D_b) folded with the intercept, so C0
-# is recovered per benchmark and averaged -- the additive constant that puts
-# the drawn surface on the anchored ECI scale (Claude 3.5 Sonnet = 130).
+# is recovered per benchmark, on the anchored ECI scale (Claude 3.5 Sonnet =
+# 130), and the HIGHEST copy is drawn: the pooled panels' empirical
+# reference is the cross-benchmark capability RECORD -- a maximum -- so the
+# mean copy sat systematically below it and only grazed; the most favorable
+# copy is the model's nearest counterpart of that record (imperfect where
+# the pooled rectangle is covered only by lower-copy benchmarks' data,
+# accepted for simplicity -- the cost direction's pooled_fe_draw mirrors
+# this with the MINIMUM, a cost record being a min).
 pooled_acc_c0 <- function(fit, sa) {
   cf <- coef(fit)
   names(cf) <- sub("^beta_", "", names(cf))
@@ -709,7 +715,7 @@ pooled_acc_c0 <- function(fit, sa) {
     nm <- paste0("bench", b)
     unname(cf[["(Intercept)"]]) + if (nm %in% names(cf)) unname(cf[[nm]]) else 0
   }, 0)
-  mean(g / ALPHA[bs] + EDI[bs])
+  max(g / ALPHA[bs] + EDI[bs])
 }
 
 # Capability-versus-cost curves at each drawn date for the pooled panel: the

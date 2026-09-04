@@ -86,10 +86,11 @@ POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
   "benchmark fixed effects; its value axis is in ECI points and its curves",
-  "trace the fitted surface at the fixed effects' mean.")
+  "trace the fitted surface at its cheapest benchmark copy (the minimum",
+  "fixed effect), the model's counterpart of the cost record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels",
-  "from the pooled fit at the benchmark fixed effects' mean, labelled in ECI",
+  "from the pooled fit at its cheapest benchmark copy, labelled in ECI",
   "points and shaded by position within the pooled capability range on the",
   "shared ramp; dashes their record staircases; dots keep each run's",
   "own-benchmark accuracy colour.")

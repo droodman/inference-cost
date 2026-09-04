@@ -1052,23 +1052,29 @@ fit_pooled_cost_bc <- function(key, d) {
 }
 
 # The pooled surface as ONE curve per date, for the figures: the fitted
-# common surface with the benchmark fixed effects averaged (unweighted over
-# the five levels, the reference's 0 included) -- "the average primary
-# benchmark's cost" at each (capability, date). cost_surface() reads only the
-# named shared coefficients, i.e. the reference benchmark's surface, so the
-# FE mean is added here; for the BC fit the la coordinate is rescaled to the
-# units the fit was estimated in (POOLED_BC_LA_SCALE).
-# The mean benchmark fixed effect (the reference level's 0 included): what
-# the drawn "one pooled surface" adds to the shared part.
-pooled_fe_mean <- function(fit) {
+# common surface at the cheapest benchmark's copy (pooled_fe_draw below).
+# cost_surface() reads only the named shared coefficients, i.e. the
+# reference benchmark's surface, so the drawn offset is added here; for the
+# BC fit the la coordinate is rescaled to the units the fit was estimated in
+# (POOLED_BC_LA_SCALE).
+# The benchmark fixed effect the drawn "one pooled surface" adds to the
+# shared part: the MINIMUM over the copies (the reference level's 0
+# included), i.e. the cheapest benchmark's copy. The pooled panels' empirical
+# reference is the cross-benchmark cost RECORD -- a minimum -- so the mean
+# copy sat systematically above-in-cost/below-in-level and only grazed it;
+# the most favorable copy is the model's nearest counterpart of that record
+# (imperfect where the pooled rectangle is covered only by dearer
+# benchmarks' data, accepted for simplicity). Time derivatives are free of
+# the choice: the offsets are additive.
+pooled_fe_draw <- function(fit) {
   cf <- coef(fit)
   names(cf) <- sub("^beta_", "", names(cf))
-  mean(c(0, unname(cf[grepl("^bench", names(cf))])))
+  min(c(0, unname(cf[grepl("^bench", names(cf))])))
 }
 
 pooled_surface <- function(fit, sp) {
   srf <- cost_surface(fit, sp)
-  fe <- pooled_fe_mean(fit)
+  fe <- pooled_fe_draw(fit)
   sc <- if (is.null(attr(fit, "bc_lambda"))) 1 else POOLED_BC_LA_SCALE
   list(f    = function(la, tc) srf$f(la / sc, tc) + fe,
        dacc = function(la, tc) srf$dacc(la / sc, tc))

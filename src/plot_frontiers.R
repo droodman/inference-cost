@@ -86,7 +86,8 @@ POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
   "benchmark fixed effects; its value axis is in ECI points and its curve is",
-  "the shared capability surface at the fixed effects' anchored mean.")
+  "the shared capability surface at its highest benchmark copy (the maximum",
+  "fixed effect), the model's counterpart of the capability record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels,",
   "labelled in ECI points and shaded by position within the pooled",
