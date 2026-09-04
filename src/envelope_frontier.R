@@ -51,6 +51,40 @@ clip_acc <- function(y, n) {
   pmin(y, 1 - 1 / (2 * n))
 }
 
+# THE estimate-pooling weight per benchmark, used wherever per-benchmark
+# results are averaged (the rate table's pooled row, the regression tables'
+# pooled columns):
+#
+#   w_b = alpha_b^2 * T_b * (Delta p_b / Delta logit_b)
+#
+# alpha^2 is the 2PL's information COEFFICIENT about the shared capability;
+# T_b the observed history (a rate is pinned down over its time base); and
+# Delta p / Delta logit -- the accuracy ground the benchmark's record covered
+# over the same ground in logits -- is the record path's AVERAGE of the
+# Fisher factor p(1-p), since p(1-p) is dp/dlogit. Along a linear capability
+# path the benchmark's integrated Fisher information about that path is
+# EXACTLY alpha^2 T Delta p / Delta logit, so the third factor is what makes
+# the first two honest: per-response information is alpha^2 p(1-p), not
+# alpha^2, and a high-discrimination benchmark spends more of its history in
+# the saturated tails where p(1-p) ~ 0 -- discrimination is self-limiting,
+# and this factor prices that in from nothing but the record's endpoints
+# (perfect scores clipped by sample size, as everywhere). A record that
+# never moved has Delta logit = 0; the limit of the ratio is the single
+# point's p(1-p).
+pool_weights <- function(d) {
+  bs <- bench_levels(d$benchmark)
+  setNames(vapply(bs, function(b) {
+    s <- d[d$benchmark == b, ]
+    nmax <- max(s$n_samples, na.rm = TRUE)
+    rec <- cummax(s$acc[order(s$tc)])
+    p0 <- clip_acc(min(rec[rec > 0]), nmax)
+    p1 <- clip_acc(max(rec), nmax)
+    dl <- qlogis(p1) - qlogis(p0)
+    fisher <- if (dl < 1e-9) p0 * (1 - p0) else (p1 - p0) / dl
+    ALPHA[[b]]^2 * diff(range(s$t)) * fisher
+  }, 0), bs)
+}
+
 # Only 2-D Pareto-efficient runs can bind. With the frontier non-decreasing in
 # both cost and date, a run that is cheaper AND earlier AND scored at least as
 # well implies the constraint of any run it dominates, so the dominated ones can

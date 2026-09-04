@@ -47,7 +47,7 @@ Libraries (sourced, never run directly):
 Output scripts:
 * `plot_accuracy_scatter.R` — raw accuracy-vs-date scatter plate, no fits.
 * `pareto_frontiers.R` — nonparametric staircase figure.
-* `record_timelines.R` — cost-record timelines (HTML + CSV).
+* `record_timelines.R` — cost records at 50% performance, per primary benchmark (HTML table + single figure on the ECI scale).
 * `plot_frontiers.R` — stochastic-frontier and plain-logit figures, both views, plus fit diagnostics.
 * `plot_paretologit.R` — Pareto-frontier logit figures, both views.
 * `plot_paretologitenv.R` — the envelope-constrained variant, both views.

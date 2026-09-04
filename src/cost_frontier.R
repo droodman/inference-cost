@@ -235,7 +235,15 @@ cost_envelope_constraints <- function(s, formula, gr, bind = NULL) {
     if (nm %in% nmv) v[match(nm, nmv)] <- 1
     v
   }
-  if ("phia" %in% nmv) {
+  # The capability slope may be one shared column ("la"/"phia") or, in the
+  # pooled bench-slopes variant, one column per benchmark; each gets its own
+  # monotonicity rows. terms() canonicalizes the interaction factor-first
+  # ("benchaime:la"), so both orders are matched, anchored on "bench" so the
+  # quadratic's la:tc column is not mistaken for one.
+  cap <- function(base) grep(
+    sprintf("^%s$|^%s:bench|^bench[^:]*:%s$", base, base, base),
+    nmv, value = TRUE)
+  if (length(cap("phia"))) {
     # Box-Cox terms (fit_cost_bc): lnC = g0 + ga*phia + gt*phit +
     # gat*phia*phit, and phi is increasing in its argument whatever lambda
     # is, so monotonicity in accuracy and date IS monotonicity in phia and
@@ -245,8 +253,9 @@ cost_envelope_constraints <- function(s, formula, gr, bind = NULL) {
     #    d lnC/d phia =  ga + gat*phit  >= 0
     #   -d lnC/d phit = -(gt + gat*phia) >= 0
     mono <- unique(rbind(
-      t(vapply(range(gr$phit), function(p) e("phia") + p * e("phiat"),
-               numeric(ncol(X)))),
+      do.call(rbind, lapply(cap("phia"), function(cc)
+        t(vapply(range(gr$phit), function(p) e(cc) + p * e("phiat"),
+                 numeric(ncol(X)))))),
       t(vapply(range(gr$phia), function(p) -(e("phit") + p * e("phiat")),
                numeric(ncol(X))))))
   } else {
@@ -259,9 +268,10 @@ cost_envelope_constraints <- function(s, formula, gr, bind = NULL) {
     # one row per derivative.
     corners <- expand.grid(la0 = range(gr$la), tc0 = range(gr$tc))
     mono <- unique(rbind(
-      t(mapply(function(la0, tc0)
-        e("la") + 2 * la0 * e("I(la^2)") + tc0 * e("la:tc"),
-        corners$la0, corners$tc0)),
+      do.call(rbind, lapply(cap("la"), function(cc)
+        t(mapply(function(la0, tc0)
+          e(cc) + 2 * la0 * e("I(la^2)") + tc0 * e("la:tc"),
+          corners$la0, corners$tc0)))),
       t(mapply(function(la0, tc0)
         -(e("tc") + 2 * tc0 * e("I(tc^2)") + la0 * e("la:tc")),
         corners$la0, corners$tc0))))
@@ -279,8 +289,9 @@ cost_feasible_start <- function(b0, Xb, cb, margin) {
   b0[is.na(b0)] <- 0   # an aliased column would otherwise poison the drop
   for (nm in c("I(la^2)", "I(tc^2)", "la:tc", "phiat"))
     if (nm %in% names(b0)) b0[[nm]] <- 0
-  for (nm in c("la", "phia"))
-    if (nm %in% names(b0)) b0[[nm]] <- max(b0[[nm]], 0.05)
+  for (nm in grep("^(la|phia)$|^(la|phia):bench|^bench[^:]*:(la|phia)$",
+                  names(b0), value = TRUE))
+    b0[[nm]] <- max(b0[[nm]], 0.05)
   for (nm in c("tc", "phit"))
     if (nm %in% names(b0)) b0[[nm]] <- min(b0[[nm]], 0)
   b0[[1]] <- b0[[1]] - max(0, max(drop(Xb %*% b0) - cb)) - margin
@@ -1016,9 +1027,21 @@ pooled_binding <- function(si) {
 # the same fitters, with the bench fixed effects appended to the formula and
 # the grid machinery handed its stacked pooled counterparts. The SFA duals'
 # inefficiency group gains bench: one u per cost curve, as within benchmark.
-fit_pooled_cost <- function(key, d, form = COST_FORMS$lin) {
+#
+# bench_slopes = TRUE frees the capability slope by benchmark (la:bench in
+# place of la) while keeping the single time slope: by Frisch-Waugh the
+# shared tc is then an exact leverage-weighted average of the per-benchmark
+# time slopes, with none of the common-capability-slope leakage the shared-la
+# fit builds in (the primaries' $/ECI-point slopes span 0.13-0.29, and la and
+# tc are positively correlated within every benchmark's grid because levels
+# only exist after first achievement). Linear form only: freeing la while
+# I(la^2) and la:tc stayed common would be a half-measure.
+fit_pooled_cost <- function(key, d, form = COST_FORMS$lin,
+                            bench_slopes = FALSE) {
   sp    <- pooled_cost_runs(d)
-  formp <- update(form, . ~ . + bench)
+  if (bench_slopes) stopifnot(identical(form, COST_FORMS$lin))
+  formp <- if (bench_slopes) update(form, . ~ . - la + la:bench + bench) else
+    update(form, . ~ . + bench)
   switch(key,
     costols        = lm(formp, data = iso_runs(sp)),
     costsfa        = fit_cost_sfa(sp, formp,
@@ -1041,11 +1064,19 @@ fit_pooled_cost <- function(key, d, form = COST_FORMS$lin) {
 # and the stacked grid / within-benchmark Pareto reduction injected. The SFA
 # keys would additionally need their u_group threaded through fit_at, so only
 # the least-squares keys are offered.
-fit_pooled_cost_bc <- function(key, d) {
+# bench_slopes mirrors fit_pooled_cost: phia:bench in place of phia, so each
+# benchmark keeps its own capability main effect while the time terms (phit,
+# and the phiat interaction through which the surface's decline rate can vary
+# with level) stay shared. pooled_bc_decline_qtr is untouched by the switch:
+# d lnC/dt reads only phit and phiat.
+fit_pooled_cost_bc <- function(key, d, bench_slopes = FALSE) {
   stopifnot(key %in% c("costols", "costgridols", "costgridolsenv"))
   sp <- pooled_cost_runs(d)
   sp$la <- sp$la / POOLED_BC_LA_SCALE
-  fit_cost_bc(key, sp, form = update(COST_BC_FORM, . ~ . + bench),
+  formp <- if (bench_slopes)
+    update(COST_BC_FORM, . ~ . - phia + phia:bench + bench) else
+    update(COST_BC_FORM, . ~ . + bench)
+  fit_cost_bc(key, sp, form = formp,
               gr0 = pooled_grid_response(sp,
                                          la_scale = POOLED_BC_LA_SCALE),
               bind0 = pooled_binding(iso_runs(sp)))

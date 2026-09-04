@@ -104,6 +104,18 @@ store_pooled_cost <- function(key) fits_once(paste0(key, "_pooled"), function() 
 store_pooled_cost_bc <- function(key) fits_once(paste0("bc_", key, "_pooled"),
   function() fit_pooled_cost_bc(key, load_runs()))
 
+# The bench-specific-capability-slopes variant of the pooled cost fits
+# (bench_slopes in cost_frontier.R): one shared time slope, each primary its
+# own $/ECI gradient. Linear form only, returned bare rather than as
+# list(lin =, quad =) -- the quadratic half-measure is refused by the fitter.
+store_pooled_cost_bs <- function(key) fits_once(paste0(key, "_pooled_bs"),
+  function() fit_pooled_cost(key, load_runs(), COST_FORMS$lin,
+                             bench_slopes = TRUE))
+
+store_pooled_cost_bc_bs <- function(key) fits_once(
+  paste0("bc_", key, "_pooled_bs"),
+  function() fit_pooled_cost_bc(key, load_runs(), bench_slopes = TRUE))
+
 # The pooled accuracy fits (S / paretologit / paretologitenv; the SFA
 # families are deliberately not pooled -- envelope_frontier.R's pooled
 # section records why): list(lin =, quad =) of single fits, plus the Box-Cox

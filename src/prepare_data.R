@@ -122,6 +122,21 @@ build_runs <- function(curves_csv = data_path("cost_truncated_curves.csv"),
   lut <- vapply(unique(agg$model), first_release, as.Date(NA))
   agg$releasedate <- as.Date(unname(lut[agg$model]), origin = "1970-01-01")
 
+  # display-friendly model name, from the same registry: the Model column of
+  # the matching row, preferring an exact id match and otherwise the SHORTEST
+  # matching id -- the closest thing to exact, where the prefix rule above
+  # would let "gpt-5" match gpt-5-mini's row too. A model absent from the
+  # registry (or with a blank Model cell) keeps its raw name.
+  display_name <- function(m) {
+    hit <- which(startsWith(id_lower, tolower(m)))
+    if (!length(hit)) return(m)
+    ex <- hit[id_lower[hit] == tolower(m)]
+    i <- if (length(ex)) ex[1] else hit[which.min(nchar(mv$id[hit]))]
+    if (is.na(mv$Model[i]) || mv$Model[i] == "") m else mv$Model[i]
+  }
+  dlut <- vapply(unique(agg$model), display_name, "")
+  agg$model_display <- unname(dlut[agg$model])
+
   agg$releaseyear  <- (as.numeric(agg$releasedate) + STATA_EPOCH_OFFSET) / 365.25
   agg$cost         <- agg$cost_per_task_usd
   agg$lncost       <- log(agg$cost)

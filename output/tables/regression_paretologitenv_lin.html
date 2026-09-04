@@ -47,7 +47,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">3.413</td>
 <td class="grp">1.558</td>
 <td class="grp">1.818</td>
-<td class="grp">14.327</td>
+<td class="grp">12.969</td>
 </tr>
 <tr><td>ln cost</td>
 <td>0.578</td>
@@ -62,7 +62,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">0.321</td>
 <td class="grp">0.077</td>
 <td class="grp">0.590</td>
-<td class="grp">2.213</td>
+<td class="grp">2.188</td>
 </tr>
 <tr><td>time</td>
 <td>3.284</td>
@@ -77,7 +77,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">2.188</td>
 <td class="grp">1.405</td>
 <td class="grp">1.216</td>
-<td class="grp">10.903</td>
+<td class="grp">10.497</td>
 </tr>
 <tr class="gap"><td>cost drop, %/qtr</td>
 <td>75.8</td>
@@ -92,7 +92,7 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">81.8</td>
 <td class="grp">99.0</td>
 <td class="grp">40.3</td>
-<td class="grp">70.8</td>
+<td class="grp">69.9</td>
 </tr>
 <tr><td>N</td>
 <td>8450</td>
@@ -109,5 +109,5 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">5298</td>
 <td class="grp">38943</td>
 </tr>
-</tbody><tfoot><tr><td colspan="14">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: this is the frontier logit's objective -- the empirical Pareto frontier P_t(c) sampled on the fixed cost-date grid -- minimised subject to the envelope's constraints: the surface must lie at or above every run (perfect scores clipped by their own sample size) and be monotone in cost and date. Grid nodes are not observations and the constrained fit has no likelihood, so errors would be fictions twice over. N is the nodes at which the frontier is defined. Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries' runs are stacked under one logit-link fit whose capability terms are each pre-scaled by the benchmark's alpha_b -- the 2PL index alpha_b (C(ln cost, time) - D_b), with alpha_b and D_b imported as known -- plus benchmark fixed effects (estimated, not shown). Equivalently, a heteroskedastic logit with known benchmark scales 1/alpha_b. Its coefficients are in ECI capability points per unit regressor, roughly a per-logit slope over alpha_b, so cells are larger than the per-benchmark columns'; the cost-drop ratio is unit-free and directly comparable. The pooled-runs column reports point estimates without quadratic or Box-Cox tests. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery), mapping them onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same capability-scale slope, and the pooled coefficient is their weighted average with w = alpha_b^2 x years of observed history -- information about the shared capability times the time base the slopes are estimated over -- i.e. sum(alpha T b) / sum(alpha^2 T), in ECI points per unit regressor. The discriminations (estimated_slope_scaled in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are aime 0.223, chess 0.120, fm13 0.169, gpqa 0.120, mystery 0.168, so one logit is worth 4.5-8.4 ECI points and pooled slopes read several times larger than the logit-scale columns beside them. The pooled cost drop is the same transform of the pooled slopes, -sum(alpha b_time) / sum(alpha b_ln cost) inside it. The pooled intercept averages capability net of difficulty at each benchmark's own reference date, so unlike the slopes it carries no clean interpretation, and pooled N sums the primary benchmark columns. For this model the alpha^2 weights borrow an information interpretation the fit cannot support -- there is no likelihood behind it -- so the pooled figures are mechanical averages. One scale caveat: accuracy is rescaled from each benchmark's guessing floor -- 0.25 on gpqa, 0.001 on aime, 0.092 on mystery, 0 elsewhere -- to 1 before the logit (prepare_data.R), a scale on which Epoch's alpha_b were not necessarily estimated.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="14">Time is measured in years and centered within benchmark, so the intercept is the frontier at each benchmark's own reference date. cost drop, %/qtr is 100*(1 - exp(-b_time / b_ln cost / 4)): the percentage fall in the cost of a fixed accuracy level per quarter (time is in years, hence the 4). Linear specification only -- with the quadratic's ln cost x time term the cost slope moves with date, so no single rate describes the column.  No standard errors: this is the frontier logit's objective -- the empirical Pareto frontier P_t(c) sampled on the fixed cost-date grid -- minimised subject to the envelope's constraints: the surface must lie at or above every run (perfect scores clipped by their own sample size) and be monotone in cost and date. Grid nodes are not observations and the constrained fit has no likelihood, so errors would be fictions twice over. N is the nodes at which the frontier is defined. Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries' runs are stacked under one logit-link fit whose capability terms are each pre-scaled by the benchmark's alpha_b -- the 2PL index alpha_b (C(ln cost, time) - D_b), with alpha_b and D_b imported as known -- plus benchmark fixed effects (estimated, not shown). Equivalently, a heteroskedastic logit with known benchmark scales 1/alpha_b. Its coefficients are in ECI capability points per unit regressor, roughly a per-logit slope over alpha_b, so cells are larger than the per-benchmark columns'; the cost-drop ratio is unit-free and directly comparable. The pooled-runs column reports point estimates without quadratic or Box-Cox tests. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery), mapping them onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same capability-scale slope, and the pooled coefficient is their weighted average with w = alpha_b^2 x years of observed history x the record path's average p(1-p) (its Delta accuracy over Delta logit) -- the benchmark's integrated Fisher information about the shared capability path: per-response information is alpha^2 p(1-p), not alpha^2, so a high-discrimination benchmark that spends much of its history saturated is discounted, as a short history is. The pooled value is sum((w/alpha) b) / sum(w), in ECI points per unit regressor. The discriminations (estimated_slope_scaled in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are aime 0.223, chess 0.120, fm13 0.169, gpqa 0.120, mystery 0.168, so one logit is worth 4.5-8.4 ECI points and pooled slopes read several times larger than the logit-scale columns beside them. The pooled cost drop is the same transform of the pooled slopes, -sum(alpha b_time) / sum(alpha b_ln cost) inside it. The pooled intercept averages capability net of difficulty at each benchmark's own reference date, so unlike the slopes it carries no clean interpretation, and pooled N sums the primary benchmark columns. For this model the alpha^2 weights borrow an information interpretation the fit cannot support -- there is no likelihood behind it -- so the pooled figures are mechanical averages. One scale caveat: accuracy is rescaled from each benchmark's guessing floor -- 0.25 on gpqa, 0.001 on aime, 0.092 on mystery, 0 elsewhere -- to 1 before the logit (prepare_data.R), a scale on which Epoch's alpha_b were not necessarily estimated.</td></tr></tfoot></table>
 </body></html>

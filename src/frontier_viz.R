@@ -895,13 +895,10 @@ bench_tbar <- function(d) {
   tapply(d$t - d$tc, d$benchmark, function(x) x[1])
 }
 
-# Observed history per benchmark, in years: first run to last. The pooling
-# weight is ALPHA^2 * this span -- alpha^2 is the 2PL's information per
-# observation about the shared capability, while a benchmark's precision
-# about its own RATE grows with the time base it is estimated over; the
-# product discounts short histories instead of leaving their exclusion
-# informal. (The spans, not "years since start": a benchmark that stopped
-# being tested should not keep gaining weight.)
+# Observed history per benchmark, in years: first run to last -- the spans,
+# not "years since start", so a benchmark that stopped being tested does not
+# keep gaining weight. One input to the pooling weights (pool_weights,
+# envelope_frontier.R).
 bench_spans <- function(d) {
   tapply(d$t, d$benchmark, function(x) diff(range(x)))
 }

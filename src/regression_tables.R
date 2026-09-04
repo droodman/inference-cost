@@ -347,13 +347,13 @@ fmt_p <- function(p) {
 pooled_col <- function(key, tt, fitlist) {
   # PRIMARY benchmarks only (PRIMARY_BENCHES, prepare_data.R): the newer
   # benchmarks are reported in their own columns but kept out of the pool.
-  # The pooling weight is alpha^2 * observed history in years (bench_spans,
-  # frontier_viz.R): information about the shared capability times the time
-  # base the benchmark's slopes are estimated over.
+  # The pooling weight is the benchmark's integrated Fisher information
+  # about the shared capability path, alpha^2 * observed history * the
+  # record path's average p(1-p) (pool_weights, envelope_frontier.R).
   fitlist <- fitlist[intersect(PRIMARY_BENCHES, names(fitlist))]
   cv <- lapply(fitlist, coef_vcov)
   bs <- names(fitlist)
-  TS <- bench_spans(d)[bs]
+  PW <- pool_weights(d)[bs]
   disp <- vapply(TERMS, function(x) x$t, character(1))
   present <- disp[disp %in% unique(unlist(lapply(cv, function(x) names(x$b))))]
 
@@ -364,9 +364,9 @@ pooled_col <- function(key, tt, fitlist) {
       k %in% names(cv[[b]]$b) && is.finite(cv[[b]]$b[[k]]), logical(1))]
     if (!length(use)) return(NULL)
     a  <- ALPHA[use]
-    w  <- a^2 * TS[use]
+    w  <- PW[use]
     # regular terms pool the ECI-converted slope b/alpha with weight w, so
-    # the coefficient on the RAW slope is a*T/sum(a^2*T); the logsig terms
+    # the coefficient on the RAW slope is (w/a)/sum(w); the logsig terms
     # pool the already-converted quantity directly
     cc <- if (grepl("^logsig_", k)) w / sum(w) else (w / a) / sum(w)
     off <- if (k == "logsig_(Intercept)") -sum(w / sum(w) * log(a)) else 0
@@ -386,10 +386,10 @@ pooled_col <- function(key, tt, fitlist) {
     b2 <- setNames(es$est[match(need, es$term)], need)
     V2 <- NULL
     if (all(vapply(bs, function(b) !is.null(cv[[b]]$V), logical(1)))) {
-      W  <- sum(ALPHA[bs]^2 * TS)
+      W  <- sum(PW)
       V2 <- matrix(0, 2, 2, dimnames = list(need, need))
       for (b in bs)
-        V2 <- V2 + (ALPHA[[b]] * TS[[b]] / W)^2 * cv[[b]]$V[need, need]
+        V2 <- V2 + (PW[[b]] / ALPHA[[b]] / W)^2 * cv[[b]]$V[need, need]
     }
     decline <- decline_from(b2, V2)
   }
@@ -415,15 +415,15 @@ pooled_col <- function(key, tt, fitlist) {
 # but the estimand this table exists for is the time slope), and the intercept
 # has no common meaning.
 pooled_col_cost <- function(fitlist) {
-  # PRIMARY benchmarks only, as in pooled_col(), and the same
-  # alpha^2 * history weights. (This replaced inverse-variance weighting: the
-  # time coefficient is already in common units, but half the cost models
-  # carry no covariance at all, and one weighting rule across every pooled
-  # figure beats a per-column mixture.)
+  # PRIMARY benchmarks only, as in pooled_col(), and the same integrated
+  # Fisher-information weights (pool_weights). (This replaced
+  # inverse-variance weighting: the time coefficient is already in common
+  # units, but half the cost models carry no covariance at all, and one
+  # weighting rule across every pooled figure beats a per-column mixture.)
   fitlist <- fitlist[intersect(PRIMARY_BENCHES, names(fitlist))]
   cv <- lapply(fitlist, coef_vcov)
   bs <- names(fitlist)
-  w <- ALPHA[bs]^2 * bench_spans(d)[bs]
+  w <- pool_weights(d)[bs]
   w <- w / sum(w)
   gts <- vapply(cv, function(x) x$b[["tc"]], numeric(1))
   ses <- vapply(cv, function(x) {
@@ -1000,9 +1000,10 @@ notes_cost <- function(key, tt) {
                            collapse = ", ")),
     "The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per",
     "year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is",
-    "needed. It is pooled with weights alpha_b^2 x years of observed history -- the 2PL's",
-    "information about the shared capability times the time base the rate is estimated over,",
-    "the same rule as every pooled figure in the repo -- with the standard error from the",
+    "needed. It is pooled with weights alpha_b^2 x years of observed history x the record path's",
+    "average p(1-p) (its Delta accuracy over Delta logit) -- the benchmark's integrated Fisher",
+    "information about the shared capability path, the same rule as every pooled figure in the",
+    "repo -- with the standard error from the",
     "weighted combination where every benchmark carries a covariance. The other coefficients",
     "are in each benchmark's own logit",
     "units and are not pooled. Pooled N sums the primary benchmark columns. The final pooled",
@@ -1056,8 +1057,11 @@ notes_plain <- function(key, kind, tt = "lin") {
     "onto the common scale of Epoch's ECI (Epoch Capabilities Index) 2PL, in which",
     "logit accuracy on benchmark b is alpha_b (C - D_b): each slope over alpha_b estimates the same",
     "capability-scale slope, and the pooled coefficient is their weighted average with",
-    "w = alpha_b^2 x years of observed history -- information about the shared capability times the",
-    "time base the slopes are estimated over -- i.e. sum(alpha T b) / sum(alpha^2 T), in ECI points",
+    "w = alpha_b^2 x years of observed history x the record path's average p(1-p) (its Delta accuracy",
+    "over Delta logit) -- the benchmark's integrated Fisher information about the shared capability",
+    "path: per-response information is alpha^2 p(1-p), not alpha^2, so a high-discrimination",
+    "benchmark that spends much of its history saturated is discounted, as a short history is.",
+    "The pooled value is sum((w/alpha) b) / sum(w), in ECI points",
     "per unit regressor. The discriminations (estimated_slope_scaled",
     sprintf("in data/edi_scores.csv, downloaded from https://epoch.ai/data/edi_scores.csv on 2026-08-20) are %s,",
             paste(sprintf("%s %.3f", pb, ALPHA[pb]), collapse = ", ")),
