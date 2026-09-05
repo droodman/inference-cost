@@ -128,7 +128,7 @@ for (tt in names(TIME_FORMS)) {
 # have one branch (phi is monotone), so ISO_BRANCH_NOTE is replaced by the BC
 # note, exactly as in the parent scripts.
 NOTES_BC <- paste("Box-Tidwell: logit accuracy is linear in phi(cost),",
-                  "phi(years since mid-2020) and their product, both lambdas",
+                  "phi(years since October 2020) and their product, both lambdas",
                   "profiled against the constrained probability-scale",
                   "quasi-likelihood. Only the REGRESSORS are transformed --",
                   "the response keeps the plain logit link.")

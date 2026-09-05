@@ -418,7 +418,17 @@ envelope_constraints <- function(data, formula, gr,
   # sweeping cost at a single date leaves the surface free to slope backwards at
   # another. e() returns a zero vector for an absent term, so this one block
   # covers every specification -- linear, cost-quadratic, time-quadratic, full.
-  if ("xc" %in% nmv || "xphic" %in% nmv) {
+  if (length(zc <- grep("^xz$|^xz:bench|^bench[^:]*:xz$", nmv,
+                        value = TRUE))) {
+    # Common-rate profile terms (fit_pooled_acc_bs): the index is
+    # alpha_b * xc_b * (ln c - r*tc) + FE_b, with the shared rate r <= 0
+    # fixed within each profile evaluation. Both derivatives then reduce to
+    # the sign of the benchmark's own steepness coefficient --
+    #   dC_b/d ln c = xc_b >= 0,   dC_b/d tc = -r * xc_b >= 0 given r <= 0
+    # -- so the block is one row per xz:bench column. terms() canonicalizes
+    # the interaction factor-first, hence the two orders in the pattern.
+    mono <- t(vapply(zc, e, numeric(ncol(X))))
+  } else if ("xc" %in% nmv || "xphic" %in% nmv) {
     # Pooled (ECI-units) terms (pooled_acc_runs): the index is
     # alpha_b * C(ln c, tc) + FE_b, every capability term pre-scaled by its
     # run's alpha_b (xc = alpha*lncost, ..., xphic = alpha*phic). alpha_b > 0
@@ -492,6 +502,10 @@ feasible_start <- function(b0, Xb, Lb, margin) {
     if (nm %in% names(b0)) b0[[nm]] <- 0
   for (nm in c("lncost", "tc", "phic", "phit", "xc", "xt", "xphic", "xphit"))
     if (nm %in% names(b0)) b0[[nm]] <- max(b0[[nm]], 0.05)
+  # the bench-specific steepness copies of the common-rate profile
+  # (fit_pooled_acc_bs), whose monotonicity rows require each >= 0
+  for (nm in grep("^xz$|^xz:bench|^bench[^:]*:xz$", names(b0), value = TRUE))
+    b0[[nm]] <- max(b0[[nm]], 0.05)
   b0[1] <- b0[1] + max(0, max(Lb - drop(Xb %*% b0))) + margin
   b0
 }
@@ -729,6 +743,53 @@ fit_pooled_acc <- function(key, d, tt = "lin") {
   else
     fit_pareto_logit_env(sa, form, gr0 = gr, bind = bind,
                          n_corners = length(bind))
+}
+
+# The accuracy-direction dual of fit_pooled_cost's bench_slopes variant. In
+# the cost direction, freeing the capability slopes leaves the shared time
+# coefficient as THE decline rate; here the rate is the RATIO -xt/xc, so
+# freeing xc by benchmark would leave five rates and pooling them would
+# re-ask the weighting question. Instead the rate itself becomes the shared
+# parameter: the index is reparametrized as
+#
+#   alpha_b * xc_b * (ln c - r*tc) + FE_b,   r = d lnC/dt at fixed accuracy
+#
+# -- benchmark-specific capability steepness xc_b, ONE decline rate r -- and
+# the fit is PROFILED over r, exactly as the Box-Cox fits profile their
+# lambdas: at fixed r the model is linear in its coefficients, so each key's
+# own fitter runs on the composite regressor xz = alpha*(ln c - r*tc) and a
+# 1-D optimization moves r against that fitter's own probability-scale
+# quasi-log-likelihood. envelope_constraints' xz branch supplies the
+# monotonicity rows (xc_b >= 0, both derivatives' sign given r <= 0). The
+# profiled r rides out on the "rate_r" attribute, in annual d lnC/dt units.
+fit_pooled_acc_bs <- function(key, d) {
+  stopifnot(key %in% c("paretologit", "paretologitenv"))
+  sa   <- pooled_acc_runs(d)
+  gr   <- pooled_acc_grid(sa)
+  bind <- pooled_acc_binding(sa)
+  form <- acc ~ xz:bench + bench
+  aug  <- function(x, r) { x$xz <- x$alpha * (x$lncost - r * x$tc); x }
+  ws <- new.env(parent = emptyenv())
+  fit_at <- function(r) {
+    sar <- aug(sa, r)
+    grr <- aug(gr, r)
+    if (key == "paretologit") {
+      f <- fit_pareto_logit(sar, form, gr0 = grr, n_corners = length(bind))
+      list(fit = f, obj = bc_qll(grr$acc, fitted(f)))
+    } else {
+      f <- fit_pareto_logit_env(sar, form, gr0 = grr, bind = bind,
+                                n_corners = length(bind), start = ws$start)
+      ws$start <- coef(f)   # warm-start the next profile evaluation
+      # value is the NEGATIVE mean qll over the grid; undo both
+      list(fit = f, obj = -f$value * attr(f, "n_grid"))
+    }
+  }
+  # r in annual log-cost units: 0 is no decline, -6 a 78%-per-quarter
+  # collapse, comfortably bracketing every per-benchmark estimate
+  o <- optimize(function(r) -fit_at(r)$obj, interval = c(-6, 0), tol = 1e-4)
+  f <- fit_at(o$minimum)$fit
+  attr(f, "rate_r") <- o$minimum
+  f
 }
 
 # Anchored display constant for the pooled capability surface: the fixed

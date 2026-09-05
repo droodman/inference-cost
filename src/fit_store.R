@@ -116,6 +116,13 @@ store_pooled_cost_bc_bs <- function(key) fits_once(
   paste0("bc_", key, "_pooled_bs"),
   function() fit_pooled_cost_bc(key, load_runs(), bench_slopes = TRUE))
 
+# Its accuracy-direction dual (fit_pooled_acc_bs, envelope_frontier.R):
+# benchmark-specific capability steepness with ONE decline rate, profiled;
+# the rate rides the fit's "rate_r" attribute, in annual d lnC/dt units.
+store_pooled_acc_bs <- function(key) fits_once(
+  paste0(key, "_pooledacc_bs"),
+  function() fit_pooled_acc_bs(key, load_runs()))
+
 # The pooled accuracy fits (S / paretologit / paretologitenv; the SFA
 # families are deliberately not pooled -- envelope_frontier.R's pooled
 # section records why): list(lin =, quad =) of single fits, plus the Box-Cox

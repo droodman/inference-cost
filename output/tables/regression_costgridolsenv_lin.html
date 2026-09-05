@@ -94,6 +94,51 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">2.7</td>
 <td class="grp">29.4</td>
 </tr>
+<tr><td>cost drop, %/qtr, at SOTA</td>
+<td>28.6</td>
+<td class="grp">27.9</td>
+<td class="grp">56.6</td>
+<td class="grp">4.4</td>
+<td class="grp">4.3</td>
+<td class="grp"></td>
+<td class="grp">8.7</td>
+<td class="grp">0.0</td>
+<td class="grp">54.4</td>
+<td class="grp">15.0</td>
+<td class="grp">14.2</td>
+<td class="grp">2.7</td>
+<td class="grp"></td>
+</tr>
+<tr><td>1 quarter past SOTA</td>
+<td>28.6</td>
+<td class="grp">27.9</td>
+<td class="grp">56.6</td>
+<td class="grp">4.4</td>
+<td class="grp">4.3</td>
+<td class="grp"></td>
+<td class="grp">8.7</td>
+<td class="grp">0.0</td>
+<td class="grp">54.4</td>
+<td class="grp">15.0</td>
+<td class="grp">14.2</td>
+<td class="grp">2.7</td>
+<td class="grp"></td>
+</tr>
+<tr><td>2 quarters past SOTA</td>
+<td>28.6</td>
+<td class="grp">27.9</td>
+<td class="grp">56.6</td>
+<td class="grp">4.4</td>
+<td class="grp">4.3</td>
+<td class="grp"></td>
+<td class="grp">8.7</td>
+<td class="grp">0.0</td>
+<td class="grp">54.4</td>
+<td class="grp">15.0</td>
+<td class="grp">14.2</td>
+<td class="grp">2.7</td>
+<td class="grp"></td>
+</tr>
 <tr><td>N</td>
 <td>4882</td>
 <td class="grp">3735</td>
@@ -109,5 +154,5 @@ tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
 <td class="grp">4121</td>
 <td class="grp">21443</td>
 </tr>
-</tbody><tfoot><tr><td colspan="14">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero -- that is, no better than guessing, since accuracy is rescaled from each benchmark's guessing floor -- and runs scoring n/n are both excluded, logit 0 and logit 1 being unusable as coordinates. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: this is the grid OLS's objective -- the record cost ln C_a(t) sampled on the uniform (logit accuracy, date) grid -- minimised subject to the cost envelope's constraints: the surface must lie at or below every positive-accuracy run's log cost, rise with accuracy and never rise with date. Grid nodes are not observations and the constrained fit has no likelihood, so errors would be fictions twice over. N is the defined grid nodes.  cost drop, %/qtr is 100*(1 - exp(b_time / 4)): the time coefficient transformed directly -- the estimand is a single coefficient here, not the ratio of two as in the accuracy-direction tables. Standard error by the delta method on the transform, where a covariance exists. Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope moves with accuracy and date, so no single rate describes those columns. Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries' runs stacked with logit accuracy converted to the anchored ECI capability scale (2PL: C = logit(a)/alpha_b + D_b) and one fit taken with benchmark fixed effects (estimated, not shown) absorbing cost-level differences. Its accuracy slope is log dollars per ECI POINT -- roughly alpha_b times a per-logit slope -- so it is not comparable cell for cell with the other columns' accuracy rows; its time coefficient is in the same units as every other column's. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery). The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is needed. It is pooled with weights alpha_b^2 x years of observed history x the record path's average p(1-p) (its Delta accuracy over Delta logit) -- the benchmark's integrated Fisher information about the shared capability path, the same rule as every pooled figure in the repo -- with the standard error from the weighted combination where every benchmark carries a covariance. The other coefficients are in each benchmark's own logit units and are not pooled. Pooled N sums the primary benchmark columns. The final pooled column covers the linear specification only.</td></tr></tfoot></table>
+</tbody><tfoot><tr><td colspan="14">This model fits LN COST as the response, linear in logit accuracy and time (years, centered within benchmark), so the intercept is the fitted log cost of 50% accuracy at the benchmark's reference date. Runs scoring zero -- that is, no better than guessing, since accuracy is rescaled from each benchmark's guessing floor -- and runs scoring n/n are both excluded, logit 0 and logit 1 being unusable as coordinates. Accuracy is a REGRESSOR here, so its sampling noise is measurement error, which attenuates the logit-accuracy slope. No standard errors: this is the grid OLS's objective -- the record cost ln C_a(t) sampled on the uniform (logit accuracy, date) grid -- minimised subject to the cost envelope's constraints: the surface must lie at or below every positive-accuracy run's log cost, rise with accuracy and never rise with date. Grid nodes are not observations and the constrained fit has no likelihood, so errors would be fictions twice over. N is the defined grid nodes.  cost drop, %/qtr is 100*(1 - exp(b_time / 4)): the time coefficient transformed directly -- the estimand is a single coefficient here, not the ratio of two as in the accuracy-direction tables. Standard error by the delta method on the transform, where a covariance exists. Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope moves with accuracy and date, so no single rate describes those columns. The at/past-SOTA rows ask the fitted surface how much faster cost falls near the frontier: an auxiliary OLS of the accuracy record's logit on date (one observation per release date) predicts each level's achievement date, and the surface's instantaneous d ln cost/dt is read at that date and one and two quarters later -- the decline rate of a level the moment it becomes achievable, and as it recedes behind the frontier -- averaged over the grid's accuracy levels and expressed quarterly. The same levels enter all three rows: a level qualifies only when its full two-quarter window lies inside the benchmark's observed dates, so the rows differ by evaluation date, never by composition. On the linear specification the three repeat the cost drop row by construction; the curved specifications let them differ, which is where faster-near-SOTA shows up. No standard errors: the auxiliary SOTA regression sits outside every fit's own error model. The pooled-runs column is blank here because achievement dates are benchmark-specific. Pooled runs, the sixth column, pools the DATA rather than the estimates: the five primaries' runs stacked with logit accuracy converted to the anchored ECI capability scale (2PL: C = logit(a)/alpha_b + D_b) and one fit taken with benchmark fixed effects (estimated, not shown) absorbing cost-level differences. Its accuracy slope is log dollars per ECI POINT -- roughly alpha_b times a per-logit slope -- so it is not comparable cell for cell with the other columns' accuracy rows; its time coefficient is in the same units as every other column's. Pooled covers the primary benchmarks only (aime, chess, fm13, gpqa, mystery). The time coefficient is d ln cost / d year at fixed accuracy -- log dollars per year on every benchmark, common units, so unlike the accuracy tables no ECI rescaling is needed. It is pooled with weights alpha_b^2 x years of observed history x the record path's average p(1-p) (its Delta accuracy over Delta logit) -- the benchmark's integrated Fisher information about the shared capability path, the same rule as every pooled figure in the repo -- with the standard error from the weighted combination where every benchmark carries a covariance. The other coefficients are in each benchmark's own logit units and are not pooled. Pooled N sums the primary benchmark columns. The final pooled column covers the linear specification only.</td></tr></tfoot></table>
 </body></html>

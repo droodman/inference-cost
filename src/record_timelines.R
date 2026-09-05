@@ -226,7 +226,21 @@ p <- ggplot(tl, aes(date, cost)) +
   geom_text(data = myst, aes(colour = dotcol), label = "?", size = 3.4,
             fontface = "bold") +
   ggrepel::geom_text_repel(
-    data = all_labs, aes(label = lab, size = sz, colour = col),
+    data = all_labs[!grepl("^90% on", all_labs$lab), ],
+    aes(label = lab, size = sz, colour = col),
+    segment.colour = LT$muted, segment.size = 0.25, min.segment.length = 0.3,
+    box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1) +
+  # the two 90% trace names, lifted into the open pocket ABOVE their opening
+  # dots (the default placement buried them among the model labels); nudges
+  # are in panel units (days, log10 dollars), one pair per label in row
+  # order. AIME's dot (2025-08) predates the FrontierMath 50% trace, so a
+  # straight-up label never crosses that line; GPQA's dot sits below that
+  # trace's tail, so its label stacks left-and-above in the same pocket, the
+  # one place its leader crosses no trace.
+  ggrepel::geom_text_repel(
+    data = all_labs[grepl("^90% on", all_labs$lab), ],
+    aes(label = lab, size = sz, colour = col),
+    nudge_x = c(0, -140), nudge_y = c(0.45, 0.93),
     segment.colour = LT$muted, segment.size = 0.25, min.segment.length = 0.3,
     box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1) +
   scale_size_identity() +

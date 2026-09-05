@@ -63,7 +63,7 @@ NOTES_QUAD <- paste("Quadratic adds all three second-order terms (cost^2, time^2
                     "monotonicity check for whether the block earns its keep.")
 NOTES_BC <- paste("Box-Cox: phi(odds) -- profiled for S, the logit for the",
                   "SFA pair -- is linear in phi(cost), phi(years since",
-                  "mid-2020) and their product, with the transform parameters",
+                  "October 2020) and their product, with the transform parameters",
                   "profiled per benchmark; monotone in cost at every date.")
 
 ## ---- the pooled pseudo-benchmark, S family's sixth panel ------------------------------

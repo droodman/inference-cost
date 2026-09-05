@@ -670,6 +670,55 @@ surface_decline_qtr <- function(fit, data, h = 1e-4) {
        n_nodes = sum(ok))
 }
 
+## ---- decline at and after achievement -------------------------------------------------
+
+# The SOTA path as a line in (date, logit accuracy): OLS of the accuracy
+# record's logit on date, one observation per release date whose record is
+# positive and sub-perfect. The fitted line predicts the record level at any
+# date and, inverted, the ACHIEVEMENT DATE of any level -- the calibration
+# post_sota_decline_qtr() reads its evaluation dates off.
+sota_line <- function(data) {
+  dt <- sort(unique(data$tc))
+  rec <- vapply(dt, function(tk) max(data$acc[data$tc <= tk]), 0)
+  ok <- rec > 0 & rec < 1
+  cf <- coef(lm(qlogis(rec[ok]) ~ dt[ok]))
+  c(int = unname(cf[1]), slope = unname(cf[2]))
+}
+
+# How much faster cost falls near SOTA, by the fitted surface's own account:
+# for each of the grid's accuracy levels, the level's predicted achievement
+# date t*(a) off the SOTA line, then the surface's instantaneous d lnC/dt at
+# t*(a) + k quarters -- the decline rate of a level at the moment it becomes
+# achievable, and k quarters into its life behind the frontier -- averaged
+# over levels and expressed quarterly, exactly as surface_decline_qtr()
+# aggregates. The SAME levels enter every k: a level qualifies only when its
+# whole window [t*(a), t*(a) + max(qtrs)/4] lies inside the benchmark's
+# observed dates, so the k's differ by evaluation date alone, never by
+# composition, and the surface is never extrapolated. On a linear fit every
+# entry equals cost_decline_qtr() by construction -- the comparison is only
+# informative for the curved specifications.
+#
+# Returns a numeric VECTOR, one entry per qtrs, NA where no level qualifies
+# or the record path has no rising fitted line to invert.
+post_sota_decline_qtr <- function(fit, data, qtrs = c(0, 1, 2), h = 1e-4) {
+  sl <- sota_line(data)
+  if (!is.finite(sl[["slope"]]) || sl[["slope"]] <= 0)
+    return(rep(NA_real_, length(qtrs)))
+  la <- unique(iso_grid(data)$la)
+  t_star <- (la - sl[["int"]]) / sl[["slope"]]
+  rng <- range(data$tc)
+  ok <- t_star >= rng[1] & t_star + max(qtrs) / 4 <= rng[2]
+  if (!any(ok)) return(rep(NA_real_, length(qtrs)))
+  srf <- cost_surface(fit, data)
+  vapply(qtrs, function(k) {
+    tt <- t_star[ok] + k / 4
+    dln <- (srf$f(la[ok], tt + h) - srf$f(la[ok], tt - h)) / (2 * h)
+    dln <- dln[is.finite(dln)]
+    if (!length(dln)) return(NA_real_)
+    100 * (1 - exp(mean(dln) / 4))
+  }, 0)
+}
+
 # Accuracy-versus-cost curves at each drawn date, for frontier_plot(). NOT an
 # inversion: the surface is SWEPT parametrically along the observed logit
 # accuracy range and plotted as (exp(lnC), plogis(la)) -- exact for every

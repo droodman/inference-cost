@@ -30,7 +30,7 @@
 SCRIPTS <- c(
   "plot_accuracy_scatter.R",# raw accuracy-vs-date plate, no fits at all
   "pareto_frontiers.R",    # nonparametric staircase figure
-  "record_timelines.R",    # cost records at 50% performance (HTML + figure)
+  "record_timelines.R",    # cost records at 10/50/90% performance (HTML + figure)
   "plot_frontiers.R",      # SFA + S figures, both views, + fit diagnostics
   "plot_paretologit.R",    # Pareto-frontier logit figures, both views
   "plot_paretologitenv.R", # envelope-constrained variant, both views

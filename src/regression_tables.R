@@ -262,6 +262,15 @@ decl_cell <- function(cl, which = "est") {
   else if (is.na(cl$decline$se)) "" else sprintf("(%s)", fmt(cl$decline$se, 1))
 }
 
+# The at/past-SOTA decline rows (cost tables; post_sota_decline_qtr,
+# cost_frontier.R): one label per entry of the qtrs vector, cells in the
+# decline row's percentage format
+SOTA_ROW_LABELS <- c("cost drop, %/qtr, at SOTA", "1 quarter past SOTA",
+                     "2 quarters past SOTA")
+sota_cell <- function(cl, i) {
+  if (is.null(cl$sota) || is.na(cl$sota[i])) "" else fmt(cl$sota[i], 1)
+}
+
 # Quadratic block test. LR where a likelihood exists, Wald where it does not,
 # nothing for the envelope. Returns label + statistic + df + p, plus `row`
 # naming which test row of the table the result belongs to.
@@ -497,6 +506,13 @@ build_model_cost <- function(key) {
            n = if (key %in% c("costgridols", "costgridolsenv"))
              attr(f, "n_grid") else nrow(iso_runs(d[d$benchmark == b, ])),
            decline = if (tt == "lin") cost_decline_dual(f) else NULL,
+           # the at/past-SOTA decline rates (post_sota_decline_qtr,
+           # cost_frontier.R): every specification gets them -- on the linear
+           # fit they repeat the cost drop row by construction, which is
+           # itself the point of comparison with the curved columns. The
+           # pooled column stays NULL: achievement dates are benchmark-
+           # specific, so no single SOTA line serves the stack.
+           sota = post_sota_decline_qtr(f, d[d$benchmark == b, ]),
            test = tst)
     })
     # The pooled-DATA column, placed sixth (right after the primaries it
@@ -757,7 +773,23 @@ html_table <- function(key, label, cols, tt) {
     }
   }
 
-  o <- c(o, sprintf('<tr%s><td>N</td>', if (has_decl) '' else ' class="gap"'))
+  # the at/past-SOTA decline rates (cost tables only): point estimates, no
+  # SE rows -- the auxiliary SOTA regression sits outside every fit's own
+  # error model
+  has_sota <- any(vapply(cols, function(cl) !is.null(cl$sota), logical(1)))
+  if (has_sota) {
+    for (i in seq_along(SOTA_ROW_LABELS)) {
+      o <- c(o, sprintf('<tr%s><td>%s</td>',
+                        if (i == 1 && !has_decl) ' class="gap"' else '',
+                        SOTA_ROW_LABELS[i]))
+      for (j in seq_along(cols))
+        o <- c(o, sprintf('<td%s>%s</td>', cls(j), sota_cell(cols[[j]], i)))
+      o <- c(o, '</tr>')
+    }
+  }
+
+  o <- c(o, sprintf('<tr%s><td>N</td>',
+                    if (has_decl || has_sota) '' else ' class="gap"'))
   for (j in seq_along(cols))
     o <- c(o, sprintf('<td%s>%d</td>', cls(j), cols[[j]]$n))
   o <- c(o, '</tr>')
@@ -890,8 +922,14 @@ rtf_table <- function(key, label, cols, tt) {
       o <- c(o, rtf_row(c("", vapply(cols, function(cl) decl_cell(cl, "se"),
                                      character(1))), widths, sep = sep_data))
   }
+  has_sota <- any(vapply(cols, function(cl) !is.null(cl$sota), logical(1)))
+  if (has_sota) for (i in seq_along(SOTA_ROW_LABELS))
+    o <- c(o, rtf_row(c(SOTA_ROW_LABELS[i],
+                        vapply(cols, function(cl) sota_cell(cl, i),
+                               character(1))),
+                      widths, top = i == 1 && !has_decl, sep = sep_data))
   o <- c(o, rtf_row(c("N", vapply(cols, function(cl) as.character(cl$n), character(1))),
-                    widths, top = !has_decl, sep = sep_data))
+                    widths, top = !has_decl && !has_sota, sep = sep_data))
   for (tr in TEST_ROWS) {
     trd <- test_row_data(cols, tr)
     if (is.null(trd)) next
@@ -950,6 +988,19 @@ notes_cost <- function(key, tt) {
     "tables. Standard error by the delta method on the transform, where a covariance exists.",
     "Linear specification only: with the quadratic's or Box-Cox's extra terms the time slope",
     "moves with accuracy and date, so no single rate describes those columns.")
+  sota <- paste(
+    "The at/past-SOTA rows ask the fitted surface how much faster cost falls near the",
+    "frontier: an auxiliary OLS of the accuracy record's logit on date (one observation per",
+    "release date) predicts each level's achievement date, and the surface's instantaneous",
+    "d ln cost/dt is read at that date and one and two quarters later -- the decline rate of a",
+    "level the moment it becomes achievable, and as it recedes behind the frontier -- averaged",
+    "over the grid's accuracy levels and expressed quarterly. The same levels enter all three",
+    "rows: a level qualifies only when its full two-quarter window lies inside the benchmark's",
+    "observed dates, so the rows differ by evaluation date, never by composition. On the linear",
+    "specification the three repeat the cost drop row by construction; the curved specifications",
+    "let them differ, which is where faster-near-SOTA shows up. No standard errors: the auxiliary",
+    "SOTA regression sits outside every fit's own error model. The pooled-runs column is blank",
+    "here because achievement dates are benchmark-specific.")
   tst <- switch(key,
     costsfa = , costsfab = paste(
       "Quadratic adds logit accuracy^2, time^2 and logit accuracy x time; the test is a",
@@ -964,8 +1015,8 @@ notes_cost <- function(key, tt) {
     paste("BC columns are BOX-TIDWELL: only the REGRESSORS are transformed, and LN COST is always the",
           "response. ln cost is linear in phi(odds; lambda_odds), phi(time; lambda_time) and their",
           "product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to the ODDS",
-          "a/(1-a) -- at lambda_odds = 0 phi(odds) IS logit accuracy -- and to years since mid-2020,",
-          "GPT-3's release. The family nests the linear model at (lambda_odds, lambda_time) = (0, 1) with",
+          "a/(1-a) -- at lambda_odds = 0 phi(odds) IS logit accuracy -- and to years since October 1,",
+          "2020, when OpenAI began charging for GPT-3. The family nests the linear model at (lambda_odds, lambda_time) = (0, 1) with",
           "no product term. A response-side lambda was tried and removed: phi(cost) has to be inverted to",
           "be read back, and that inverse has a pole at a finite index, which the profile walked into --",
           "fitted costs near e^20 per task against a dearest observed run under $1, with 1% of grid nodes",
@@ -1017,9 +1068,9 @@ notes_cost <- function(key, tt) {
     "other columns' accuracy rows; its time coefficient is in the same units as every other",
     "column's.")
   switch(tt,
-         lin  = paste(dir, se, extra, decl, pruns, pool),
-         quad = paste(dir, se, extra, tst, pruns),
-         bc   = paste(dir, se, extra, bc, pruns))
+         lin  = paste(dir, se, extra, decl, sota, pruns, pool),
+         quad = paste(dir, se, extra, tst, sota, pruns),
+         bc   = paste(dir, se, extra, bc, sota, pruns))
 }
 
 notes_plain <- function(key, kind, tt = "lin") {
@@ -1088,8 +1139,8 @@ notes_plain <- function(key, kind, tt = "lin") {
   bc <- paste(
     "BC columns are a Box-Cox alternative to the quadratic: the index is linear in phi(cost), phi(time) and",
     "their product, with phi(x; lambda) = (x^lambda - 1)/lambda (log at lambda = 0) applied to LEVEL cost per",
-    "task and to years since mid-2020, GPT-3's release -- so the BC intercept is the fit at $1 per task in",
-    "mid-2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in",
+    "task and to years since October 1, 2020, when OpenAI began charging for GPT-3 -- so the BC intercept is",
+    "the fit at $1 per task on October 1, 2021, where both transforms vanish. phi is increasing whatever lambda is, so the surface is monotone in",
     "cost at every date -- the quadratic's bending back toward the data cannot happen -- while the product term",
     "still allows the cost slope one sign change over time.",
     paste("These are BOX-TIDWELL fits: phi acts on the REGRESSORS only and the index is the plain logit,",

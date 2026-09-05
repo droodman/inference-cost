@@ -5,7 +5,8 @@
 #                  + bxt*phi(cost)*phi(tau)
 #
 # with phi(x; l) = (x^l - 1)/l, the Box-Cox transform (log at l = 0), applied to
-# LEVEL cost per task and to tau = years since BC_T0 (GPT-3's release, mid-2020
+# LEVEL cost per task and to tau = years since BC_T0 (October 1, 2020, when
+# OpenAI began charging for GPT-3
 # -- level time needs an origin, and log cost does not, which is why the linear
 # and quadratic specifications never faced this question).
 #
@@ -389,7 +390,14 @@ fit_bc <- function(key, s, lambda_start = c(0, 1)) {
     lam <- sr$lam; lt_free <- sr$lt_free
   }
 
-  r <- bc_fit_at(key, s, off, lam[1], lam[2], start = ws$start)
+  # The refit warm-starts from the search's LAST inner solve, which sat at
+  # whatever lambdas the search evaluated last -- not necessarily near the
+  # optimum. A start incompatible with the optimum's transform scaling kills
+  # maxLik on an NA initial gradient (first seen when BC_T0 moved), so fall
+  # back to the cold self-start the inner fitter uses on its own.
+  r <- tryCatch(bc_fit_at(key, s, off, lam[1], lam[2], start = ws$start),
+                error = function(e) NULL)
+  if (is.null(r)) r <- bc_fit_at(key, s, off, lam[1], lam[2])
   fit <- r$fit
   attr(fit, "bc_lambda") <- c(lambda_cost = lam[1], lambda_time = lam[2])
   attr(fit, "bc_lambda_free") <- c(lambda_cost = TRUE, lambda_time = lt_free)

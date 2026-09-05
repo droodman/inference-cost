@@ -65,12 +65,6 @@ rate_rows <- do.call(rbind, lapply(bench_levels(d$benchmark), function(b) {
     # when the benchmark's history starts: how much data each rate rests on,
     # which is the first thing to check when one row disagrees with the rest
     start      = format(min(s$releasedate), "%Y-%m"),
-    # alpha_b^2, the 2PL information weight the pooled row uses. Reported for
-    # EVERY benchmark, pooled or not: it is a property of the benchmark rather
-    # than of the pool, and seeing it for the secondaries is how one judges
-    # what adding them would do -- several carry MORE information per
-    # observation than any primary does.
-    alpha2     = ALPHA[[b]]^2,
     staircase  = if (is.null(np)) NA_real_ else np$pct_qtr,
     bc_surface = if (is.null(ms)) NA_real_ else ms$pct_qtr,
     grid_ols   = cost_decline_qtr(store_cost("costgridols")$lin[[b]]),
@@ -136,15 +130,11 @@ pool_ratio <- function(fits) {
 }
 
 pri <- rate_rows[match(PB, rate_rows$bench), ]
-# the primaries' pooling shares, spelled out in the footnote (the alpha^2
-# column alone no longer implies them, the weight carrying the history term)
+# the primaries' pooling shares, spelled out in the footnote
 share_txt <- paste(sprintf("%s %.1f%%", LABELS[PB], 100 * WPOOL / sum(WPOOL)),
                    collapse = ", ")
 pooled <- data.frame(
   bench = "pooled", benchmark = "Pooled, primary (ECI-weighted)", start = "",
-  # the pool's denominator, sum over the PRIMARY benchmarks of the
-  # alpha^2 * years weight
-  alpha2 = sum(WPOOL),
   staircase  = pool_qtr(pri$staircase),
   bc_surface = pool_qtr(pri$bc_surface),
   grid_ols   = pool_qtr(pri$grid_ols),
@@ -159,61 +149,47 @@ pooled <- data.frame(
 # The final row above pools per-benchmark ESTIMATES; this row pools the RUNS:
 # fit_pooled_cost (cost_frontier.R) stacks the five primaries with logit
 # accuracy converted to anchored ECI capability units and benchmark fixed
-# effects absorbing cost-level differences, then fits each cost model once;
-# the accuracy-direction pair is pooled the same way (fit_pooled_acc,
-# envelope_frontier.R: alpha_b-scaled capability terms, benchmark FEs), its
-# rate the same -b_t/b_x ratio, which the alpha scaling cancels out of.
+# effects absorbing cost-level differences, then fits each cost model once.
 # The BC surface cell averages the pooled BC fit's instantaneous rate over
 # the stacked grid (pooled_bc_decline_qtr), mirroring the per-benchmark
 # column. The nonparametric column averages over one benchmark's accuracy
 # lattice, so that cell stays blank. Placed SIXTH -- right after the five
 # primaries it stacks, before the secondaries.
-rate_acc_pooled <- function(fit) {
-  cf <- coef(fit)
-  100 * (1 - exp(-cf[["xt"]] / cf[["xc"]] / 4))
-}
-pooled_runs <- data.frame(
-  bench = "p.runs", benchmark = "Pooled runs, primary (ECI units, benchmark FE)",
-  start = format(min(d$releasedate[d$benchmark %in% PB]), "%Y-%m"),
-  alpha2 = NA_real_, staircase = NA_real_,
-  bc_surface = pooled_bc_decline_qtr(store_pooled_cost_bc("costgridols"),
-                                     pooled_cost_runs(d)),
-  grid_ols = cost_decline_qtr(store_pooled_cost("costgridols")$lin),
-  grid_env = cost_decline_qtr(store_pooled_cost("costgridolsenv")$lin),
-  sfa_cost = cost_decline_qtr(store_pooled_cost("costsfa")$lin),
-  ols_runs = cost_decline_qtr(store_pooled_cost("costols")$lin),
-  par_logit = rate_acc_pooled(store_pooled_acc("paretologit")$lin),
-  pl_env    = rate_acc_pooled(store_pooled_acc("paretologitenv")$lin))
-
-# The same stacked regression with the common-capability-slope restriction
-# lifted (fit_pooled_cost's bench_slopes: la:bench in place of la, one shared
-# time slope). This isolates the two reasons the pooled-runs row sits below
-# both the final row and the primaries' own average: by Frisch-Waugh its tc
-# is now an exact leverage-weighted mean of the per-benchmark time slopes, so
-# any remaining gap to the final row is pure weighting -- grid nodes versus
-# alpha^2 x history -- with the shared-slope leakage gone. The accuracy cells
-# are blank on purpose: freeing b_x by benchmark makes the -b_t/b_x rate
-# benchmark-specific, and pooling those ratios would re-ask the weighting
-# question the final row already answers.
+#
+# The stacked-runs regression with benchmark-specific capability slopes
+# (fit_pooled_cost's bench_slopes: la:bench in place of la, one shared time
+# slope). A shared-slope variant used to sit beside it and was dropped: the
+# primaries reject a common capability slope (0.13-0.29 log dollars per ECI
+# point), and forcing one leaks into the time coefficient through the
+# positive within-benchmark correlation of capability and date that
+# SOTA-truncated grids build in. With the slopes freed, Frisch-Waugh makes
+# the shared tc an exact leverage-weighted mean of the per-benchmark time
+# slopes, so this row's distance from the final row is purely the weighting
+# -- grid nodes and time spread here, alpha^2 x history x p(1-p) there.
+# The accuracy cells cannot free a slope the same way -- their rate is the
+# RATIO -b_t/b_x, so freeing b_x leaves five rates -- and instead profile
+# the SHARED RATE directly: fit_pooled_acc_bs (envelope_frontier.R)
+# reparametrizes the index as alpha_b*xc_b*(ln c - r*tc) + FE and moves r
+# against the fit's own objective, benchmark-specific steepness with one
+# decline rate, the exact dual of the cost side's freed slopes.
+rate_bs <- function(fit) 100 * (1 - exp(attr(fit, "rate_r") / 4))
 pooled_runs_bs <- data.frame(
   bench = "p.bslp",
   benchmark = "Pooled runs, benchmark-specific capability slopes",
-  start = pooled_runs$start,
-  alpha2 = NA_real_, staircase = NA_real_,
+  start = format(min(d$releasedate[d$benchmark %in% PB]), "%Y-%m"),
+  staircase = NA_real_,
   bc_surface = pooled_bc_decline_qtr(store_pooled_cost_bc_bs("costgridols"),
                                      pooled_cost_runs(d)),
   grid_ols = cost_decline_qtr(store_pooled_cost_bs("costgridols")),
   grid_env = cost_decline_qtr(store_pooled_cost_bs("costgridolsenv")),
   sfa_cost = cost_decline_qtr(store_pooled_cost_bs("costsfa")),
   ols_runs = cost_decline_qtr(store_pooled_cost_bs("costols")),
-  par_logit = NA_real_, pl_env = NA_real_)
-rate_rows <- rbind(rate_rows[seq_along(PB), ], pooled_runs, pooled_runs_bs,
+  par_logit = rate_bs(store_pooled_acc_bs("paretologit")),
+  pl_env    = rate_bs(store_pooled_acc_bs("paretologitenv")))
+rate_rows <- rbind(rate_rows[seq_along(PB), ], pooled_runs_bs,
                    rate_rows[-seq_along(PB), ])
 
 pc <- function(x) ifelse(is.na(x), "", sprintf("%.1f%%", x))
-# alpha^2 formatter: the pooled-runs row has no alpha^2 (it is not a
-# weighted combination), and sprintf("%.4f", NA) would print "NA"
-pa <- function(x) ifelse(is.na(x), "", sprintf("%.4f", x))
 
 # The HTML gets a real minus sign. sprintf leaves an ASCII hyphen, which is
 # narrower than the digits it sits against and reads as a dash rather than a
@@ -222,15 +198,15 @@ pc_html <- function(x) sub("^-", "&minus;", pc(x))
 
 cat("cost decline per quarter at fixed accuracy\n")
 cat("(positive = cheaper; frontier columns first, then the run-cloud pair)\n")
-cat(sprintf("%-6s %8s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
-            "bench", "from", "alpha^2", "staircase", "grid OLS", "BC surf",
+cat(sprintf("%-6s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
+            "bench", "from", "staircase", "grid OLS", "BC surf",
             "grid+env", "OLS runs", "SFA cost", "par.logit", "pl env"))
 for (i in seq_len(nrow(rate_rows) + 1)) {
   r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else pooled
-  if (i > nrow(rate_rows)) cat(strrep("-", 96), "\n")
+  if (i > nrow(rate_rows)) cat(strrep("-", 87), "\n")
   cat(sprintf(
-    "%-6s %8s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
-    r$bench, r$start, pa(r$alpha2), pc(r$staircase), pc(r$grid_ols),
+    "%-6s %8s %10s %9s %9s %9s | %9s %9s | %10s %8s\n",
+    r$bench, r$start, pc(r$staircase), pc(r$grid_ols),
     pc(r$bc_surface),
     pc(r$grid_env), pc(r$ols_runs), pc(r$sfa_cost), pc(r$par_logit),
     pc(r$pl_env)))
@@ -300,7 +276,6 @@ o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
        # column, where a centred block would drift off the column's edge.
        '<th rowspan="2">Benchmark</th>',
        '<th rowspan="2"><div class="hd">Data start</div></th>',
-       '<th rowspan="2"><div class="hd">&alpha;<sup>2</sup> weight</div></th>',
        '<th rowspan="2"><div class="hd">Non-parametric</div></th>',
        '<th colspan="5"><div class="hd">Cost models</div></th>',
        '<th colspan="2"><div class="hd">Accuracy models</div></th>',
@@ -312,13 +287,13 @@ o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
        '<th><div class="hd">Model frontier</div></th>',
        '<th><div class="hd">Model frontier, require envelopment</div></th>',
        '</tr></thead><tbody>')
-order_cells <- c("<i>Model order</i>", "", "", "", "Linear", "Box-Cox",
+order_cells <- c("<i>Model order</i>", "", "", "Linear", "Box-Cox",
                  "Linear", "Linear", "Linear", "Linear", "Linear")
 o <- c(o, sprintf('<tr class="order-row">%s</tr>',
                   paste0(sprintf('<td>%s</td>', order_cells), collapse = '')))
 for (i in seq_len(nrow(rate_rows) + 1)) {
   r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else pooled
-  cells <- c(esc(r$start), pa(r$alpha2),
+  cells <- c(esc(r$start),
              pc_html(unlist(r[, c("staircase", "grid_ols", "bc_surface",
                                   "grid_env", "ols_runs", "sfa_cost",
                                   "par_logit", "pl_env")])))
@@ -329,7 +304,7 @@ for (i in seq_len(nrow(rate_rows) + 1)) {
                     esc(r$benchmark),
                     paste0(sprintf('<td>%s</td>', cells), collapse = '')))
 }
-o <- c(o, '</tbody><tfoot><tr><td colspan="11">',
+o <- c(o, '</tbody><tfoot><tr><td colspan="10">',
        paste("All numbers are estimates of the average quarterly drop in the cost",
              "of a given level of accuracy on a given benchmark, over the years of available data.",
              "The \"non-parametric\" values are averages over grids with one date node every ~13 days (the same time resolution for every benchmark, so longer",
@@ -352,11 +327,11 @@ o <- c(o, '</tbody><tfoot><tr><td colspan="11">',
              "capability C. Holding accuracy fixed on a benchmark holds C fixed, so each column's rate already answers the same question and needs no rescaling; what ECI supplies is",
              "how much each benchmark counts. The pooling weight is &alpha;<sub>b</sub><sup>2</sup> &times; the benchmark's observed history in years &times; the record path's",
              "average of p(1&minus;p), computed as &Delta;accuracy/&Delta;logit between the record's first and last levels. The three factors are the benchmark's integrated Fisher",
-             "information about the shared capability path: &alpha;<sup>2</sup> is the 2PL's information coefficient (the &alpha;<sup>2</sup> column, shown for every benchmark because",
-             "it is a property of the benchmark and not of the pool); the history term recognizes that a rate is pinned down over its time base; and the p(1&minus;p) term recognizes",
+             "information about the shared capability path: &alpha;<sup>2</sup> is the 2PL's information coefficient; the history term recognizes that a rate is pinned",
+             "down over its time base; and the p(1&minus;p) term recognizes",
              "that per-response information is &alpha;<sup>2</sup>p(1&minus;p), so a high-discrimination benchmark self-limits &mdash; it spends more of its history in saturated",
-             "tails where responses carry little information. Short histories and saturated benchmarks are thus both discounted automatically. The final row's",
-             "&alpha;<sup>2</sup> cell holds the pool's denominator, the weights summed over the five primaries; their shares are",
+             "tails where responses carry little information. Short histories and saturated benchmarks are thus both discounted automatically. The five primaries'",
+             "shares under this weight are",
              sprintf("%s.", share_txt),
              "Note that several SECONDARY benchmarks carry a larger &alpha;<sup>2</sup> than any primary; under this weighting their short histories discount them automatically,",
              "so their continued exclusion is a choice about data maturity rather than a necessity. Every column but the last two is pooled as the",
@@ -366,21 +341,18 @@ o <- c(o, '</tbody><tfoot><tr><td colspan="11">',
              "For the envelope and grid fits the &alpha;<sup>2</sup> weights borrow an information interpretation those fits cannot support &mdash; there is no likelihood behind them",
              "&mdash; so their pooled entries are mechanical averages.",
              "The sixth row pools the DATA rather than the estimates: the five primaries' runs are stacked with each logit accuracy converted to the anchored ECI capability",
-             "scale via the 2PL, C = logit(a)/&alpha;<sub>b</sub> + D<sub>b</sub>, and each cost model is fitted once to the stack with benchmark fixed effects absorbing",
-             "cost-level differences across benchmarks; the frontier-per-se fits sample each benchmark's staircase on its own grid, stacked, under one surface. Its Box-Cox",
-             "cell transforms exp(C/10) in place of the odds &mdash; a pure relabeling of &lambda; &mdash; and averages the fitted surface's instantaneous rate over the stacked grid.",
-             "Its accuracy-model cells pool the same way in that direction: one logit-link fit whose capability terms are pre-scaled by &alpha;<sub>b</sub>, with benchmark fixed",
-             "effects; the &alpha;'s cancel out of the reported -b_t/b_x ratio. Its non-parametric cell is blank: that column averages over a single benchmark's accuracy lattice.",
-             "Where this row's cost cells sit below the final row's, the gap is real, not error: pooling the runs imposes ONE capability slope, which the primaries reject",
-             "(their slopes span 0.13-0.29 log dollars per ECI point), and it weights benchmarks by their data (grid nodes and leverage) rather than by the final row's",
-             "&alpha;<sup>2</sup> &times; history weights. The accuracy cells escape both effects more nearly, hence their closer agreement.",
-             "The seventh row separates those two effects: it repeats the sixth with the common-capability-slope restriction lifted &mdash; each benchmark keeps its own",
-             "capability slope (a capability &times; benchmark interaction; for the Box-Cox cell, on the &phi;(odds) main effect) while the time slope stays shared. By the",
-             "Frisch&ndash;Waugh theorem the shared time slope is then an exact leverage-weighted average of the five per-benchmark time slopes, so the seventh row's distance",
-             "from the sixth is what the common-slope restriction was contributing, and its remaining distance from the final row is purely the difference in weights &mdash;",
-             "each benchmark's defined grid nodes and time spread there, &alpha;<sup>2</sup> &times; history &times; p(1&minus;p) in the final row. Its accuracy cells are blank",
-             "by construction: freeing the cost slope by benchmark makes the &minus;b_t/b_x rate benchmark-specific, and pooling those ratios would re-ask the weighting",
-             "question the final row already answers."),
+             "scale via the 2PL, C = logit(a)/&alpha;<sub>b</sub> + D<sub>b</sub>, and each cost model is fitted once to the stack, with benchmark fixed effects absorbing",
+             "cost-level differences and each benchmark keeping its OWN capability slope (a capability &times; benchmark interaction; for the Box-Cox cell, on the &phi;(odds)",
+             "main effect) while the time slope is shared; the frontier-per-se fits sample each benchmark's staircase on its own grid, stacked, under one surface.",
+             "The slopes must be freed because the primaries reject a common one &mdash; their capability slopes span 0.13&ndash;0.29 log dollars per ECI point &mdash; and forcing",
+             "it leaks into the time coefficient through the positive within-benchmark correlation of capability and date that defined-where-achieved grids build in. Freed, the",
+             "Frisch&ndash;Waugh theorem makes the shared time slope an exact leverage-weighted average of the five per-benchmark time slopes, so this row's distance from the",
+             "final row is purely the difference in weights: each benchmark's defined grid nodes and time spread here, &alpha;<sup>2</sup> &times; history &times; p(1&minus;p)",
+             "there. Its Box-Cox cell transforms exp(C/10) in place of the odds &mdash; a pure relabeling of &lambda; &mdash; and averages the fitted surface's instantaneous",
+             "rate over the stacked grid. Its accuracy-model cells cannot free a slope the same way &mdash; their rate is the ratio &minus;b_t/b_x, and freeing b_x by benchmark",
+             "would leave five rates &mdash; so they profile the shared rate directly: the index is reparametrized as &alpha;<sub>b</sub>x<sub>b</sub>(ln c &minus; r&middot;t) plus",
+             "fixed effects &mdash; benchmark-specific capability steepness x<sub>b</sub>, one decline rate r &mdash; and r is moved against the fit's own quasi-likelihood,",
+             "the exact dual of the cost side's freed slopes. Its non-parametric cell is blank: that column averages over a single benchmark's accuracy lattice."),
        '</td></tr></tfoot></table></body></html>')
 writeLines(o, out_path("tables", "rate_comparison.html"))
 cat("wrote rate_comparison.html\n")

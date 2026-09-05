@@ -141,7 +141,7 @@ SPEC_NOTE <- c(
   bc = paste("Box-Cox: phi(cost) -- profiled for the least-squares fits,",
              "fixed at ln cost for the SFA duals, whose inefficiency term the",
              "response transform would confound -- is linear in phi(odds) and",
-             "phi(years since mid-2020) (zeros excluded)."))
+             "phi(years since October 2020) (zeros excluded)."))
 ISO_SPEC_NOTE <- c(
   lin = paste("The linear surface cannot bend, so its parallel contours miss",
               "the records' sharp rise toward each date's best-achieved",
@@ -152,7 +152,7 @@ ISO_SPEC_NOTE <- c(
                "ceiling still cannot be tracked by one fixed surface."),
   bc = paste("Box-Cox: phi(cost) -- profiled for the least-squares fits,",
              "fixed at ln cost for the SFA duals -- linear in phi(odds) and",
-             "phi(years since mid-2020); a lambda on the search-box edge",
+             "phi(years since October 2020); a lambda on the search-box edge",
              "means the profile ran to the wall, and contours blank where",
              "the fitted index leaves phi's range."))
 
