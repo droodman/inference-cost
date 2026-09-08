@@ -681,7 +681,10 @@ cloud_decline_qtr <- function(fit, data, h = 1e-4) {
   dln <- (srf$f(su$la, su$tc + h) - srf$f(su$la, su$tc - h)) / (2 * h)
   dln <- dln[is.finite(dln)]
   if (!length(dln)) return(NA_real_)
-  100 * (1 - exp(mean(dln) / 4))
+  r <- 100 * (1 - exp(mean(dln) / 4))
+  # an extreme profiled lambda_time makes tau^(lt - 1) overflow at the
+  # earliest runs; a non-finite average is reported blank, not as -Inf
+  if (is.finite(r)) r else NA_real_
 }
 
 ## ---- decline at and after achievement -------------------------------------------------

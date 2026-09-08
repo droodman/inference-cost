@@ -1,16 +1,21 @@
 # Console report: quarterly cost-decline rates from the cost-direction dual
 # fits (cost_frontier.R), beside the accuracy-direction fits they mirror and
-# the nonparametric staircase check. All linear specifications; every column
-# targets the same estimand, the fall per quarter in the cost of fixed
-# frontier performance.
+# the nonparametric staircase check. Every column targets the same estimand,
+# the fall per quarter in the cost of fixed frontier performance.
 #
-# Columns, in the order printed:
+# TWO tables (console blocks and HTML alike), both led by the data-start and
+# model-free columns:
 #
 #   data start the benchmark's earliest run, as YYYY-MM: how much history a
 #              row's rates rest on, and the first thing to check when one
 #              benchmark disagrees with the rest
-#   staircase  pareto_decline_qtr, the model-free average over a QUARTER
-#              horizon (blank where the benchmark spans less than that)
+#   model-free pareto_decline_qtr, the model-free average over a QUARTER
+#              horizon (blank where the benchmark spans less than that);
+#              printed as "staircase" in the console
+#
+# Table 1, the frontier and all-data cost models, each as a linear /
+# Box-Tidwell pair:
+#
 #   grid OLS   fit_lncost_grid: ln C_a(t) sampled on the (logit acc, date)
 #              grid, OLS through the samples; rate = its tc coefficient
 #   BC surf    the Box-Cox grid OLS surface's own INSTANTANEOUS d lnC/dt,
@@ -20,13 +25,23 @@
 #              it is a step function, a fitted surface does not. On a linear
 #              fit this reproduces the grid OLS column exactly
 #   grid+env   fit_lncost_grid_env: the grid OLS objective under the cost
-#              envelope's constraints; rate = its tc coefficient
+#              envelope's constraints; rate = its tc coefficient. Its BC twin
+#              is summarized like BC surf
 #   OLS runs   lm of ln cost on logit acc and date over all positive-accuracy
-#              runs -- model S's reverse regression, the typical run's cost
-#   SFA cost   fit_cost_sfa: stochastic cost frontier, half-normal per
+#              runs -- model S's reverse regression, the typical run's cost.
+#              Its BC twin averages the surface's rate over the RUNS
+#              (cloud_decline_qtr), the model's own population
+#
+# Table 2, the SFA pair and the accuracy models, again as linear / BC pairs:
+#
+#   SFA        fit_cost_sfa: stochastic cost frontier, half-normal per
 #              model x effort; rate = its tc coefficient
-#   par.logit  fit_pareto_logit (accuracy direction); rate = -b_t/b_x
-#   pl env     fit_pareto_logit_env (accuracy direction); rate = -b_t/b_x
+#   SFAb       the same with log sigma_u linear in date (costsfab)
+#   (BC twins of both average the frontier's rate over the runs, as OLS BC)
+#   par.logit  fit_pareto_logit (accuracy direction); rate = -b_t/b_x, and
+#              its BC twin the ratio of node-averaged slopes
+#              (pareto_bc_decline_qtr)
+#   pl env     fit_pareto_logit_env, same pair of summaries
 #
 # Reading the spread: the frontier-per-se columns (staircase, grid OLS, BC
 # surf, grid+env, par.logit, pl env) all target the record's decline, and differ by
@@ -76,6 +91,12 @@ rate_rows <- do.call(rbind, lapply(bench_levels(d$benchmark), function(b) {
       if (is.null(me)) NA_real_ else me$pct_qtr
     },
     sfa_cost   = cost_decline_qtr(store_cost("costsfa")$lin[[b]]),
+    # the SFA pair's Box-Tidwell twins, and the time-varying-sigma_u SFA:
+    # cloud models, so their BC rates average the fitted surface's
+    # instantaneous d lnC/dt over the runs, exactly as ols_runs_bc does
+    sfa_bc     = cloud_decline_qtr(store_cost_bc("costsfa")[[b]], s),
+    sfab       = cost_decline_qtr(store_cost("costsfab")$lin[[b]]),
+    sfab_bc    = cloud_decline_qtr(store_cost_bc("costsfab")[[b]], s),
     ols_runs   = cost_decline_qtr(store_cost("costols")$lin[[b]]),
     # the all-data Box-Cox twin: the cloud model's instantaneous rate
     # averaged over the runs themselves (cloud_decline_qtr, cost_frontier.R)
@@ -158,6 +179,9 @@ pooled <- data.frame(
   grid_env   = pool_qtr(pri$grid_env),
   grid_env_bc = pool_qtr(pri$grid_env_bc),
   sfa_cost   = pool_qtr(pri$sfa_cost),
+  sfa_bc     = pool_qtr(pri$sfa_bc),
+  sfab       = pool_qtr(pri$sfab),
+  sfab_bc    = pool_qtr(pri$sfab_bc),
   ols_runs   = pool_qtr(pri$ols_runs),
   ols_runs_bc = pool_qtr(pri$ols_runs_bc),
   par_logit  = pool_ratio(store_grid("paretologit")$lin),
@@ -194,6 +218,9 @@ simple <- data.frame(
   grid_env   = savg(pri$grid_env),
   grid_env_bc = savg(pri$grid_env_bc),
   sfa_cost   = savg(pri$sfa_cost),
+  sfa_bc     = savg(pri$sfa_bc),
+  sfab       = savg(pri$sfab),
+  sfab_bc    = savg(pri$sfab_bc),
   ols_runs   = savg(pri$ols_runs),
   ols_runs_bc = savg(pri$ols_runs_bc),
   par_logit  = savg(pri$par_logit),
@@ -209,24 +236,32 @@ pc <- function(x) ifelse(is.na(x), "", sprintf("%.1f%%", x))
 # sign. The console keeps the hyphen, where the entity would print literally.
 pc_html <- function(x) sub("^-", "&minus;", pc(x))
 
-cat("cost decline per quarter at fixed accuracy\n")
-cat("(positive = cheaper; frontier columns first, then the run-cloud pair)\n")
-cat(sprintf("%-6s %8s %10s %9s %9s %9s %8s | %9s %8s %9s | %10s %10s %8s %9s\n",
-            "bench", "from", "staircase", "grid OLS", "BC surf",
-            "grid+env", "env BC", "OLS runs", "OLS BC", "SFA cost",
-            "par.logit", "par.lg BC", "pl env", "plenv BC"))
-for (i in seq_len(nrow(rate_rows) + nrow(summary_rows))) {
-  r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else
-    summary_rows[i - nrow(rate_rows), ]
-  if (i == nrow(rate_rows) + 1) cat(strrep("-", 128), "\n")
-  cat(sprintf(
-    "%-6s %8s %10s %9s %9s %9s %8s | %9s %8s %9s | %10s %10s %8s %9s\n",
-    r$bench, r$start, pc(r$staircase), pc(r$grid_ols),
-    pc(r$bc_surface),
-    pc(r$grid_env), pc(r$grid_env_bc), pc(r$ols_runs), pc(r$ols_runs_bc),
-    pc(r$sfa_cost), pc(r$par_logit),
-    pc(r$par_lg_bc), pc(r$pl_env), pc(r$pl_env_bc)))
+# Two blocks, mirroring the two saved tables: the frontier/all-data cost
+# models, then the SFA pair and the accuracy models.
+console_block <- function(hdr, keys) {
+  f <- paste0("%-6s %8s ", paste(rep("%10s", length(keys)), collapse = " "),
+              "\n")
+  cat(do.call(sprintf, c(list(f, "bench", "from"), as.list(hdr))))
+  for (i in seq_len(nrow(rate_rows) + nrow(summary_rows))) {
+    r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else
+      summary_rows[i - nrow(rate_rows), ]
+    if (i == nrow(rate_rows) + 1)
+      cat(strrep("-", 16 + 11 * length(keys)), "\n")
+    cat(do.call(sprintf, c(list(f, r$bench, r$start),
+                           lapply(keys, function(k) pc(r[[k]])))))
+  }
 }
+cat("cost decline per quarter at fixed accuracy (positive = cheaper)\n\n")
+cat("frontier and all-data cost models\n")
+console_block(c("model-free", "grid OLS", "BC surf", "grid+env", "env BC",
+                "OLS runs", "OLS BC"),
+              c("staircase", "grid_ols", "bc_surface", "grid_env",
+                "grid_env_bc", "ols_runs", "ols_runs_bc"))
+cat("\nstochastic frontier and accuracy models\n")
+console_block(c("model-free", "SFA", "SFA BC", "SFAb", "SFAb BC",
+                "par.logit", "par.lg BC", "pl env", "plenv BC"),
+              c("staircase", "sfa_cost", "sfa_bc", "sfab", "sfab_bc",
+                "par_logit", "par_lg_bc", "pl_env", "pl_env_bc"))
 
 ## ---- the same comparison, saved as a table (HTML) ------------------------------
 
@@ -285,98 +320,134 @@ o <- c('<!DOCTYPE html>', '<html lang="en"><head><meta charset="UTF-8" />',
        # summaries of the rows rather than as more benchmarks among them.
        '.pooled-row td{border-top:1px solid #1d1d1d;padding-top:1em}',
        '.pooled-row td:first-child,.summary2-row td:first-child{font-style:italic}',
+       # subtitles for the two tables the page now holds
+       'h2{font-size:1.05em;margin:18px 0 4px 0}',
        '</style></head><body>',
-       '<h1>Average quarterly rate of decline in cost of given accuracy</h1>',
-       '<table><thead><tr>',
-       # Benchmark alone keeps its bare label: it is the left-aligned first
-       # column, where a centred block would drift off the column's edge.
-       '<th rowspan="2">Benchmark</th>',
-       '<th rowspan="2"><div class="hd">Data start</div></th>',
-       '<th rowspan="2"><div class="hd">Non-parametric</div></th>',
-       '<th colspan="7"><div class="hd">Cost models</div></th>',
-       '<th colspan="4"><div class="hd">Accuracy models</div></th>',
-       '</tr><tr>',
-       '<th colspan="2"><div class="hd">Model frontier</div></th>',
-       '<th colspan="2"><div class="hd">Model frontier, require envelopment</div></th>',
-       '<th colspan="2"><div class="hd">Model all data</div></th>',
-       '<th><div class="hd">Stochastic frontier analysis</div></th>',
-       '<th colspan="2"><div class="hd">Model frontier</div></th>',
-       '<th colspan="2"><div class="hd">Model frontier, require envelopment</div></th>',
-       '</tr></thead><tbody>')
-order_cells <- c("<i>Model order</i>", "", "", "Linear", "Box-Cox",
-                 "Linear", "Box-Cox", "Linear", "Box-Cox", "Linear",
-                 "Linear", "Box-Cox", "Linear", "Box-Cox")
-o <- c(o, sprintf('<tr class="order-row">%s</tr>',
-                  paste0(sprintf('<td>%s</td>', order_cells), collapse = '')))
-for (i in seq_len(nrow(rate_rows) + nrow(summary_rows))) {
-  r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else
-    summary_rows[i - nrow(rate_rows), ]
-  cells <- c(esc(r$start),
-             pc_html(unlist(r[, c("staircase", "grid_ols", "bc_surface",
-                                  "grid_env", "grid_env_bc",
-                                  "ols_runs", "ols_runs_bc", "sfa_cost",
-                                  "par_logit", "par_lg_bc",
-                                  "pl_env", "pl_env_bc")])))
-  # the summary rows are summaries, not more benchmarks: a rule above the
-  # first and italic labels on both keep them from reading as more data rows
-  o <- c(o, sprintf('<tr%s><td>%s</td>%s</tr>',
-                    if (i == nrow(rate_rows) + 1) ' class="pooled-row"' else
-                      if (i > nrow(rate_rows)) ' class="summary2-row"' else '',
-                    esc(r$benchmark),
-                    paste0(sprintf('<td>%s</td>', cells), collapse = '')))
+       '<h1>Average quarterly rate of decline in cost of given accuracy</h1>')
+
+# One rendered table: subtitle, its own two header rows over the shared
+# Benchmark / Data start / Model-free stub, the model-order row, every
+# benchmark and summary row restricted to `keys`, and its own footnote.
+html_tbl <- function(subtitle, group_html, order_cells, keys, notes) {
+  out <- c(sprintf('<h2>%s</h2>', subtitle),
+           '<table><thead><tr>',
+           # Benchmark alone keeps its bare label: it is the left-aligned
+           # first column, where a centred block would drift off the edge.
+           '<th rowspan="2">Benchmark</th>',
+           '<th rowspan="2"><div class="hd">Data start</div></th>',
+           '<th rowspan="2"><div class="hd">Model-free</div></th>',
+           group_html,
+           '</tr></thead><tbody>',
+           sprintf('<tr class="order-row">%s</tr>',
+                   paste0(sprintf('<td>%s</td>',
+                                  c("<i>Model order</i>", "", "",
+                                    order_cells)), collapse = '')))
+  for (i in seq_len(nrow(rate_rows) + nrow(summary_rows))) {
+    r <- if (i <= nrow(rate_rows)) rate_rows[i, ] else
+      summary_rows[i - nrow(rate_rows), ]
+    cells <- c(esc(r$start), pc_html(unlist(r[, c("staircase", keys)])))
+    # the summary rows are summaries, not more benchmarks: a rule above the
+    # first and italic labels on both keep them apart from the data rows
+    out <- c(out, sprintf('<tr%s><td>%s</td>%s</tr>',
+                          if (i == nrow(rate_rows) + 1)
+                            ' class="pooled-row"' else
+                            if (i > nrow(rate_rows))
+                              ' class="summary2-row"' else '',
+                          esc(r$benchmark),
+                          paste0(sprintf('<td>%s</td>', cells),
+                                 collapse = '')))
+  }
+  c(out, sprintf('</tbody><tfoot><tr><td colspan="%d">', length(keys) + 3),
+    notes, '</td></tr></tfoot></table>')
 }
-o <- c(o, '</tbody><tfoot><tr><td colspan="14">',
-       paste("All numbers are estimates of the average quarterly drop in the cost",
-             "of a given level of accuracy on a given benchmark, over the years of available data.",
-             "The \"non-parametric\" values are averages over grids with one date node every ~13 days (the same time resolution for every benchmark, so longer",
-             "histories carry proportionally more nodes) and 100 accuracy-uniform levels spanning the benchmark's achieved range, truncated at each date to the",
-             "state of the art (SOTA) by then &mdash; the same defined-where-achieved rule the fitted models' grids apply. At each point, the lowest cost",
-             "of performance at least as good one QUARTER later is found and divided by the initial cost. The geometric mean of the ratios is the quarterly decline rate.",
-             "Over so short a horizon most levels do not move at all, and each such node enters the geometric mean as a ratio of 1, so the rate is a minority of real drops",
-             "averaged in with a majority of unchanged records.",
-             "Results in all cost model columns are coefficients on release year as an explanator for log cost, again reexpressed quarterly; except that the nonlinear Box-Cox variants,",
-             "having no single such coefficient, are summarized by the average of the instantaneous rate of decline the fitted surface implies at each point &mdash; over the same",
-             "lattice as the non-parametric column for the two frontier fits, and over the runs themselves for the all-data fit, whose population is the cloud rather than the record.",
-             "That average differences nothing over time &mdash; the record needs a horizon because it is a step function, a fitted surface does not &mdash; and on a linear fit it reduces",
-             "exactly to the coefficient in the column beside it. In the accuracy model columns accuracy",
-             "is the dependent variable and log cost as an explanatory variable, so the linear rates are extracted as -b_t/b_x. The accuracy side's Box-Cox",
-             "(Box-Tidwell) columns have no single such ratio, so they take the grid analogue: with z the fitted logit index, the ratio of the node-averaged",
-             "slopes, &minus;mean(&part;z/&part;t) / mean(&part;z/&part;ln c) over the accuracy grid's defined nodes where the surface rises in cost &mdash;",
-             "equivalently a &part;z/&part;ln c-weighted mean of each node's implied d ln cost/dt, so near-flat nodes whose pointwise ratio diverges carry",
-             "no weight &mdash; which reduces exactly to -b_t/b_x on a linear fit.",
-             "\"Model frontier\" means modeling the empirical frontier as realized at a grid of points, either with ordinary least squares (OLS; for log cost) or with a logit link (for accuracy).",
-             "\"Model frontier, require envelopment\" means the same, but with the constraint that the fitted surface is never above any data point (for cost) or below (for accuracy).",
-             "\"Model all data\" means modeling all runs, not just the frontier, with OLS. \"Stochastic frontier analysis\" models the frontier and the distribution of runs around it",
-             "with a half-normal distribution of inefficiency.",
-             "The two closing rows summarize the five primary benchmarks &mdash; AIME, Chess Puzzles, FrontierMath tiers 1&ndash;3, GPQA Diamond and Mystery Game Puzzles &mdash;",
-             "two ways. The first is the SIMPLE AVERAGE: the unweighted mean of the five annual log-cost changes, converted back to a quarterly rate &mdash; transparent, free of any",
-             "external calibration, and the equal-weights limit of random-effects pooling, appropriate insofar as the benchmarks are exchangeable draws whose true rates differ.",
-             "(For the two linear accuracy columns this averages the five &minus;b_t/b_x ratios directly, where the weighted row below pools slopes first.)",
-             "The final row instead pools the same five estimates onto the common",
-             "capability scale of Epoch's ECI (Epoch Capabilities Index), whose 2PL writes logit accuracy on benchmark b as &alpha;<sub>b</sub>(C &minus; D<sub>b</sub>) for a shared",
-             "capability C. Holding accuracy fixed on a benchmark holds C fixed, so each column's rate already answers the same question and needs no rescaling; what ECI supplies is",
-             "how much each benchmark counts. The pooling weight is &alpha;<sub>b</sub><sup>2</sup> &times; the benchmark's observed history in years &times; the record path's",
-             "average of p(1&minus;p), computed as &Delta;accuracy/&Delta;logit between the record's first and last levels. The three factors are the benchmark's integrated Fisher",
-             "information about the shared capability path: &alpha;<sup>2</sup> is the 2PL's information coefficient; the history term recognizes that a rate is pinned",
-             "down over its time base; and the p(1&minus;p) term recognizes",
-             "that per-response information is &alpha;<sup>2</sup>p(1&minus;p), so a high-discrimination benchmark self-limits &mdash; it spends more of its history in saturated",
-             "tails where responses carry little information. Short histories and saturated benchmarks are thus both discounted automatically. The five primaries'",
-             "shares under this weight are",
-             sprintf("%s.", share_txt),
-             "Note that several SECONDARY benchmarks carry a larger &alpha;<sup>2</sup> than any primary; under this weighting their short histories discount them automatically,",
-             "so their continued exclusion is a choice about data maturity rather than a necessity. Every column but the last two is pooled as the",
-             "weighted mean of the annual log-cost change, converted back to a quarterly rate. Inverse-variance weighting is unavailable here because the grid and",
-             "non-parametric columns carry no standard errors. The two LINEAR accuracy-model rates are ratios &minus;b_t/b_x in which &alpha;<sub>b</sub> cancels within a benchmark but not",
-             "across them, so they instead take the ratio of the ECI-pooled slopes, &minus;&Sigma;&alpha;Tb_t / &Sigma;&alpha;Tb_x, matching the pooled decline in the regression tables;",
-             "the Box-Cox accuracy columns, whose transforms leave no common slope scale, are pooled as mechanical weighted means like the grid columns.",
-             "For the envelope and grid fits the &alpha;<sup>2</sup> weights borrow an information interpretation those fits cannot support &mdash; there is no likelihood behind them",
-             "&mdash; so their pooled entries are mechanical averages.",
-             "The two summaries typically differ by a point or two; a delete-one-model jackknife puts each benchmark's own sampling error at several times that,",
-             "so the gap between them is a difference of weighting philosophies, not a finding the data can order.",
-             "(A third summary &mdash; one pooled regression over the five primaries' stacked runs with benchmark fixed effects &mdash; appeared in earlier versions of this",
-             "table; it weights benchmarks by data volume and leverage and landed within the same sampling error, and its Box-Cox cell imposed a shared curvature the",
-             "benchmarks reject, so it was retired.)"),
-       '</td></tr></tfoot></table></body></html>')
+
+# Footnote text shared by both tables' openings.
+NOTE_ESTIMAND <- paste(
+  "All numbers are estimates of the average quarterly drop in the cost",
+  "of a given level of accuracy on a given benchmark, over the years of available data.")
+NOTE_MODELFREE <- paste(
+  "The model-free values are averages over grids with one date node every ~13 days (the same time resolution for every benchmark, so longer",
+  "histories carry proportionally more nodes) and 100 accuracy-uniform levels spanning the benchmark's achieved range, truncated at each date to the",
+  "state of the art (SOTA) by then &mdash; the same defined-where-achieved rule the fitted models' grids apply. At each point, the lowest cost",
+  "of performance at least as good one QUARTER later is found and divided by the initial cost. The geometric mean of the ratios is the quarterly decline rate.",
+  "Over so short a horizon most levels do not move at all, and each such node enters the geometric mean as a ratio of 1, so the rate is a minority of real drops",
+  "averaged in with a majority of unchanged records.")
+NOTE_SUMMARIES <- paste(
+  "The two closing rows summarize the five primary benchmarks &mdash; AIME, Chess Puzzles, FrontierMath tiers 1&ndash;3, GPQA Diamond and Mystery Game Puzzles &mdash;",
+  "two ways. The first is the SIMPLE AVERAGE: the unweighted mean of the five annual log-cost changes, converted back to a quarterly rate &mdash; transparent, free of any",
+  "external calibration, and the equal-weights limit of random-effects pooling, appropriate insofar as the benchmarks are exchangeable draws whose true rates differ.",
+  "The final row instead pools the same five estimates with weights &alpha;<sub>b</sub><sup>2</sup> &times; the benchmark's observed history in years &times; the record",
+  "path's average of p(1&minus;p), where &alpha;<sub>b</sub> is the benchmark's discrimination in the 2PL behind Epoch's ECI (Epoch Capabilities Index), which writes logit",
+  "accuracy as &alpha;<sub>b</sub>(C &minus; D<sub>b</sub>) for a shared capability C. The three factors are the benchmark's integrated Fisher information about the shared",
+  "capability path: per-response information is &alpha;<sup>2</sup>p(1&minus;p), and a rate is pinned down over its time base, so short histories and saturated benchmarks",
+  "are both discounted automatically.",
+  "The two summaries typically differ by a point or two; a delete-one-model jackknife puts each benchmark's own sampling error at several times that,",
+  "so the gap between them is a difference of weighting philosophies, not one the data can resolve.")
+
+t1 <- html_tbl(
+  "Frontier and all-data cost models",
+  c('<th colspan="6"><div class="hd">Cost models</div></th>',
+    '</tr><tr>',
+    '<th colspan="2"><div class="hd">Model frontier</div></th>',
+    '<th colspan="2"><div class="hd">Model frontier, require envelopment</div></th>',
+    '<th colspan="2"><div class="hd">Model all data</div></th>'),
+  rep(c("Linear", "Box-Cox"), 3),
+  c("grid_ols", "bc_surface", "grid_env", "grid_env_bc",
+    "ols_runs", "ols_runs_bc"),
+  paste(NOTE_ESTIMAND, NOTE_MODELFREE,
+        "Results in the Linear columns are coefficients on release year as an explanator for log cost, reexpressed quarterly. The nonlinear Box-Cox variants,",
+        "having no single such coefficient, are summarized by the average of the instantaneous rate of decline the fitted surface implies at each point &mdash; over the same",
+        "lattice as the model-free column for the two frontier fits, and over the runs themselves for the all-data fit, whose population is the cloud rather than the record.",
+        "That average differences nothing over time &mdash; the record needs a horizon because it is a step function, a fitted surface does not &mdash; and on a linear fit it reduces",
+        "exactly to the coefficient in the column beside it.",
+        "\"Model frontier\" means modeling the empirical frontier as realized at a grid of points with ordinary least squares (OLS).",
+        "\"Model frontier, require envelopment\" means the same, but with the constraint that the fitted surface is never above any data point.",
+        "\"Model all data\" means modeling all runs, not just the frontier, with OLS.",
+        NOTE_SUMMARIES,
+        "Every column here is pooled as the weighted (or unweighted) mean of the annual log-cost change, converted back to a quarterly rate; inverse-variance weighting is",
+        "unavailable because the grid and model-free columns carry no standard errors, and for those fits the &alpha;<sup>2</sup> weights borrow an information interpretation",
+        "they cannot support &mdash; there is no likelihood behind them &mdash; so their pooled entries are mechanical averages. The five primaries'",
+        "shares under the weight are",
+        sprintf("%s.", share_txt),
+        "Several SECONDARY benchmarks carry a larger &alpha;<sup>2</sup> than any primary; under this weighting their short histories discount them automatically,",
+        "so their continued exclusion is a choice about data maturity rather than a necessity.",
+        "(A third summary &mdash; one pooled regression over the five primaries' stacked runs with benchmark fixed effects &mdash; appeared in earlier versions of this",
+        "table; it weights benchmarks by data volume and leverage and landed within the same sampling error, and its Box-Cox cell imposed a shared curvature the",
+        "benchmarks reject, so it was removed.)"))
+
+t2 <- html_tbl(
+  "Stochastic frontier and accuracy models",
+  c('<th colspan="4"><div class="hd">Cost models</div></th>',
+    '<th colspan="4"><div class="hd">Accuracy models</div></th>',
+    '</tr><tr>',
+    '<th colspan="2"><div class="hd">Stochastic frontier analysis</div></th>',
+    '<th colspan="2"><div class="hd">Stochastic frontier analysis, time-varying inefficiency spread</div></th>',
+    '<th colspan="2"><div class="hd">Model frontier</div></th>',
+    '<th colspan="2"><div class="hd">Model frontier, require envelopment</div></th>'),
+  rep(c("Linear", "Box-Cox"), 4),
+  c("sfa_cost", "sfa_bc", "sfab", "sfab_bc",
+    "par_logit", "par_lg_bc", "pl_env", "pl_env_bc"),
+  paste(NOTE_ESTIMAND,
+        "The Data start and Model-free columns repeat the first table's; see its notes for their construction.",
+        "Stochastic frontier analysis models ALL runs: log cost is a frontier in accuracy and date plus a half-normal inefficiency term (one draw per model &times;",
+        "reasoning-effort group) plus noise; the second variant lets the log inefficiency spread vary linearly with date. Read these columns with care: they track",
+        "the dense cheap edge of the run cloud, which grows dearer as expensive reasoning configurations arrive at every accuracy level, so a negative decline here",
+        "is the cloud drifting up while the record falls. Linear SFA rates are the time coefficient reexpressed quarterly; the Box-Cox variants average the fitted",
+        "frontier's instantaneous rate over the runs, as the first table's all-data fit does. A blank Box-Cox cell means that average is not finite: an extreme",
+        "profiled lambda_time makes the surface's rate overflow at the earliest runs.",
+        "In the accuracy model columns accuracy is the dependent variable and log cost an explanatory variable, fit at a grid of points with a logit link",
+        "(\"Model frontier\"), optionally constrained so the fitted surface is never below any data point (\"require envelopment\"). The linear rates are extracted",
+        "as -b_t/b_x. The Box-Cox (Box-Tidwell) columns have no single such ratio, so they take the grid analogue: with z the fitted logit index, the ratio of the",
+        "node-averaged slopes, &minus;mean(&part;z/&part;t) / mean(&part;z/&part;ln c) over the accuracy grid's defined nodes where the surface rises in cost &mdash;",
+        "equivalently a &part;z/&part;ln c-weighted mean of each node's implied d ln cost/dt, so near-flat nodes whose pointwise ratio diverges carry no weight &mdash;",
+        "which reduces exactly to -b_t/b_x on a linear fit.",
+        NOTE_SUMMARIES,
+        "The two LINEAR accuracy-model rates are ratios &minus;b_t/b_x in which &alpha;<sub>b</sub> cancels within a benchmark but not across them, so the weighted row",
+        "instead takes the ratio of the ECI-pooled slopes, &minus;&Sigma;&alpha;Tb_t / &Sigma;&alpha;Tb_x, matching the pooled decline in the regression tables, while",
+        "the simple average averages the five ratios directly. Every other column in this table is pooled as the weighted (or unweighted) mean of the annual log-cost",
+        "change, converted back to a quarterly rate."))
+
+o <- c(o, t1, t2, '</body></html>')
 writeLines(o, out_path("tables", "rate_comparison.html"))
 cat("wrote rate_comparison.html\n")
 
