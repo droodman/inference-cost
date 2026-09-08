@@ -175,10 +175,12 @@ frontier_slope_bounds <- function(co, lncost, tc) {
 # in boxcox_frontier.R, because the model-agnostic curve builders below must
 # evaluate and invert BC fits, and boxcox_frontier.R already sources this file
 # (via fit_specs.R) -- defining them there would close a source cycle.
-# The origin for tau: October 1, 2020, when OpenAI started charging for
-# GPT-3. Expressed through as_t so it converts exactly the way bc_tau()
-# converts every other date (2020.7495 in decimal years).
-BC_T0 <- 2023 + as_t(as.Date("2020-10-01"))
+# The origin for tau: November 18, 2021, when the GPT-3 API became
+# generally available (OpenAI dropped its waitlist;
+# openai.com/index/api-no-waitlist). Expressed through as_t so it converts
+# exactly the way bc_tau() converts every other date (2021.8830 in decimal
+# years).
+BC_T0 <- 2023 + as_t(as.Date("2021-11-18"))
 
 bc_tf <- function(y, l) if (abs(l) < 1e-6) log(y) else (y^l - 1) / l
 

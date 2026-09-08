@@ -86,8 +86,10 @@ POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
   "benchmark fixed effects; its value axis is in ECI points and its curves",
-  "trace the fitted surface at its cheapest benchmark copy (the minimum",
-  "fixed effect), the model's counterpart of the cost record.")
+  "trace the fitted surface at its most favorable benchmark copy (the",
+  "minimum fixed effect; for the Box-Cox fit, whose capability slopes are",
+  "benchmark-specific, the copy with the lowest mean fitted cost), the",
+  "model's counterpart of the cost record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels",
   "from the pooled fit at its cheapest benchmark copy, labelled in ECI",
@@ -141,7 +143,7 @@ SPEC_NOTE <- c(
   bc = paste("Box-Cox: phi(cost) -- profiled for the least-squares fits,",
              "fixed at ln cost for the SFA duals, whose inefficiency term the",
              "response transform would confound -- is linear in phi(odds) and",
-             "phi(years since October 2020) (zeros excluded)."))
+             "phi(years since November 2021) (zeros excluded)."))
 ISO_SPEC_NOTE <- c(
   lin = paste("The linear surface cannot bend, so its parallel contours miss",
               "the records' sharp rise toward each date's best-achieved",
@@ -152,7 +154,7 @@ ISO_SPEC_NOTE <- c(
                "ceiling still cannot be tracked by one fixed surface."),
   bc = paste("Box-Cox: phi(cost) -- profiled for the least-squares fits,",
              "fixed at ln cost for the SFA duals -- linear in phi(odds) and",
-             "phi(years since October 2020); a lambda on the search-box edge",
+             "phi(years since November 2021); a lambda on the search-box edge",
              "means the profile ran to the wall, and contours blank where",
              "the fitted index leaves phi's range."))
 

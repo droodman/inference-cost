@@ -197,6 +197,7 @@ tr$sz  <- TRACE_LABEL_SIZE
 tr$col <- LT$ink
 all_labs <- rbind(labs[c("date", "cost", "lab", "sz", "col")],
                   tr[c("date", "cost", "lab", "sz", "col")])
+main_labs <- all_labs[!grepl("^90% on", all_labs$lab), ]
 
 # One fillable marker (shapes 21-24, so the ECI gradient stays on fill) per
 # benchmark -- the diamond goes to GPQA Diamond, naturally. Mystery Game
@@ -225,9 +226,15 @@ p <- ggplot(tl, aes(date, cost)) +
   # bolded, and the plain glyph sat too faint against the trace lines
   geom_text(data = myst, aes(colour = dotcol), label = "?", size = 3.4,
             fontface = "bold") +
+  # nudge_y (in log10-dollar panel units) starts every label a step ABOVE
+  # its dot, so the placements read consistently up-from-the-point; repel
+  # still resolves collisions from there. Trace names get a LARGER lift than
+  # model labels, so at a trace's opening dot the stack reads dot, model,
+  # trace name on top.
   ggrepel::geom_text_repel(
-    data = all_labs[!grepl("^90% on", all_labs$lab), ],
+    data = main_labs,
     aes(label = lab, size = sz, colour = col),
+    nudge_y = ifelse(grepl("^[0-9]+% on ", main_labs$lab), 0.5, 0.18),
     segment.colour = LT$muted, segment.size = 0.25, min.segment.length = 0.3,
     box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1) +
   # the two 90% trace names, lifted into the open pocket ABOVE their opening
@@ -240,7 +247,7 @@ p <- ggplot(tl, aes(date, cost)) +
   ggrepel::geom_text_repel(
     data = all_labs[grepl("^90% on", all_labs$lab), ],
     aes(label = lab, size = sz, colour = col),
-    nudge_x = c(0, -140), nudge_y = c(0.45, 0.93),
+    nudge_x = c(-55, -140), nudge_y = c(1.37, 0.93),
     segment.colour = LT$muted, segment.size = 0.25, min.segment.length = 0.3,
     box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1) +
   scale_size_identity() +

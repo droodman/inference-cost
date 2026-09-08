@@ -342,11 +342,13 @@ pz_cost_inverted <- function(fit, bl) {
   g <- grid_lt(bl$lnc, bl$tc)
   fe <- pooled_fe_draw(fit)
   if (is_cost_bc(fit)) {
-    cf <- coef(fit); names(cf) <- sub("^beta_", "", names(cf))
+    # the bench-slopes pooled BT flattened to its most favorable benchmark
+    # copy (pooled_bc_flat, cost_frontier.R), fixed effect already folded in
+    cf <- pooled_bc_flat(fit, bl$s)
     lam <- attr(fit, "bc_lambda")
     phit <- bc_tf(g$t + bl$off, lam[["lambda_time"]])
     bb <- cf[["phia"]] + cf[["phiat"]] * phit
-    phia <- (g$x - cf[["(Intercept)"]] - fe - cf[["phit"]] * phit) / bb
+    phia <- (g$x - cf[["(Intercept)"]] - cf[["phit"]] * phit) / bb
     phia[bb <= 0] <- NA_real_
     as_z(POOLED_BC_LA_SCALE * log(bc_inv(phia, lam[["lambda_odds"]])))
   } else {
@@ -819,13 +821,14 @@ pdecline_cost <- function(fit, bl, mask = TRUE) {
   urng <- range(bl$s$lncost)
   fe <- pooled_fe_draw(fit)
   if (is_cost_bc(fit)) {
-    cf <- coef(fit)
-    names(cf) <- sub("^beta_", "", names(cf))
+    # flattened to the most favorable benchmark copy (fixed effect folded
+    # in); the rate itself is copy-free, only the masking lnC uses the copy
+    cf <- pooled_bc_flat(fit, bl$s)
     lam <- attr(fit, "bc_lambda")
     tau <- g$t + bl$off
     phia <- bc_tf(exp(g$x / POOLED_BC_LA_SCALE), lam[["lambda_odds"]])
     phit <- bc_tf(tau, lam[["lambda_time"]])
-    lnC <- cf[["(Intercept)"]] + fe + cf[["phia"]] * phia +
+    lnC <- cf[["(Intercept)"]] + cf[["phia"]] * phia +
       cf[["phit"]] * phit + cf[["phiat"]] * phia * phit
     rate <- (cf[["phit"]] + cf[["phiat"]] * phia) *
       tau^(lam[["lambda_time"]] - 1)

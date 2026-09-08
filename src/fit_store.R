@@ -99,22 +99,21 @@ store_pooled_cost <- function(key) fits_once(paste0(key, "_pooled"), function() 
   lapply(COST_FORMS, function(form) fit_pooled_cost(key, d, form))
 })
 
-# Its Box-Cox profile (least-squares keys only), la rescaled by
-# POOLED_BC_LA_SCALE -- see the pooled section of cost_frontier.R.
+# Its Box-Tidwell profile (least-squares keys only): ECI capability units
+# with benchmark fixed effects AND benchmark-specific capability slopes --
+# THE pooled B-C recipe (fit_pooled_cost_bc, cost_frontier.R).
 store_pooled_cost_bc <- function(key) fits_once(paste0("bc_", key, "_pooled"),
   function() fit_pooled_cost_bc(key, load_runs()))
 
-# The bench-specific-capability-slopes variant of the pooled cost fits
-# (bench_slopes in cost_frontier.R): one shared time slope, each primary its
-# own $/ECI gradient. Linear form only, returned bare rather than as
-# list(lin =, quad =) -- the quadratic half-measure is refused by the fitter.
+# The bench-specific-capability-slopes variant of the pooled LINEAR cost
+# fits (bench_slopes in cost_frontier.R): one shared time slope, each
+# primary its own $/ECI gradient. Linear form only, returned bare rather
+# than as list(lin =, quad =) -- the quadratic half-measure is refused by
+# the fitter. (The Box-Tidwell fits need no such variant: bench-specific
+# slopes are their canonical recipe, above.)
 store_pooled_cost_bs <- function(key) fits_once(paste0(key, "_pooled_bs"),
   function() fit_pooled_cost(key, load_runs(), COST_FORMS$lin,
                              bench_slopes = TRUE))
-
-store_pooled_cost_bc_bs <- function(key) fits_once(
-  paste0("bc_", key, "_pooled_bs"),
-  function() fit_pooled_cost_bc(key, load_runs(), bench_slopes = TRUE))
 
 # Its accuracy-direction dual (fit_pooled_acc_bs, envelope_frontier.R):
 # benchmark-specific capability steepness with ONE decline rate, profiled;

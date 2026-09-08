@@ -670,6 +670,20 @@ surface_decline_qtr <- function(fit, data, h = 1e-4) {
        n_nodes = sum(ok))
 }
 
+# The all-data (run-cloud) mirror of surface_decline_qtr: the fitted
+# surface's instantaneous d lnC/dt averaged over the RUNS' own (la, tc)
+# points rather than the record lattice -- the model's population is the
+# cloud, so its rate is averaged where its data live. On a linear fit this
+# too reduces to cost_decline_qtr() exactly.
+cloud_decline_qtr <- function(fit, data, h = 1e-4) {
+  su <- iso_runs(data)
+  srf <- cost_surface(fit, data)
+  dln <- (srf$f(su$la, su$tc + h) - srf$f(su$la, su$tc - h)) / (2 * h)
+  dln <- dln[is.finite(dln)]
+  if (!length(dln)) return(NA_real_)
+  100 * (1 - exp(mean(dln) / 4))
+}
+
 ## ---- decline at and after achievement -------------------------------------------------
 
 # The SOTA path as a line in (date, logit accuracy): OLS of the accuracy
@@ -691,26 +705,30 @@ sota_line <- function(data) {
 # t*(a) + k quarters -- the decline rate of a level at the moment it becomes
 # achievable, and k quarters into its life behind the frontier -- averaged
 # over levels and expressed quarterly, exactly as surface_decline_qtr()
-# aggregates. The SAME levels enter every k: a level qualifies only when its
-# whole window [t*(a), t*(a) + max(qtrs)/4] lies inside the benchmark's
-# observed dates, so the k's differ by evaluation date alone, never by
-# composition, and the surface is never extrapolated. On a linear fit every
-# entry equals cost_decline_qtr() by construction -- the comparison is only
-# informative for the curved specifications.
+# aggregates. Each horizon keeps the levels whose OWN window
+# [t*(a), t*(a) + k/4] lies inside the benchmark's observed dates, so the
+# surface is never extrapolated; longer horizons therefore average over
+# fewer, earlier-achieved levels, and the k's differ by composition as well
+# as by evaluation date. (An earlier same-levels-for-every-k rule keyed the
+# set to max(qtrs); at a two-year longest horizon it would empty the shorter
+# benchmarks' rows entirely, including k = 0, so it was traded away.) On a
+# linear fit every entry equals cost_decline_qtr() by construction -- the
+# comparison is only informative for the curved specifications.
 #
 # Returns a numeric VECTOR, one entry per qtrs, NA where no level qualifies
 # or the record path has no rising fitted line to invert.
-post_sota_decline_qtr <- function(fit, data, qtrs = c(0, 1, 2), h = 1e-4) {
+post_sota_decline_qtr <- function(fit, data, qtrs = 0:8, h = 1e-4) {
   sl <- sota_line(data)
   if (!is.finite(sl[["slope"]]) || sl[["slope"]] <= 0)
     return(rep(NA_real_, length(qtrs)))
   la <- unique(iso_grid(data)$la)
   t_star <- (la - sl[["int"]]) / sl[["slope"]]
   rng <- range(data$tc)
-  ok <- t_star >= rng[1] & t_star + max(qtrs) / 4 <= rng[2]
-  if (!any(ok)) return(rep(NA_real_, length(qtrs)))
-  srf <- cost_surface(fit, data)
+  srf <- NULL
   vapply(qtrs, function(k) {
+    ok <- t_star >= rng[1] & t_star + k / 4 <= rng[2]
+    if (!any(ok)) return(NA_real_)
+    if (is.null(srf)) srf <<- cost_surface(fit, data)
     tt <- t_star[ok] + k / 4
     dln <- (srf$f(la[ok], tt + h) - srf$f(la[ok], tt - h)) / (2 * h)
     dln <- dln[is.finite(dln)]
@@ -1113,19 +1131,29 @@ fit_pooled_cost <- function(key, d, form = COST_FORMS$lin,
 # and the stacked grid / within-benchmark Pareto reduction injected. The SFA
 # keys would additionally need their u_group threaded through fit_at, so only
 # the least-squares keys are offered.
-# bench_slopes mirrors fit_pooled_cost: phia:bench in place of phia, so each
-# benchmark keeps its own capability main effect while the time terms (phit,
-# and the phiat interaction through which the surface's decline rate can vary
-# with level) stay shared. pooled_bc_decline_qtr is untouched by the switch:
-# d lnC/dt reads only phit and phiat.
-fit_pooled_cost_bc <- function(key, d, bench_slopes = FALSE) {
+# THE pooled Box-Tidwell: the Box-Tidwell family in ECI CAPABILITY UNITS,
+# with benchmark fixed effects and BENCHMARK-SPECIFIC capability slopes
+# (phia:bench in place of phia) -- only the transform pair (lambda_C,
+# lambda_time) and the time terms are shared across benchmarks. The fixed
+# effects absorb the D_b anchors and the free slopes the alpha_b scales, so
+# the only cross-benchmark content is the curvature: a shared lambda_C on
+# the capability scale, which by phi(x^k) = k phi(x; k lambda) equals
+# native-odds curvatures locked in the ratio lambda/(10 alpha_b) -- close to
+# the freely profiled per-benchmark values on four of the five primaries --
+# and a shared lambda_time, best read as partial pooling of the least
+# identified parameter in the analysis (single-model deletions swing the
+# per-benchmark lambda_time fits wildly). Transforming exp(C/10) rather than
+# C itself is pure parameterization, not substance: phi(C; lambda) profiled
+# over a widened lambda box reproduces this fit's rate to 0.1pp with design
+# columns of order 1e14, so the exponential form is kept for its
+# conditioning. A shared-slope variant (one capability slope for the whole
+# stack) preceded this recipe and lives in the git history.
+fit_pooled_cost_bc <- function(key, d) {
   stopifnot(key %in% c("costols", "costgridols", "costgridolsenv"))
   sp <- pooled_cost_runs(d)
   sp$la <- sp$la / POOLED_BC_LA_SCALE
-  formp <- if (bench_slopes)
-    update(COST_BC_FORM, . ~ . - phia + phia:bench + bench) else
-    update(COST_BC_FORM, . ~ . + bench)
-  fit_cost_bc(key, sp, form = formp,
+  fit_cost_bc(key, sp,
+              form = update(COST_BC_FORM, . ~ . - phia + phia:bench + bench),
               gr0 = pooled_grid_response(sp,
                                          la_scale = POOLED_BC_LA_SCALE),
               bind0 = pooled_binding(iso_runs(sp)))
@@ -1152,12 +1180,61 @@ pooled_fe_draw <- function(fit) {
   min(c(0, unname(cf[grepl("^bench", names(cf))])))
 }
 
+# The bench-slopes pooled Box-Tidwell exposed as ONE benchmark copy's
+# coefficients, in the shared-slope layout every drawing consumer was
+# written for: c((Intercept), phia, phit, phiat), with the chosen copy's
+# fixed effect and capability slope folded in. The copy is the MOST
+# FAVORABLE one -- lowest mean fitted log cost over the stacked runs --
+# generalizing pooled_fe_draw's minimum fixed effect, which no longer
+# suffices once the slopes differ and the copies cross (the same
+# accepted-imperfection as there: one copy stands in for a min over
+# copies). Shared phit/phiat terms drop out of the comparison. A fit that
+# still carries a shared phia passes through with the minimum fixed effect
+# folded in.
+pooled_bc_flat <- function(fit, sp) {
+  cf <- coef(fit)
+  names(cf) <- sub("^beta_", "", names(cf))
+  out <- function(int, ga) c("(Intercept)" = int, phia = ga,
+                             phit = unname(cf[["phit"]]),
+                             phiat = unname(cf[["phiat"]]))
+  if ("phia" %in% names(cf))
+    return(out(unname(cf[["(Intercept)"]]) + pooled_fe_draw(fit),
+               unname(cf[["phia"]])))
+  lam <- attr(fit, "bc_lambda")
+  phia <- bc_tf(exp(sp$la / POOLED_BC_LA_SCALE), lam[["lambda_odds"]])
+  ga_of <- function(b)
+    unname(cf[grep(sprintf("^phia:bench%s$|^bench%s:phia$", b, b),
+                   names(cf))][1])
+  fe_of <- function(b) {
+    nm <- paste0("bench", b)
+    if (nm %in% names(cf)) unname(cf[[nm]]) else 0
+  }
+  bs <- levels(sp$bench)
+  b <- bs[which.min(vapply(bs, function(b)
+    mean(fe_of(b) + ga_of(b) * phia), 0))]
+  out(unname(cf[["(Intercept)"]]) + fe_of(b), ga_of(b))
+}
+
 pooled_surface <- function(fit, sp) {
-  srf <- cost_surface(fit, sp)
-  fe <- pooled_fe_draw(fit)
-  sc <- if (is.null(attr(fit, "bc_lambda"))) 1 else POOLED_BC_LA_SCALE
-  list(f    = function(la, tc) srf$f(la / sc, tc) + fe,
-       dacc = function(la, tc) srf$dacc(la / sc, tc))
+  lam <- attr(fit, "bc_lambda")
+  if (!is.null(lam)) {
+    cf <- pooled_bc_flat(fit, sp)
+    off <- (sp$year - sp$tc)[1] - BC_T0
+    list(f = function(la, tc) {
+           pa <- bc_tf(exp(la / POOLED_BC_LA_SCALE), lam[["lambda_odds"]])
+           pt <- bc_tf(tc + off, lam[["lambda_time"]])
+           cf[["(Intercept)"]] + cf[["phia"]] * pa + cf[["phit"]] * pt +
+             cf[["phiat"]] * pa * pt
+         },
+         dacc = function(la, tc)
+           cf[["phia"]] + cf[["phiat"]] * bc_tf(tc + off,
+                                                lam[["lambda_time"]]))
+  } else {
+    srf <- cost_surface(fit, sp)
+    fe <- pooled_fe_draw(fit)
+    list(f    = function(la, tc) srf$f(la, tc) + fe,
+         dacc = function(la, tc) srf$dacc(la, tc))
+  }
 }
 
 # Capability-versus-cost curves at each drawn date for the pooled panel: the

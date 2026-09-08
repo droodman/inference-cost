@@ -5,8 +5,8 @@
 #                  + bxt*phi(cost)*phi(tau)
 #
 # with phi(x; l) = (x^l - 1)/l, the Box-Cox transform (log at l = 0), applied to
-# LEVEL cost per task and to tau = years since BC_T0 (October 1, 2020, when
-# OpenAI began charging for GPT-3
+# LEVEL cost per task and to tau = years since BC_T0 (November 18, 2021,
+# when the GPT-3 API became generally available
 # -- level time needs an origin, and log cost does not, which is why the linear
 # and quadratic specifications never faced this question).
 #
@@ -140,6 +140,44 @@ bc_grid_augment <- function(lc, lt, off) {
     gr$phixt <- gr$phic * gr$phit
     gr
   }
+}
+
+# What an accuracy-direction Box-Tidwell fit says the COST-DECLINE rate is:
+# the accuracy mirror of surface_decline_qtr (cost_frontier.R). The linear
+# accuracy fits report -b_t/b_x, a single ratio; the BC surface's ratio moves
+# with (cost, date), so at each defined node of the benchmark's (cost, date)
+# grid the iso-accuracy contour's slope is read off by the implicit function
+# theorem on the index z = b0 + bx phic + bt phit + bxt phic phit,
+#
+#   d lnC/dt = -(dz/dt)/(dz/d ln c)
+#            = -(b_t + b_xt phic) tau^(lt-1) / ((b_x + b_xt phit) c^lc),
+#
+# (dphi(x; l)/dx = x^(l-1) at every l, log included; the extra c from
+# d/d ln c makes the cost factor c^lc). The reported rate is the ratio of
+# the NODE-AVERAGED slopes, -mean(dz/dt) / mean(dz/d ln c) -- the grid
+# analogue of the linear column's -b_t/b_x, which it reproduces exactly on a
+# linear fit. Equivalently a dz/d ln c-weighted mean of the pointwise
+# ratios: nodes where the surface runs nearly flat in cost, whose pointwise
+# ratio diverges, carry weight near zero -- a plain node-mean of the ratios
+# was tried first and rode those nodes to ~100% on several benchmarks, the
+# same few-nodes-carry-the-mean pathology the table notes record for the
+# removed response-side lambda. Expressed quarterly exactly as the linear
+# columns are; no horizon is differenced, matching the cost side's BC column.
+pareto_bc_decline_qtr <- function(fit, data) {
+  lam <- attr(fit, "bc_lambda")
+  cf  <- coef(fit)
+  gr  <- pareto_grid_response(data)
+  off <- (data$year - data$tc)[1] - BC_T0
+  tau  <- gr$tc + off
+  phic <- bc_tf(exp(gr$lncost), lam[["lambda_cost"]])
+  phit <- bc_tf(tau, lam[["lambda_time"]])
+  dz_dt <- (cf[["phit"]] + cf[["phixt"]] * phic) *
+    tau^(lam[["lambda_time"]] - 1)
+  dz_dc <- (cf[["phic"]] + cf[["phixt"]] * phit) *
+    exp(gr$lncost)^lam[["lambda_cost"]]
+  ok <- is.finite(dz_dt) & is.finite(dz_dc) & dz_dc > 0
+  if (!any(ok)) return(NA_real_)
+  100 * (1 - exp(-mean(dz_dt[ok]) / mean(dz_dc[ok]) / 4))
 }
 
 # bc_qll(), the probability-scale quasi-log-likelihood these fits profile on,
