@@ -23,7 +23,7 @@ $$C_t(a) = \min\limits_{i | a_i \ge a, t_i \le t} c_i$$
 ## Controls sets
 * Linear: Time (in years) and log cost.
 * Quadratic: Adds time², (log cost)² and time × log cost.
-* Box-Cox: Drops linear and quadratic terms in favor of [Box-Cox transforms](https://en.wikipedia.org/wiki/Power_transform#Box%E2%80%93Cox_transformation) of time and cost, with time expressed as years since the release of GPT3 in mid-2020. Each is allowed its own exponent (where 0=log and 1=linear). The product of these two is also included, with the same exponents. 
+* Box-Tidwell: Drops linear and quadratic terms in favor of [Box-Cox transforms](https://en.wikipedia.org/wiki/Power_transform#Box%E2%80%93Cox_transformation) of time and cost, with time expressed as years since the release of GPT3 in mid-2020. Each is allowed its own exponent (where 0=log and 1=linear). The product of these two is also included, with the same exponents. 
 
 ## Code
 Everything is in `src/`. `run_all.R` sources the output scripts into one process so the heavy fits are computed once and shared.
