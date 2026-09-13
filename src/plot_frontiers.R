@@ -85,8 +85,9 @@ pts_iso      <- rbind(d[, IC], pd$sa[, IC])
 POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
-  "benchmark fixed effects; its value axis is in ECI points and its curve is",
-  "the shared capability surface at its highest benchmark copy (the maximum",
+  "benchmark fixed effects. Those effects shift ONE shared capability surface",
+  "up or down by a constant per benchmark; its value axis is in ECI points",
+  "and its curve is that surface under the most favorable shift (the maximum",
   "fixed effect), the model's counterpart of the capability record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels,",
@@ -151,6 +152,50 @@ iso_ranges_p <- rbind(iso_ranges, data.frame(
   benchmark = "pooled", date = range(pd$sa$releasedate),
   cost = range(pd$sa$cost)))
 
+# ---- the two remaining readings: the transposed plate and the isocost one ----
+ISOCOST_NOTES <- c(
+  paste("Contours are fixed budgets traced over time: the accuracy each budget",
+        "bought at each date. Dots are observed runs, coloured by what they",
+        "cost, on the same scale as the contours."),
+  ISOCOST_PARETO_NOTE,
+  paste("No inversion is involved -- the fitted surface is already accuracy as",
+        "a function of cost and date, so a contour is a slice of it at fixed",
+        "cost. Budgets outside a benchmark's observed cost range get none."))
+POOL_ISOCOST_NOTE <- paste(
+  "Sixth panel: the pooled primaries; its axis is in ECI points rather than a",
+  "share, and its contours and dots ride the same budget colour scale.")
+
+KC <- c("benchmark", "releasedate", "acc", "cost")
+pts_isocost <- rbind(d[, KC], pd$spx[, KC])
+isocost_steps <- isocost_pareto_curves(d, COST_LEVELS)
+isocost_steps_p <- rbind(isocost_steps, isocost_pareto_curves(pd$spx, COST_LEVELS))
+isocost_ranges <- do.call(rbind, lapply(benches, function(b) {
+  s <- d[d$benchmark == b, ]
+  data.frame(benchmark = b, date = range(s$releasedate), acc = c(0, 1))
+}))
+isocost_ranges_p <- rbind(isocost_ranges, data.frame(
+  benchmark = "pooled", date = range(pd$sa$releasedate),
+  acc = range(pd$spx$acc)))
+
+isocost_fig <- function(fits, fname, extra_notes, pooled = NULL) {
+  curves <- isocost_curves(fits, d, tbar)
+  if (!is.null(pooled))
+    curves <- rbind(curves, pooled_acc_isocost_curves(pooled, pd$sa))
+  p <- isocost_plot(
+    curves, if (is.null(pooled)) d[, KC] else pts_isocost,
+    labels = if (is.null(pooled)) LABELS else LABELS_POOLED,
+    free_value = !is.null(pooled),
+    ranges = if (is.null(pooled)) isocost_ranges else isocost_ranges_p,
+    notes = c(ISOCOST_NOTES, extra_notes,
+              if (!is.null(pooled)) POOL_ISOCOST_NOTE)) +
+    isocost_pareto_layer(
+      if (is.null(pooled)) isocost_steps else isocost_steps_p,
+      labels = if (is.null(pooled)) LABELS else LABELS_POOLED)
+  ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", fname, "\n")
+}
+
 iso_fig <- function(fits, fname, extra_notes, pooled = NULL) {
   curves <- iso_acc_curves(fits, d, tbar, levels = LEVELS)
   p <- iso_acc_plot(curves, if (is.null(pooled)) d else pts_iso,
@@ -174,6 +219,18 @@ for (k in names(specs)) {
 for (fam in names(bc_fits))
   iso_fig(bc_fits[[fam]], sprintf("isoaccuracy_%s_bc.png", fam), NOTES_BC,
           pooled = if (fam == "S") store_pooled_acc_bc("S"))
+
+for (k in names(specs)) {
+  sp <- specs[[k]]
+  pooled <- if (sp$family == "S") store_pooled_acc("S")[[sp$time]]
+  isocost_fig(sp$fits, sprintf("isocost_%s.png", k),
+              if (sp$time == "quad") NOTES_QUAD, pooled = pooled)
+}
+for (fam in names(bc_fits)) {
+  pooled <- if (fam == "S") store_pooled_acc_bc("S")
+  isocost_fig(bc_fits[[fam]], sprintf("isocost_%s_bc.png", fam), NOTES_BC,
+              pooled = pooled)
+}
 
 ## ---- does each fitted curve actually envelope the data? -------------------------------
 # For S this is a sanity check, not a criticism: a conditional mean SHOULD have

@@ -28,10 +28,13 @@ BLUE <- c("#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6",
           "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b")
 
 if (DARK) {
-  # unreversed (bright = late/high), with the first 20% clipped off: plasma's
-  # deepest blue-purples sat too close to the black surface, so the low end now
-  # starts at a violet that reads as data rather than background
-  PALETTE     <- viridisLite::plasma(10, begin = 0.2)
+  # unreversed (bright = late/high), with the first 40% clipped off: plasma's
+  # deepest blue-purples sat too close to the black surface. 20% lifted the low
+  # end to a violet, which still receded more than it should; 40% starts it at
+  # a magenta that holds its own against black. The cost is hue range -- the
+  # ramp now runs magenta to yellow rather than violet to yellow -- so adjacent
+  # levels at the low end separate less than they did.
+  PALETTE     <- viridisLite::plasma(10, begin = 0.4)
   INK_PRIMARY <- "#f2f1ec"
   INK_SECOND  <- "#c6c5bf"
   INK_MUTED   <- "#8f8e88"
@@ -284,7 +287,7 @@ frontier_curves <- function(fitset, data, dates_by_bench, tbar, n_cost = 200) {
 # and only the notes themselves change.
 #
 # Six is the current maximum (the envelope figure, which must explain the solid
-# curve, the dashed staircase, monotonicity and the fixed grid). Adding a seventh
+# curve, the staircase, monotonicity and the fixed grid). Adding a seventh
 # note anywhere means raising this, and the warning below says so rather than
 # letting one figure quietly grow its caption and shrink its panels.
 CAPTION_LINES <- 6
@@ -439,14 +442,17 @@ pareto_curves <- function(data, dates_by_bench) {
   }))
 }
 
-# The dashed staircase drawn OVER a fitted frontier figure. Returned as a layer
+# The staircase drawn OVER a fitted frontier figure. Returned as a layer
 # rather than described in prose in each script, so every figure that shows a
-# fitted curve against the empirical frontier shows it identically -- same dash,
-# same weight, same colour scale.
+# fitted curve against the empirical frontier shows it identically -- same
+# weight, same colour scale. SOLID, like the fitted curves: the step shape
+# already tells the two apart, and a lighter weight keeps the empirical line
+# from competing with the fit. Dashes at this weight broke up into specks on
+# the near-vertical risers, where the staircase carries most of its meaning.
 pareto_step_layer <- function(steps, labels = LABELS) {
   steps$benchmark <- factor(labels[steps$benchmark], levels = labels)
   geom_step(data = steps, aes(cost, value, group = qdate, colour = year),
-            direction = "hv", linewidth = 0.4, linetype = "22",
+            direction = "hv", linewidth = 0.4,
             inherit.aes = FALSE)
 }
 
@@ -457,7 +463,7 @@ pareto_step_layer <- function(steps, labels = LABELS) {
 # date, which no fit here promises: the staircase is a running maximum carrying
 # old records forward, while the curve is the surface at one instant.
 PARETO_STEP_NOTE <- paste(
-  "Dashed: the empirical Pareto staircase P_t(c) = max{a_i : c_i <= c, t_i <= t}",
+  "Stepped: the empirical Pareto staircase P_t(c) = max{a_i : c_i <= c, t_i <= t}",
   "at the same date; a running maximum, so it carries older records forward.")
 
 # Belongs with any iso-accuracy figure whose fit can bend in cost. The contour is
@@ -500,7 +506,7 @@ iso_pareto_steps <- function(sub, level) {
 
 # One staircase per benchmark per accuracy level, in the column layout
 # iso_acc_plot()'s overlay expects; `levels` should be the same vector the
-# fitted contours use, so each dashed curve pairs with a solid one shade for
+# fitted contours use, so each staircase pairs with a contour shade for
 # shade.
 #
 #   data     DATA FRAME of runs across benchmarks (needs benchmark, cost, acc,
@@ -522,19 +528,19 @@ iso_pareto_curves <- function(data, levels) {
 }
 
 # Drawn over iso_acc_plot() exactly as pareto_step_layer() is drawn over
-# frontier_plot(): same dash, same weight, and coloured by the same accuracy
+# frontier_plot(): same weight, and coloured by the same accuracy
 # scale as the fitted contours, so each staircase reads against the contour at
 # its own level.
 iso_pareto_layer <- function(steps, labels = LABELS) {
   steps$benchmark <- factor(labels[steps$benchmark], levels = labels)
   geom_step(data = steps, aes(date, cost, group = interaction(benchmark, acc),
                               colour = acc),
-            direction = "hv", linewidth = 0.4, linetype = "22",
+            direction = "hv", linewidth = 0.4,
             inherit.aes = FALSE)
 }
 
 ISO_PARETO_NOTE <- paste(
-  "Dashed: the minimum cost at which accuracy at least each contour's level had",
+  "Stepped: the minimum cost at which accuracy at least each contour's level had",
   "been achieved by each date -- the Pareto staircase read as cost against date.")
 
 # The pooled panel's iso-view layers: contours at ECI capability levels,
@@ -559,7 +565,7 @@ pooled_iso_layers <- function(pool_iso, crng, labels = LABELS_POOLED,
   c(if (!is.null(steps)) list(
       geom_step(data = shade(steps),
                 aes(date, cost, group = acc, colour = lvl),
-                direction = "hv", linewidth = 0.4, linetype = "22",
+                direction = "hv", linewidth = 0.4,
                 inherit.aes = FALSE)),
     list(
       geom_path(data = shade(pool_iso),
@@ -850,6 +856,157 @@ iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
                               direction = "horizontal", ticks.colour = SURFACE)) +
     labs(title = title, subtitle = subtitle,
          x = "Model release date", y = "Cost per task (log scale)",
+         caption = pad_caption(notes)) +
+    frontier_theme()
+}
+
+## ---- isocost contours: accuracy against date at a fixed budget ---------------------
+#
+# The third of the three 2-D readings, and the mirror of the iso-accuracy one
+# above. Writing the surface as z(ln c, t), the plates are
+#
+#   accuracy vs cost, curves by date      frontier_plot()
+#   cost vs date, contours by accuracy    iso_acc_plot()      -- C_a(t)
+#   accuracy vs date, contours by cost    isocost_plot()      -- A_c(t)
+#
+# Transposing the first -- cost up, accuracy across -- was tried and dropped:
+# it is the same curve objects remapped, so it can show nothing the frontier
+# plate does not. The two contour plates are not redundant that way, because
+# each holds a DIFFERENT variable fixed.
+#
+# This one asks what a FIXED BUDGET bought over time. For an
+# accuracy-direction fit it needs no inversion at all: the surface is already
+# accuracy as a function of (ln c, t), so a contour is the surface evaluated
+# along a vertical slice of cost. That is why there is no fold, no
+# discriminant and no min_slope guard here -- all of which iso_acc_curves()
+# carries only because it has to solve for cost.
+#
+# Levels are round dollar amounts rather than accuracy targets, log-spaced to
+# match the cost axis everything else uses.
+COST_LEVELS <- 10^(-4:0)
+
+# A_c(t) = max { a_i : c_i <= c, t_i <= t }: the best accuracy a budget of c
+# had bought by date t. This is P_t(c) read along t rather than along c, so it
+# is the SAME staircase the frontier figures overlay, sliced the other way --
+# and it is a running MAXIMUM, non-decreasing in t, where C_a(t) is a running
+# minimum, non-increasing. Returns NULL when no run ever came in at or under
+# the budget: a missing curve, not a curve at zero.
+isocost_pareto_steps <- function(sub, level) {
+  s <- sub[sub$cost <= level, ]
+  if (!nrow(s)) return(NULL)
+  s <- s[order(s$releasedate), ]
+  m <- cummax(s$acc)
+  keep <- c(TRUE, diff(m) > 0)
+  # extended flat to the benchmark's last run date, for the same reason the
+  # other staircases are: past the last release nothing changes
+  data.frame(date = c(s$releasedate[keep], max(sub$releasedate)),
+             acc  = c(m[keep], m[length(m)]))
+}
+
+# One staircase per benchmark per budget, in the column layout isocost_plot()'s
+# overlay expects. `levels` should be the vector the fitted contours use, so
+# each staircase pairs with a contour shade for shade.
+isocost_pareto_curves <- function(data, levels) {
+  do.call(rbind, lapply(sort(unique(data$benchmark)), function(b) {
+    sub <- data[data$benchmark == b, ]
+    do.call(rbind, lapply(levels, function(cl) {
+      st <- isocost_pareto_steps(sub, cl)
+      if (is.null(st)) return(NULL)
+      st$cost <- cl
+      st$benchmark <- b
+      st
+    }))
+  }))
+}
+
+# The fitted contours, accuracy-direction fits. A budget outside the
+# benchmark's observed cost range gets no contour: the surface would happily
+# report what $100 buys on a benchmark whose dearest run cost $2, but that is
+# the functional form extrapolating, not a finding -- the same rule
+# iso_acc_curves() applies to cost, applied here to the level itself.
+isocost_curves <- function(fitset, data, tbar, levels = COST_LEVELS,
+                           n_date = 300) {
+  do.call(rbind, lapply(names(fitset), function(b) {
+    fit <- fitset[[b]]
+    sub <- data[data$benchmark == b, ]
+    crng <- range(sub$cost)
+    lv <- levels[levels >= crng[1] & levels <= crng[2]]
+    if (!length(lv)) return(NULL)
+    dts <- seq(min(sub$releasedate), max(sub$releasedate), length.out = n_date)
+    g <- expand.grid(date = dts, cost = lv)
+    g$acc <- if (is_bc_fit(fit)) {
+      p <- bc_pieces(fit)
+      phic <- bc_tf(g$cost, p$lc)
+      phit <- bc_tf(bc_tau(g$date), p$lt)
+      plogis(p$b0 + p$bx * phic + p$bt * phit + p$bxt * phic * phit)
+    } else {
+      co <- frontier_coefs(fit)
+      plogis(frontier_index(co, log(g$cost), as_t(g$date) - tbar[[b]]))
+    }
+    g$benchmark <- b
+    g$seg <- 1L          # no blanking to break, so one segment per contour
+    g
+  }))
+}
+
+# Drawn over isocost_plot() exactly as iso_pareto_layer() is drawn over
+# iso_acc_plot(): same weight, same colour scale as the contours.
+isocost_pareto_layer <- function(steps, labels = LABELS) {
+  steps$benchmark <- factor(labels[steps$benchmark], levels = labels)
+  geom_step(data = steps, aes(date, acc, group = interaction(benchmark, cost),
+                              colour = cost),
+            direction = "hv", linewidth = 0.4,
+            inherit.aes = FALSE)
+}
+
+ISOCOST_PARETO_NOTE <- paste(
+  "Stepped: the best accuracy each budget had bought by each date -- the Pareto",
+  "staircase read as accuracy against date.")
+
+# `pts` are the observed runs at (release date, accuracy), coloured by what
+# they COST -- the same scale as the contours, so a run's shade reads against
+# the contour it sits on, exactly as iso_acc_plot() colours its dots by the
+# accuracy they reached.
+isocost_plot <- function(curves, pts, title = NULL, subtitle = NULL,
+                         notes = character(0), ranges = NULL,
+                         labels = LABELS, free_value = FALSE,
+                         cost_limits = NULL) {
+  curves$benchmark <- factor(labels[curves$benchmark], levels = labels)
+  pts$benchmark    <- factor(labels[pts$benchmark],    levels = labels)
+  blank_layer <- NULL
+  if (!is.null(ranges)) {
+    ranges$benchmark <- factor(labels[ranges$benchmark], levels = labels)
+    blank_layer <- geom_blank(data = ranges, aes(date, acc), inherit.aes = FALSE)
+  }
+  # the colour scale spans the observed costs, so every isocost panel shares
+  # one ramp -- the counterpart of iso_acc_plot()'s fixed 0-1 accuracy scale
+  if (is.null(cost_limits)) cost_limits <- range(pts$cost, na.rm = TRUE)
+
+  ggplot(curves, aes(date, acc)) +
+    blank_layer +
+    geom_point(data = pts, aes(releasedate, acc, colour = cost),
+               size = 0.35, alpha = 0.3, inherit.aes = FALSE) +
+    geom_path(aes(group = interaction(benchmark, cost, seg), colour = cost),
+              linewidth = 0.6, na.rm = TRUE) +
+    facet_wrap(~benchmark, ncol = 2, drop = FALSE,
+               scales = if (free_value) "free_y" else "fixed") +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+    (if (free_value)
+      scale_y_continuous(labels = function(v)
+        ifelse(v > 1.5, sprintf("%.0f", v),
+               scales::percent(v, accuracy = 1)))
+     else scale_y_continuous(limits = c(0, 1),
+                             labels = scales::percent_format(accuracy = 1))) +
+    scale_colour_gradientn(
+      # every other decade: seven dollar labels on a 7cm bar collide at the
+      # cheap end, where the ticks are closest together
+      colours = PALETTE, name = NULL, transform = "log10",
+      limits = cost_limits, breaks = 10^seq(-5, 1, by = 2), labels = dollar_log,
+      guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
+                              barwidth = grid::unit(7, "cm"),
+                              direction = "horizontal", ticks.colour = SURFACE)) +
+    labs(title = title, subtitle = subtitle,
+         x = "Model release date", y = "Fitted accuracy",
          caption = pad_caption(notes)) +
     frontier_theme()
 }

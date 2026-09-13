@@ -97,6 +97,18 @@ NOTES_ISO <- c(
         "the fitted cost slope is too flat to invert."),
   ISO_BRANCH_NOTE)
 
+NOTES_ISOCOST <- c(
+  paste("Contours are fixed budgets traced over time: the accuracy each budget",
+        "bought at each date. Dots are observed runs, coloured by what they",
+        "cost, on the same scale as the contours."),
+  ISOCOST_PARETO_NOTE,
+  paste("No inversion is involved -- the fitted surface is already accuracy as",
+        "a function of cost and date, so a contour is a slice of it at fixed",
+        "cost. Budgets outside a benchmark's observed cost range get none."))
+POOL_ISOCOST_NOTE <- paste(
+  "Sixth panel: the pooled primaries; its axis is in ECI points rather than a",
+  "share, and its contours and dots ride the same budget colour scale.")
+
 iso_ranges <- do.call(rbind, lapply(benches, function(b) {
   s <- d[d$benchmark == b, ]
   data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
@@ -114,6 +126,9 @@ axis_ranges <- do.call(rbind, lapply(benches, function(b) {
 # contour levels, for the swapped-axes figure.
 steps <- pareto_curves(d, dates)
 iso_steps <- iso_pareto_curves(d, LEVELS)
+# and the isocost staircase A_c(t): the same Pareto frontier sliced at fixed
+# budgets instead of fixed accuracy
+isocost_steps <- isocost_pareto_curves(d, COST_LEVELS)
 
 ## ---- the pooled pseudo-benchmark, sixth panel ----------------------------------------
 # The five primaries pooled on the anchored ECI scale with benchmark fixed
@@ -132,16 +147,29 @@ PC <- c("benchmark", "cost", "acc", "year")
 IC <- c("benchmark", "releasedate", "cost", "acc")
 pts_frontier <- rbind(d[, PC], pd$spx[, PC])
 pts_iso      <- rbind(d[, IC], pd$sa[, IC])
+# the isocost view plots runs at (date, accuracy) coloured by cost, and the
+# pooled panel's accuracy is its ECI capability -- hence spx, not sa
+KC <- c("benchmark", "releasedate", "acc", "cost")
+pts_isocost <- rbind(d[, KC], pd$spx[, KC])
+isocost_ranges <- do.call(rbind, lapply(benches, function(b) {
+  s <- d[d$benchmark == b, ]
+  data.frame(benchmark = b, date = range(s$releasedate), acc = c(0, 1))
+}))
+isocost_ranges_p <- rbind(isocost_ranges, data.frame(
+  benchmark = "pooled", date = range(pd$sa$releasedate),
+  acc = range(pd$spx$acc)))
+isocost_steps_p <- rbind(isocost_steps, isocost_pareto_curves(pd$spx, COST_LEVELS))
 POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
-  "benchmark fixed effects; its value axis is in ECI points and its curve is",
-  "the shared capability surface at its highest benchmark copy (the maximum",
+  "benchmark fixed effects. Those effects shift ONE shared capability surface",
+  "up or down by a constant per benchmark; its value axis is in ECI points",
+  "and its curve is that surface under the most favorable shift (the maximum",
   "fixed effect), the model's counterpart of the capability record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels,",
   "labelled in ECI points and shaded by position within the pooled",
-  "capability range on the shared ramp; dashes their record staircases; dots",
+  "capability range on the shared ramp; steps their record staircases; dots",
   "keep each run's own-benchmark accuracy colour.")
 pool_iso_layers <- function(pool_iso)
   pooled_iso_layers(pool_iso, crng = range(pd$spx$acc), steps = pd$iso_steps)
@@ -176,6 +204,17 @@ for (tt in names(TIME_FORMS)) {
   ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fi, "\n")
+
+  pk <- isocost_plot(
+    rbind(isocost_curves(fits, d, tbar),
+          pooled_acc_isocost_curves(pf, pd$sa)),
+    pts_isocost, ranges = isocost_ranges_p, labels = LABELS_POOLED,
+    free_value = TRUE, notes = c(NOTES_ISOCOST, POOL_ISOCOST_NOTE)) +
+    isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
+  fk <- sprintf("isocost_paretologit_%s.png", tt)
+  ggsave(out_path(fk), pk, width = 10, height = fig_height(length(benches)), dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", fk, "\n")
 }
 
 ## ---- the Box-Cox specification ------------------------------------------------------
@@ -203,6 +242,78 @@ ggsave(out_path("paretologit_bc.png"), p, width = 10, height = fig_height(length
        device = ragg::agg_png)
 cat("wrote paretologit_bc.png\n")
 
+## ---- construction slides ------------------------------------------------------------
+#
+# Three plates over the FIRST FOUR benchmarks -- the historical quartet, two
+# by two -- showing this figure assembled a layer at a time: the observations
+# alone, the record staircases laid over them, then the fitted surface over
+# both. The last is paretologit_bc.png itself, restricted to those four
+# panels, so a deck can end on the figure the paper carries.
+#
+# Sized for Google Slides' standard widescreen page (10 x 5.625in, 16:9) and
+# CAPTIONLESS: on a slide the notes are spoken, and dropping the block hands
+# its height back to the panels. That is the one way these depart from the
+# figure they are cut from -- everything else is built by SUBSETTING the
+# finished figure's own objects, so no fit is recomputed and the third
+# slide's curves are the curves above. The pooled pseudo-benchmark falls
+# outside the quartet and drops out with the rest, which returns the value
+# axis to a plain 0-1 share.
+SLIDE_BENCHES <- head(intersect(names(LABELS), benches), 4)
+SLIDE_LABELS  <- LABELS[SLIDE_BENCHES]
+SLIDE_W <- 10
+SLIDE_H <- 5.625
+# colour limits from the FULL curve set, so the date ramp is the same on the
+# slides as on the figure they are cut from
+SLIDE_COLOURS <- range(curves$year)
+slide_rows <- function(x) x[x$benchmark %in% SLIDE_BENCHES, , drop = FALSE]
+
+slide_base <- function(cv, ylab)
+  frontier_plot(cv, slide_rows(pts_frontier), ranges = slide_rows(axis_ranges_p),
+                labels = SLIDE_LABELS, ylab = ylab,
+                colour_limits = SLIDE_COLOURS) +
+  labs(caption = NULL)
+slide_steps <- function() pareto_step_layer(slide_rows(steps), labels = SLIDE_LABELS)
+# the slides live apart from the figures they are cut from: one folder to
+# point a deck at, and no chance of a stage plate being mistaken for a plate
+# the paper uses
+dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
+slide_save <- function(p, fname) {
+  ggsave(out_path("slides", fname), p, width = SLIDE_W, height = SLIDE_H,
+         dpi = 200, device = ragg::agg_png)
+  cat("wrote slides/", fname, "\n", sep = "")
+}
+
+# (1) the frontier plate, accuracy against cost
+p1 <- slide_base(curves[0, ], "Accuracy")                    # the runs
+slide_save(p1, "paretologit_bc_dots.png")
+p2 <- p1 + slide_steps()                                     # the empirical frontier
+slide_save(p2, "paretologit_bc_steps.png")
+p3 <- slide_base(slide_rows(curves), "Fitted frontier accuracy") +
+  slide_steps()                                              # and the fit over both
+slide_save(p3, "paretologit_bc_fit.png")
+
+# (2) the isocost plate, accuracy against date. Same three stages, and the
+# same objects as the finished plate above it: the runs at (date, accuracy),
+# the record staircases A_c(t) laid over them, then the fitted contours over
+# both. cost_limits is pinned to the FULL sample so the budget ramp matches
+# the finished figure rather than rescaling to the quartet.
+ic_curves <- rbind(isocost_curves(fits_bc, d, tbar),
+                   pooled_acc_isocost_curves(pf_bc, pd$sa))
+ic_base <- function(cv)
+  isocost_plot(cv, slide_rows(pts_isocost),
+               ranges = slide_rows(isocost_ranges_p), labels = SLIDE_LABELS,
+               cost_limits = range(pts_isocost$cost)) +
+  labs(caption = NULL)
+ic_steps <- function()
+  isocost_pareto_layer(slide_rows(isocost_steps_p), labels = SLIDE_LABELS)
+
+k1 <- ic_base(ic_curves[0, ])
+slide_save(k1, "isocost_paretologit_bc_dots.png")
+k2 <- k1 + ic_steps()
+slide_save(k2, "isocost_paretologit_bc_steps.png")
+k3 <- ic_base(slide_rows(ic_curves)) + ic_steps()
+slide_save(k3, "isocost_paretologit_bc_fit.png")
+
 iso <- iso_acc_curves(fits_bc, d, tbar, levels = LEVELS, cost_cap = iso_steps)
 pi <- iso_acc_plot(
   iso, pts_iso, ranges = iso_ranges_p, labels = LABELS_POOLED,
@@ -213,6 +324,16 @@ pi <- iso_acc_plot(
 ggsave(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = fig_height(length(benches)),
        dpi = 200, device = ragg::agg_png)
 cat("wrote isoaccuracy_paretologit_bc.png\n")
+
+pk <- isocost_plot(
+  rbind(isocost_curves(fits_bc, d, tbar),
+        pooled_acc_isocost_curves(pf_bc, pd$sa)),
+  pts_isocost, ranges = isocost_ranges_p, labels = LABELS_POOLED,
+  free_value = TRUE, notes = c(NOTES_ISOCOST, NOTES_BC, POOL_ISOCOST_NOTE)) +
+  isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
+ggsave(out_path("isocost_paretologit_bc.png"), pk, width = 10,
+       height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
+cat("wrote isocost_paretologit_bc.png\n")
 
 ## ---- what does moving from the cloud to the frontier change? ------------------------
 # Model S on all runs vs the same functional form fitted to the sampled frontier.

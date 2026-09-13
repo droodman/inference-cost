@@ -30,6 +30,7 @@ fits_by_spec <- store_grid("paretologitenv")
 # underneath exactly as the two parent scripts draw them.
 steps     <- pareto_curves(d, dates)
 iso_steps <- iso_pareto_curves(d, LEVELS)
+isocost_steps <- isocost_pareto_curves(d, COST_LEVELS)
 
 axis_ranges <- do.call(rbind, lapply(benches, function(b) {
   s <- d[d$benchmark == b, ]
@@ -39,6 +40,18 @@ iso_ranges <- do.call(rbind, lapply(benches, function(b) {
   s <- d[d$benchmark == b, ]
   data.frame(benchmark = b, date = range(s$releasedate), cost = range(s$cost))
 }))
+
+NOTES_ISOCOST <- c(
+  paste("Contours are fixed budgets traced over time: the accuracy each budget",
+        "bought at each date. Dots are observed runs, coloured by what they",
+        "cost, on the same scale as the contours."),
+  ISOCOST_PARETO_NOTE,
+  paste("No inversion is involved -- the fitted surface is already accuracy as",
+        "a function of cost and date, so a contour is a slice of it at fixed",
+        "cost. Budgets outside a benchmark's observed cost range get none."))
+POOL_ISOCOST_NOTE <- paste(
+  "Sixth panel: the pooled primaries; its axis is in ECI points rather than a",
+  "share, and its contours and dots ride the same budget colour scale.")
 
 NOTES_FRONTIER <- c(
   paste("Solid: the Pareto-grid logit refitted subject to the envelope's",
@@ -75,16 +88,29 @@ PC <- c("benchmark", "cost", "acc", "year")
 IC <- c("benchmark", "releasedate", "cost", "acc")
 pts_frontier <- rbind(d[, PC], pd$spx[, PC])
 pts_iso      <- rbind(d[, IC], pd$sa[, IC])
+# the isocost view: runs at (date, accuracy) coloured by cost; the pooled
+# panel's accuracy is its ECI capability, hence spx rather than sa
+KC <- c("benchmark", "releasedate", "acc", "cost")
+pts_isocost <- rbind(d[, KC], pd$spx[, KC])
+isocost_ranges_p <- rbind(
+  do.call(rbind, lapply(benches, function(b) {
+    s <- d[d$benchmark == b, ]
+    data.frame(benchmark = b, date = range(s$releasedate), acc = c(0, 1))
+  })),
+  data.frame(benchmark = "pooled", date = range(pd$sa$releasedate),
+             acc = range(pd$spx$acc)))
+isocost_steps_p <- rbind(isocost_steps, isocost_pareto_curves(pd$spx, COST_LEVELS))
 POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
-  "benchmark fixed effects; its value axis is in ECI points and its curve is",
-  "the shared capability surface at its highest benchmark copy (the maximum",
+  "benchmark fixed effects. Those effects shift ONE shared capability surface",
+  "up or down by a constant per benchmark; its value axis is in ECI points",
+  "and its curve is that surface under the most favorable shift (the maximum",
   "fixed effect), the model's counterpart of the capability record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels,",
   "labelled in ECI points and shaded by position within the pooled",
-  "capability range on the shared ramp; dashes their record staircases; dots",
+  "capability range on the shared ramp; steps their record staircases; dots",
   "keep each run's own-benchmark accuracy colour.")
 pool_iso_layers <- function(pool_iso)
   pooled_iso_layers(pool_iso, crng = range(pd$spx$acc), steps = pd$iso_steps)
@@ -119,6 +145,17 @@ for (tt in names(TIME_FORMS)) {
   ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
          device = ragg::agg_png)
   cat("wrote", fi, "\n")
+
+  pk <- isocost_plot(
+    rbind(isocost_curves(fits, d, tbar),
+          pooled_acc_isocost_curves(pf, pd$sa)),
+    pts_isocost, ranges = isocost_ranges_p, labels = LABELS_POOLED,
+    free_value = TRUE, notes = c(NOTES_ISOCOST, POOL_ISOCOST_NOTE)) +
+    isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
+  fk <- sprintf("isocost_paretologitenv_%s.png", tt)
+  ggsave(out_path(fk), pk, width = 10, height = fig_height(length(benches)), dpi = 200,
+         device = ragg::agg_png)
+  cat("wrote", fk, "\n")
 }
 
 ## ---- the Box-Cox specification ------------------------------------------------------
@@ -157,6 +194,16 @@ pi <- iso_acc_plot(
 ggsave(out_path("isoaccuracy_paretologitenv_bc.png"), pi, width = 10,
        height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
 cat("wrote isoaccuracy_paretologitenv_bc.png\n")
+
+pk <- isocost_plot(
+  rbind(isocost_curves(fits_bc, d, tbar),
+        pooled_acc_isocost_curves(pf_bc, pd$sa)),
+  pts_isocost, ranges = isocost_ranges_p, labels = LABELS_POOLED,
+  free_value = TRUE, notes = c(NOTES_ISOCOST, NOTES_BC, POOL_ISOCOST_NOTE)) +
+  isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
+ggsave(out_path("isocost_paretologitenv_bc.png"), pk, width = 10,
+       height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
+cat("wrote isocost_paretologitenv_bc.png\n")
 
 ## ---- which constraint is doing the work --------------------------------------------
 # slack_envelope ~ 0: the surface touches a run -- the ABOVE-the-runs side

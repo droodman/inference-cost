@@ -34,7 +34,7 @@
 #
 # Every page and heatmap also carries the POOLED pseudo-benchmark as a sixth
 # panel (after the primaries it stacks): the pooled fits drawn at their
-# most favorable benchmark copy (max fixed effect in capability, min in
+# most favorable benchmark offset (max fixed effect in capability, min in
 # cost), the level axis in anchored ECI capability
 # points, and the empirical surfaces the pooled records in those units --
 # see the pooled sections of cost_frontier.R and envelope_frontier.R.
@@ -343,7 +343,7 @@ pz_cost_inverted <- function(fit, bl) {
   fe <- pooled_fe_draw(fit)
   if (is_cost_bc(fit)) {
     # the bench-slopes pooled BT flattened to its most favorable benchmark
-    # copy (pooled_bc_flat, cost_frontier.R), fixed effect already folded in
+    # offset (pooled_bc_flat, cost_frontier.R), fixed effect already folded in
     cf <- pooled_bc_flat(fit, bl$s)
     lam <- attr(fit, "bc_lambda")
     phit <- bc_tf(g$t + bl$off, lam[["lambda_time"]])
@@ -821,8 +821,8 @@ pdecline_cost <- function(fit, bl, mask = TRUE) {
   urng <- range(bl$s$lncost)
   fe <- pooled_fe_draw(fit)
   if (is_cost_bc(fit)) {
-    # flattened to the most favorable benchmark copy (fixed effect folded
-    # in); the rate itself is copy-free, only the masking lnC uses the copy
+    # flattened to the most favorable benchmark offset (fixed effect folded
+    # in); the rate itself is offset-free, only the masking lnC uses it
     cf <- pooled_bc_flat(fit, bl$s)
     lam <- attr(fit, "bc_lambda")
     tau <- g$t + bl$off

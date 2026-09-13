@@ -502,7 +502,7 @@ feasible_start <- function(b0, Xb, Lb, margin) {
     if (nm %in% names(b0)) b0[[nm]] <- 0
   for (nm in c("lncost", "tc", "phic", "phit", "xc", "xt", "xphic", "xphit"))
     if (nm %in% names(b0)) b0[[nm]] <- max(b0[[nm]], 0.05)
-  # the bench-specific steepness copies of the common-rate profile
+  # the bench-specific steepness variants of the common-rate profile
   # (fit_pooled_acc_bs), whose monotonicity rows require each >= 0
   for (nm in grep("^xz$|^xz:bench|^bench[^:]*:xz$", names(b0), value = TRUE))
     b0[[nm]] <- max(b0[[nm]], 0.05)
@@ -792,16 +792,23 @@ fit_pooled_acc_bs <- function(key, d) {
   f
 }
 
-# Anchored display constant for the pooled capability surface: the fixed
-# effect for bench b is alpha_b*(C0 - D_b) folded with the intercept, so C0
-# is recovered per benchmark, on the anchored ECI scale (Claude 3.5 Sonnet =
-# 130), and the HIGHEST copy is drawn: the pooled panels' empirical
-# reference is the cross-benchmark capability RECORD -- a maximum -- so the
-# mean copy sat systematically below it and only grazed; the most favorable
-# copy is the model's nearest counterpart of that record (imperfect where
-# the pooled rectangle is covered only by lower-copy benchmarks' data,
-# accepted for simplicity -- the cost direction's pooled_fe_draw mirrors
-# this with the MINIMUM, a cost record being a min).
+# Anchored display constant for the pooled capability surface.
+#
+# The pooled fit is ONE shared surface plus a benchmark fixed effect, so on
+# the capability scale each benchmark implies the SAME curve shifted up or
+# down by a constant: the fixed effect for bench b is alpha_b*(C0 - D_b)
+# folded with the intercept, so dividing it out recovers that benchmark's
+# offset C0 in anchored ECI points (Claude 3.5 Sonnet = 130). Five
+# benchmarks, five parallel versions of one surface -- identical in shape,
+# differing only in height.
+#
+# The HIGHEST offset is drawn. The pooled panels' empirical reference is the
+# cross-benchmark capability RECORD -- a maximum -- so the mean offset sat
+# systematically below it and only grazed it; the most favorable offset is
+# the model's nearest counterpart of that record (imperfect where the pooled
+# rectangle is covered only by lower-offset benchmarks' data, accepted for
+# simplicity -- the cost direction's pooled_fe_draw mirrors this with the
+# MINIMUM, a cost record being a min).
 pooled_acc_c0 <- function(fit, sa) {
   cf <- coef(fit)
   names(cf) <- sub("^beta_", "", names(cf))
@@ -856,6 +863,40 @@ pooled_acc_display <- function(d, dates_grid, levels_n = 5) {
   list(sa = sa, spx = spx, levels = lv, dates = dts,
        steps = pareto_curves(spx, setNames(list(dts), "pooled")),
        iso_steps = iso_pareto_curves(spx, lv))
+}
+
+# The pooled panel's isocost contours, accuracy direction: the pooled surface
+# evaluated along a fixed-cost slice, `value` in ECI points (no plogis -- the
+# pooled index IS the capability score). The mirror of
+# pooled_acc_iso_curves(), and as with isocost_curves() no inversion is
+# involved, so none of that function's fold bookkeeping is needed.
+pooled_acc_isocost_curves <- function(fit, sa, levels = COST_LEVELS,
+                                      n_date = 300) {
+  cf <- coef(fit)
+  gv <- function(nm) if (nm %in% names(cf) && is.finite(cf[[nm]]))
+    unname(cf[[nm]]) else 0
+  c0 <- pooled_acc_c0(fit, sa)
+  tbar <- (sa$t - sa$tc)[1]
+  lam <- attr(fit, "bc_lambda")
+  crng <- range(sa$cost)
+  lv <- levels[levels >= crng[1] & levels <= crng[2]]
+  if (!length(lv)) return(NULL)
+  dts <- seq(min(sa$releasedate), max(sa$releasedate), length.out = n_date)
+  g <- expand.grid(date = dts, cost = lv)
+  tc <- as_t(g$date) - tbar
+  g$acc <- if (!is.null(lam)) {
+    off <- (sa$year - sa$tc)[1] - BC_T0
+    phic <- bc_tf(g$cost, lam[["lambda_cost"]])
+    phit <- bc_tf(tc + off, lam[["lambda_time"]])
+    c0 + gv("xphic") * phic + gv("xphit") * phit + gv("xphixt") * phic * phit
+  } else {
+    lc <- log(g$cost)
+    c0 + gv("xc") * lc + gv("xt") * tc + gv("xcc") * lc^2 +
+      gv("xtt") * tc^2 + gv("xct") * lc * tc
+  }
+  g$benchmark <- "pooled"
+  g$seg <- 1L
+  g
 }
 
 # Iso-capability contours for the pooled panel: iso_acc_curves() with the

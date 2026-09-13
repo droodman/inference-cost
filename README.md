@@ -46,8 +46,10 @@ Libraries (sourced, never run directly):
 Output scripts:
 * `plot_accuracy_scatter.R` — raw accuracy-vs-date scatter plate, no fits.
 * `pareto_frontiers.R` — nonparametric staircase figure.
-* `record_timelines.R` — cost records at 50% performance, per primary benchmark (HTML table + single figure on the ECI scale).
+* `record_timelines.R` — cost records at 25% and 75% performance, per primary benchmark (HTML table + single figure, dots coloured by equivalent ECI).
 * `plot_frontiers.R` — stochastic-frontier and plain-logit figures, both views, plus fit diagnostics.
+
+Each fit is drawn in **three** 2-D views, the three non-redundant ways to read one surface z(cost, date). One is an isochrone plate, holding the date fixed and sweeping cost: accuracy against cost (`<model>_<order>.png`, `frontier_progression_*`). Two are contour plates, each holding a different variable fixed and running date across: cost against date at fixed accuracy (`isoaccuracy_*`) and accuracy against date at fixed budget (`isocost_*`). Transposing the isochrone plate — cost up, accuracy across — is the same curve objects remapped and shows nothing new, so it is not drawn. The dashed staircases under the two contour plates are the same empirical Pareto frontier sliced the two ways — C_a(t) = min{c : a_i ≥ a, t_i ≤ t} and A_c(t) = max{a_i : c_i ≤ c, t_i ≤ t}.
 * `plot_paretologit.R` — Pareto-frontier logit figures, both views.
 * `plot_paretologitenv.R` — the envelope-constrained variant, both views.
 * `plot_cost_frontier.R` — cost-direction dual figures, both views.

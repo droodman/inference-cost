@@ -152,17 +152,26 @@
         </div>
 
         <!-- The symmetric twin of Modeled variable: which variable the figure
-             PLOTS as the outcome. Accuracy plots frontier curves (accuracy
-             against cost by date); Cost plots iso-accuracy contours (cost
-             against date by accuracy level). Either modeled variable can be
-             shown either way -- native in one, inverted in the other. The
-             third option plots the rate of cost decline at fixed accuracy
-             read off the fitted surface, over (accuracy, date) -- 3-D only,
-             Pareto-grid models only (plot_surfaces_3d.R). -->
+             PLOTS as the outcome, and against what. Writing a fit as the
+             surface z(cost, date), there are four 2-D readings of it, and
+             every model is drawn in all four:
+
+               accuracy vs cost,     curves by date        isochrones
+               cost     vs date,     contours by accuracy  iso-accuracy
+               accuracy vs date,     contours by cost      isocost
+
+             Transposing the first -- cost up, accuracy across -- would be the
+             same curves remapped and is deliberately not offered; the two
+             contour plates each hold a DIFFERENT variable fixed, so neither
+             is redundant. Either modeled variable can be shown any of the
+             three ways -- native in some, inverted in others. The fourth option
+             plots the rate of cost decline at fixed accuracy over
+             (accuracy, date) -- 3-D only, Pareto-grid models only. -->
         <div class="control-group">
           <div class="group-label">Plotted variable</div>
-          <label><input type="radio" name="plotType" value="frontier" checked /> Accuracy (isochrone curves)</label>
-          <label><input type="radio" name="plotType" value="isoaccuracy" /> Cost (iso-accuracy curves)</label>
+          <label><input type="radio" name="plotType" value="frontier" checked /> Accuracy vs cost (isochrones)</label>
+          <label><input type="radio" name="plotType" value="isocost" /> Accuracy vs date (isocost)</label>
+          <label><input type="radio" name="plotType" value="isoaccuracy" /> Cost vs date (iso-accuracy)</label>
           <label><input type="radio" name="plotType" value="decline" /> Cost decline rate (%/qtr)</label>
         </div>
 
@@ -222,34 +231,33 @@
         B: "costsfab",
       };
 
+      // Every view but the frontier one prefixes the model key with its own
+      // name; the frontier view keeps each script's historical naming.
+      const VIEW_PREFIX = {
+        isoaccuracy: "isoaccuracy",
+        isocost: "isocost",
+      };
+
       function buildFilename() {
         const model = getRadioValue("model");
         const order = getRadioValue("order");
         const plotType = getRadioValue("plotType");
+        const prefix = VIEW_PREFIX[plotType];
 
         if (getRadioValue("direction") === "cost") {
           const key = COST_KEY[model];
-          return plotType === "frontier"
-            ? `${key}_${order}.png`
-            : `isoaccuracy_${key}_${order}.png`;
+          return prefix ? `${prefix}_${key}_${order}.png` : `${key}_${order}.png`;
         }
 
-        // Models with their own fitting script (the Pareto-point logit and
-        // its envelope-constrained variant) are named <model>_<order>.png
-        // rather than following the SFA grid's
-        // frontier_progression_<family>_<order>.png pattern.
-        if (["paretologit", "paretologitenv"].includes(model)) {
-          if (plotType === "frontier") {
-            return `${model}_${order}.png`;
-          }
-          return `isoaccuracy_${model}_${order}.png`;
-        }
+        if (prefix) return `${prefix}_${model}_${order}.png`;
 
-        if (plotType === "frontier") {
-          return `frontier_progression_${model}_${order}.png`;
-        }
-
-        return `isoaccuracy_${model}_${order}.png`;
+        // Frontier view: the Pareto-point logit and its envelope-constrained
+        // variant have their own fitting scripts and are named
+        // <model>_<order>.png; the SFA grid follows
+        // frontier_progression_<family>_<order>.png.
+        return ["paretologit", "paretologitenv"].includes(model)
+          ? `${model}_${order}.png`
+          : `frontier_progression_${model}_${order}.png`;
       }
 
       // Rename each model radio to its dual when the cost direction is
@@ -278,6 +286,16 @@
           frame.style.display = "none";
           label.innerHTML =
             '<span class="missing">Cost-decline surfaces exist as 3-D pages and heatmaps; switch Rendering.</span>';
+          return;
+        }
+
+        // The isocost plate is a remapping of a surface the other views
+        // already render in 3-D, so no 3-D page is built for it.
+        if (getRadioValue("plotType") === "isocost" && rendering !== "2d") {
+          img.style.display = "none";
+          frame.style.display = "none";
+          label.innerHTML =
+            '<span class="missing">The isocost view is 2-D only; its surface is rendered in 3-D under the other views.</span>';
           return;
         }
 

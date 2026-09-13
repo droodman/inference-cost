@@ -74,27 +74,38 @@ pool_levels <- {
 }
 pool_steps     <- pareto_curves(spx, setNames(list(pool_dates), "pooled"))
 pool_iso_steps <- iso_pareto_curves(spx, pool_levels)
+isocost_steps   <- isocost_pareto_curves(d, COST_LEVELS)
+isocost_steps_p <- rbind(isocost_steps, isocost_pareto_curves(spx, COST_LEVELS))
 PC <- c("benchmark", "cost", "acc", "year")           # frontier-view point columns
 IC <- c("benchmark", "releasedate", "cost", "acc")    # iso-view point columns
 pts_frontier <- rbind(d[, PC], spx[, PC])
 pts_iso      <- rbind(d[, IC], sp[, IC])
+KC <- c("benchmark", "releasedate", "acc", "cost")  # isocost-view point columns
+pts_isocost  <- rbind(d[, KC], spx[, KC])
 axis_ranges_p <- rbind(axis_ranges, data.frame(
   benchmark = "pooled", cost = range(sp$cost), value = range(sp$la)))
 iso_ranges_p <- rbind(iso_ranges, data.frame(
   benchmark = "pooled", date = range(sp$releasedate), cost = range(sp$cost)))
+isocost_ranges <- do.call(rbind, lapply(benches, function(b) {
+  s <- d[d$benchmark == b, ]
+  data.frame(benchmark = b, date = range(s$releasedate), acc = c(0, 1))
+}))
+isocost_ranges_p <- rbind(isocost_ranges, data.frame(
+  benchmark = "pooled", date = range(sp$releasedate), acc = range(spx$acc)))
 POOL_NOTE <- paste(
   "Sixth panel: the five primaries pooled on the anchored ECI capability",
   "scale (2PL: C = logit(a)/alpha_b + D_b, Claude 3.5 Sonnet = 130) with",
-  "benchmark fixed effects; its value axis is in ECI points and its curves",
-  "trace the fitted surface at its most favorable benchmark copy (the",
-  "minimum fixed effect; for the Box-Cox fit, whose capability slopes are",
-  "benchmark-specific, the copy with the lowest mean fitted cost), the",
+  "benchmark fixed effects. Those effects shift ONE shared surface up or",
+  "down by a constant per benchmark; its value axis is in ECI points and its",
+  "curves trace that surface under the most favorable shift (the minimum",
+  "fixed effect; for the Box-Cox fit, whose capability slopes are",
+  "benchmark-specific, the shift with the lowest mean fitted cost) -- the",
   "model's counterpart of the cost record.")
 POOL_ISO_NOTE <- paste(
   "Sixth panel: the pooled primaries; contours are ECI capability levels",
-  "from the pooled fit at its cheapest benchmark copy, labelled in ECI",
+  "from the pooled fit under its cheapest benchmark offset, labelled in ECI",
   "points and shaded by position within the pooled capability range on the",
-  "shared ramp; dashes their record staircases; dots keep each run's",
+  "shared ramp; steps their record staircases; dots keep each run's",
   "own-benchmark accuracy colour.")
 
 # One caption line saying what kind of surface each model's is; the rest of
@@ -103,7 +114,7 @@ POOL_ISO_NOTE <- paste(
 # the same objects. The SFA line states the cloud-versus-record caveat
 # documented at length in cost_frontier.R -- on this data its time slope
 # tracks the dense cheap edge of the model-effort cells, which grows dearer
-# as reasoning configurations arrive, so read it against the dashed record.
+# as reasoning configurations arrive, so read it against the stepped record.
 MODELS <- list(
   costols = list(
     note = paste("Least squares of log cost over all positive-accuracy runs:",
@@ -113,12 +124,12 @@ MODELS <- list(
     note = paste("Stochastic cost frontier (half-normal inefficiency per",
                  "model x effort). Its time slope follows the dense cheap",
                  "edge of the cells, which grows DEARER as reasoning models",
-                 "arrive -- not the record; compare the dashed staircase.")),
+                 "arrive -- not the record; compare the stepped staircase.")),
   costsfab = list(
     note = paste("Stochastic cost frontier with log sigma_u linear in date.",
                  "Like the constant-scale variant, its time slope follows",
                  "the dense cheap edge of the model-effort cells, not the",
-                 "record; compare the dashed staircase.")),
+                 "record; compare the stepped staircase.")),
   costgridols = list(
     note = paste("Least squares to the record cost ln C_a(t) sampled on a",
                  "uniform (logit accuracy, date) grid. Grid nodes are not",
@@ -133,6 +144,18 @@ MODELS <- list(
 # Specification lines, one per caption. The frontier-view line also covers
 # the zero-exclusion and (for the curved specs) the rising-branch blanking;
 # the iso-view line states each specification's known limitation.
+ISOCOST_NOTES <- c(
+  paste("Contours are fixed budgets traced over time: the accuracy each budget",
+        "bought at each date. Dots are observed runs, coloured by what they",
+        "cost, on the same scale as the contours."),
+  ISOCOST_PARETO_NOTE,
+  paste("This direction models ln cost, so the contours are INVERTED for",
+        "accuracy -- numerically, off the same dense sweep the frontier view",
+        "uses -- and blank where the surface stops rising in accuracy."))
+POOL_ISOCOST_NOTE <- paste(
+  "Sixth panel: the pooled primaries; its axis is in ECI points rather than a",
+  "share, and its contours and dots ride the same budget colour scale.")
+
 SPEC_NOTE <- c(
   lin = paste("ln cost is modeled linearly in logit accuracy and date, on",
               "runs scoring above zero (logit 0 is unusable as a",
@@ -157,6 +180,15 @@ ISO_SPEC_NOTE <- c(
              "phi(years since November 2021); a lambda on the search-box edge",
              "means the profile ran to the wall, and contours blank where",
              "the fitted index leaves phi's range."))
+
+# ONE figure gets construction slides: three extra renderings of the iso view
+# showing it built a layer at a time -- dots alone, the record staircases over
+# them, then the contours over both -- over the FIRST FOUR benchmarks only
+# (the historical quartet, two by two), sized for Google Slides' standard
+# widescreen page and captionless, since on a slide the notes are spoken.
+# Built by SUBSETTING the finished plate's own objects, so nothing is
+# refitted and the three line up panel for panel.
+CONSTRUCT <- list(key = "costgridols", tt = "bc")
 
 for (key in names(MODELS)) {
   m <- MODELS[[key]]
@@ -217,15 +249,54 @@ for (key in names(MODELS)) {
       # contours at ECI capability levels, shaded by position within the
       # pooled capability range on the shared ramp (pooled_iso_layers,
       # frontier_viz.R), each labelled in place with its ECI value
+      pool_iso <- pooled_iso_curves(pf, sp, pool_levels,
+                                    cost_cap = pool_iso_steps)
       p_iso <- p_iso +
-        pooled_iso_layers(pooled_iso_curves(pf, sp, pool_levels,
-                                            cost_cap = pool_iso_steps),
-                          crng = range(sp$la), steps = pool_iso_steps)
+        pooled_iso_layers(pool_iso, crng = range(sp$la),
+                          steps = pool_iso_steps)
     }
     fi <- sprintf("isoaccuracy_%s_%s.png", key, tt)
     ggsave(out_path(fi), p_iso, width = 10, height = fig_height(length(benches)), dpi = 200,
            device = ragg::agg_png)
     cat("wrote", fi, "\n")
+
+    # and the isocost plate, this direction's surface inverted for accuracy
+    ic <- cost_isocost_curves(fits, d, tbar)
+    if (!is.null(pf)) ic <- rbind(ic, pooled_isocost_curves(pf, sp))
+    p_ic <- isocost_plot(
+      ic, if (is.null(pf)) d[, KC] else pts_isocost,
+      ranges = if (is.null(pf)) isocost_ranges else isocost_ranges_p,
+      labels = lbs, free_value = !is.null(pf),
+      notes = c(ISOCOST_NOTES, SPEC_NOTE[[tt]],
+                if (!is.null(pf)) POOL_ISOCOST_NOTE)) +
+      isocost_pareto_layer(if (is.null(pf)) isocost_steps else isocost_steps_p,
+                           labels = lbs)
+    fk <- sprintf("isocost_%s_%s.png", key, tt)
+    ggsave(out_path(fk), p_ic, width = 10, height = fig_height(length(benches)), dpi = 200,
+           device = ragg::agg_png)
+    cat("wrote", fk, "\n")
+
+    if (key == CONSTRUCT$key && tt == CONSTRUCT$tt) {
+      sb  <- head(intersect(names(LABELS), benches), 4)
+      slb <- LABELS[sb]
+      srow <- function(x) x[x$benchmark %in% sb, , drop = FALSE]
+      # the slides live apart from the figures they are cut from
+      dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
+      ssave <- function(pp, suffix) {
+        fn <- sprintf("isoaccuracy_%s_%s_%s.png", key, tt, suffix)
+        ggsave(out_path("slides", fn), pp, width = 10, height = 5.625,
+               dpi = 200, device = ragg::agg_png)
+        cat("wrote slides/", fn, "\n", sep = "")
+      }
+      sbase <- function(cv)
+        iso_acc_plot(cv, srow(pts_iso), ranges = srow(iso_ranges_p),
+                     labels = slb) + labs(caption = NULL)
+      ssteps <- function() iso_pareto_layer(srow(iso_steps), labels = slb)
+
+      ssave(sbase(iso[0, ]), "dots")
+      ssave(sbase(iso[0, ]) + ssteps(), "steps")
+      ssave(sbase(srow(iso)) + ssteps(), "fit")
+    }
 
     if (tt == "lin") {
       cat(sprintf("  %-12s per-quarter cost change at fixed accuracy:", key))

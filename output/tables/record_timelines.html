@@ -12,63 +12,51 @@ tr.gap td{border-top:1px solid #d9d9d5}
 tfoot td{border-top:1px solid #1d1d1d;font-size:.92em;color:#5e5e5e;
   white-space:normal;padding-top:8px;max-width:760px}
 </style></head><body>
-<h1>Record timelines at 10%, 50%, and 90% performance</h1>
+<h1>Record timelines at 25% and 75% performance</h1>
 <table><thead><tr><th>Benchmark</th><th>Level</th>
 <th>Cheapest model</th><th>Accuracy</th><th>Equivalent ECI</th>
 <th>Release date</th><th>Cost per task</th></tr></thead><tbody>
-<tr><td>AIME (OTIS Mock)</td><td class="num">10%</td><td>o1-mini (medium)</td><td class="num">12.8%</td><td class="num">129.7</td><td>2024-09-12</td><td class="num">$0.00892</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">10%</td><td>Gemini 1.5 Flash</td><td class="num">15.4%</td><td class="num">130.6</td><td>2024-09-24</td><td class="num">$0.000335</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">10%</td><td>Phi-4</td><td class="num">13.5%</td><td class="num">129.9</td><td>2024-12-12</td><td class="num">$0.000173</td></tr>
-<tr class="gap"><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>o1 (medium)</td><td class="num">64.4%</td><td class="num">141.0</td><td>2024-09-12</td><td class="num">$0.576</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>QwQ-32B</td><td class="num">59.1%</td><td class="num">139.9</td><td>2024-11-28</td><td class="num">$0.00977</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>DeepSeek-R1-Distill-Qwen-14B</td><td class="num">50.5%</td><td class="num">138.4</td><td>2025-01-20</td><td class="num">$0.00199</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>Gemini 2.5 Flash</td><td class="num">68.0%</td><td class="num">141.7</td><td>2025-05-20</td><td class="num">$0.00154</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>gpt-oss-20b (medium)</td><td class="num">60.0%</td><td class="num">140.1</td><td>2025-08-05</td><td class="num">$0.00121</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>Qwen3.5-9B</td><td class="num">61.6%</td><td class="num">140.4</td><td>2026-02-24</td><td class="num">$0.00117</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">50%</td><td>Gemma 4 31B IT (minimal)</td><td class="num">57.8%</td><td class="num">139.7</td><td>2026-04-02</td><td class="num">$0.000531</td></tr>
-<tr class="gap"><td>AIME (OTIS Mock)</td><td class="num">90%</td><td>GPT-5 (high)</td><td class="num">91.1%</td><td class="num">148.7</td><td>2025-08-07</td><td class="num">$0.162</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">90%</td><td>GPT-5.2 Codex (medium)</td><td class="num">93.1%</td><td class="num">149.9</td><td>2025-12-11</td><td class="num">$0.132</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">90%</td><td>Gemini 3 Flash (high)</td><td class="num">95.6%</td><td class="num">152.1</td><td>2025-12-17</td><td class="num">$0.0678</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">90%</td><td>Kimi K2.5</td><td class="num">92.2%</td><td class="num">149.4</td><td>2026-01-27</td><td class="num">$0.0664</td></tr>
-<tr><td>AIME (OTIS Mock)</td><td class="num">90%</td><td>DeepSeek-V4-Pro (high)</td><td class="num">95.6%</td><td class="num">152.1</td><td>2026-04-24</td><td class="num">$0.0216</td></tr>
-<tr class="gap"><td>Chess Puzzles</td><td class="num">10%</td><td>GPT-4o</td><td class="num">13.0%</td><td class="num">145.1</td><td>2024-05-13</td><td class="num">$0.00318</td></tr>
-<tr><td>Chess Puzzles</td><td class="num">10%</td><td>GPT-5 nano (low)</td><td class="num">14.0%</td><td class="num">145.8</td><td>2025-08-07</td><td class="num">$0.00116</td></tr>
-<tr><td>Chess Puzzles</td><td class="num">10%</td><td>Gemini 3.1 Flash-Lite (low)</td><td class="num">19.0%</td><td class="num">148.9</td><td>2026-03-03</td><td class="num">$0.00068</td></tr>
-<tr class="gap"><td>Chess Puzzles</td><td class="num">50%</td><td>Gemini 3.1 Pro</td><td class="num">61.7%</td><td class="num">165.0</td><td>2026-02-19</td><td class="num">$0.194</td></tr>
-<tr><td>Chess Puzzles</td><td class="num">50%</td><td>Gemini 3.5 Flash (high)</td><td class="num">50.0%</td><td class="num">161.0</td><td>2026-05-19</td><td class="num">$0.096</td></tr>
-<tr class="gap"><td>FrontierMath, tiers 1-3</td><td class="num">10%</td><td>o1 (medium)</td><td class="num">10.2%</td><td class="num">137.7</td><td>2024-09-12</td><td class="num">$1.42</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">10%</td><td>o3-mini (medium)</td><td class="num">10.5%</td><td class="num">138.0</td><td>2025-01-31</td><td class="num">$0.0334</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">10%</td><td>o4-mini (low)</td><td class="num">12.6%</td><td class="num">139.2</td><td>2025-04-16</td><td class="num">$0.0204</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">10%</td><td>GPT-5 mini (low)</td><td class="num">15.1%</td><td class="num">140.4</td><td>2025-08-07</td><td class="num">$0.00667</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">10%</td><td>Qwen 3.5 Flash (hosted 35B-A3B)</td><td class="num">13.0%</td><td class="num">139.4</td><td>2026-02-25</td><td class="num">$0.00339</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">10%</td><td>GPT-5.6 Luna (low)</td><td class="num">14.4%</td><td class="num">140.1</td><td>2026-07-09</td><td class="num">$0.00107</td></tr>
-<tr class="gap"><td>FrontierMath, tiers 1-3</td><td class="num">50%</td><td>GPT-5 Pro (high)</td><td class="num">52.6%</td><td class="num">151.2</td><td>2025-10-07</td><td class="num">$6.35</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">50%</td><td>Gemini 3 Flash</td><td class="num">51.2%</td><td class="num">150.9</td><td>2025-12-17</td><td class="num">$0.34</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">50%</td><td>Kimi K2.6</td><td class="num">57.2%</td><td class="num">152.3</td><td>2026-04-20</td><td class="num">$0.327</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">50%</td><td>Kimi K2.7 Code</td><td class="num">54.0%</td><td class="num">151.6</td><td>2026-06-12</td><td class="num">$0.245</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">50%</td><td>GPT-5.6 Luna (max)</td><td class="num">50.2%</td><td class="num">150.7</td><td>2026-07-09</td><td class="num">$0.0996</td></tr>
-<tr><td>FrontierMath, tiers 1-3</td><td class="num">50%</td><td>DeepSeek V4 Flash 0731 (max)</td><td class="num">57.5%</td><td class="num">152.4</td><td>2026-07-31</td><td class="num">$0.0223</td></tr>
-<tr class="gap"><td>GPQA Diamond</td><td class="num">10%</td><td>GPT-4 (Mar 2023)</td><td class="num">13.1%</td><td class="num">120.1</td><td>2023-03-14</td><td class="num">$0.0291</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>Claude 2</td><td class="num">10.6%</td><td class="num">118.1</td><td>2023-07-11</td><td class="num">$0.00666</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>Gemini 1.0 Pro</td><td class="num">11.7%</td><td class="num">119.0</td><td>2023-12-13</td><td class="num">$0.000441</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>Llama 3-70B</td><td class="num">10.4%</td><td class="num">117.9</td><td>2024-04-18</td><td class="num">$0.000154</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>Gemini 1.5 Flash</td><td class="num">18.2%</td><td class="num">123.3</td><td>2024-05-23</td><td class="num">$0.000121</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>Gemini 1.5 Flash 8B</td><td class="num">10.4%</td><td class="num">117.9</td><td>2024-10-03</td><td class="num">$0.00008</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>Mistral Small 3</td><td class="num">14.6%</td><td class="num">121.1</td><td>2025-01-25</td><td class="num">$0.000078</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">10%</td><td>gpt-oss-20b (low)</td><td class="num">17.0%</td><td class="num">122.7</td><td>2025-08-05</td><td class="num">$0.000065</td></tr>
-<tr class="gap"><td>GPQA Diamond</td><td class="num">50%</td><td>o1 (medium)</td><td class="num">61.1%</td><td class="num">139.7</td><td>2024-09-12</td><td class="num">$0.23</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">50%</td><td>QwQ-32B</td><td class="num">52.7%</td><td class="num">136.8</td><td>2024-11-28</td><td class="num">$0.00465</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">50%</td><td>DeepSeek-R1-Distill-Qwen-32B</td><td class="num">52.5%</td><td class="num">136.7</td><td>2025-01-20</td><td class="num">$0.00214</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">50%</td><td>Gemini 2.0 Flash</td><td class="num">52.2%</td><td class="num">136.7</td><td>2025-02-05</td><td class="num">$0.00027</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">50%</td><td>GPT-5.6 Luna</td><td class="num">51.5%</td><td class="num">136.4</td><td>2026-07-09</td><td class="num">$0.000118</td></tr>
-<tr class="gap"><td>GPQA Diamond</td><td class="num">90%</td><td>Gemini 3 Pro</td><td class="num">90.2%</td><td class="num">154.5</td><td>2025-11-18</td><td class="num">$ 0.1</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">90%</td><td>Gemini 3.1 Pro</td><td class="num">93.6%</td><td class="num">158.3</td><td>2026-02-19</td><td class="num">$0.0693</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">90%</td><td>Gemini 3.5 Flash (high)</td><td class="num">90.3%</td><td class="num">154.6</td><td>2026-05-19</td><td class="num">$0.0516</td></tr>
-<tr><td>GPQA Diamond</td><td class="num">90%</td><td>Claude Opus 5</td><td class="num">90.1%</td><td class="num">154.4</td><td>2026-07-24</td><td class="num">$0.0362</td></tr>
-<tr class="gap"><td>Mystery Game Puzzles</td><td class="num">10%</td><td>o3 (medium)</td><td class="num">15.2%</td><td class="num">151.8</td><td>2025-01-31</td><td class="num">$0.215</td></tr>
-<tr><td>Mystery Game Puzzles</td><td class="num">10%</td><td>GPT-5.1-Codex (low)</td><td class="num">11.0%</td><td class="num">149.6</td><td>2025-11-12</td><td class="num">$0.0381</td></tr>
-<tr><td>Mystery Game Puzzles</td><td class="num">10%</td><td>Qwen3.5 397B-A17B</td><td class="num">10.1%</td><td class="num">149.0</td><td>2026-02-13</td><td class="num">$0.0137</td></tr>
-<tr><td>Mystery Game Puzzles</td><td class="num">10%</td><td>Qwen 3.5 Flash (hosted 35B-A3B)</td><td class="num">10.9%</td><td class="num">149.5</td><td>2026-02-25</td><td class="num">$0.00148</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">25%</td><td>o1-mini (medium)</td><td class="num">29.4%</td><td class="num">134.4</td><td>2024-09-12</td><td class="num">$0.0155</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">25%</td><td>QwQ-32B</td><td class="num">48.6%</td><td class="num">138.0</td><td>2024-11-28</td><td class="num">$0.00749</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">25%</td><td>DeepSeek-R1-Distill-Qwen-14B</td><td class="num">27.8%</td><td class="num">134.0</td><td>2025-01-20</td><td class="num">$0.0011</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">25%</td><td>Gemini 2.0 Flash</td><td class="num">27.6%</td><td class="num">134.0</td><td>2025-02-05</td><td class="num">$0.000605</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">25%</td><td>gpt-oss-20b (low)</td><td class="num">28.3%</td><td class="num">134.1</td><td>2025-08-05</td><td class="num">$0.000232</td></tr>
+<tr class="gap"><td>AIME (OTIS Mock)</td><td class="num">75%</td><td>o3-mini (high)</td><td class="num">75.3%</td><td class="num">143.3</td><td>2025-01-31</td><td class="num">$0.057</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">75%</td><td>Grok-3 mini (high)</td><td class="num">77.8%</td><td class="num">143.9</td><td>2025-04-09</td><td class="num">$0.0102</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">75%</td><td>gpt-oss-120b (high)</td><td class="num">78.9%</td><td class="num">144.2</td><td>2025-08-05</td><td class="num">$0.00316</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">75%</td><td>Gemma 4 26B A4B (minimal)</td><td class="num">82.2%</td><td class="num">145.2</td><td>2026-04-02</td><td class="num">$0.00194</td></tr>
+<tr><td>AIME (OTIS Mock)</td><td class="num">75%</td><td>Qwen3.7 Flash</td><td class="num">77.8%</td><td class="num">143.9</td><td>2026-07-27</td><td class="num">$0.000694</td></tr>
+<tr class="gap"><td>Chess Puzzles</td><td class="num">25%</td><td>o3 (low)</td><td class="num">27.0%</td><td class="num">152.7</td><td>2025-01-31</td><td class="num">$0.0709</td></tr>
+<tr><td>Chess Puzzles</td><td class="num">25%</td><td>GPT-5 nano (high)</td><td class="num">27.0%</td><td class="num">152.7</td><td>2025-08-07</td><td class="num">$0.0137</td></tr>
+<tr><td>Chess Puzzles</td><td class="num">25%</td><td>Gemini 3.1 Flash-Lite (low)</td><td class="num">25.0%</td><td class="num">151.8</td><td>2026-03-03</td><td class="num">$0.000726</td></tr>
+<tr class="gap"><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>o3 (medium)</td><td class="num">26.3%</td><td class="num">144.5</td><td>2025-01-31</td><td class="num">$0.553</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>o4-mini (medium)</td><td class="num">26.0%</td><td class="num">144.4</td><td>2025-04-16</td><td class="num">$0.129</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>GPT-5 mini (high)</td><td class="num">30.5%</td><td class="num">145.8</td><td>2025-08-07</td><td class="num">$0.0988</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>Qwen3.5 397B-A17B</td><td class="num">25.6%</td><td class="num">144.3</td><td>2026-02-13</td><td class="num">$0.0924</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>Grok 4.20</td><td class="num">28.4%</td><td class="num">145.2</td><td>2026-02-17</td><td class="num">$0.079</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>GPT-5.4 Nano (high)</td><td class="num">28.4%</td><td class="num">145.2</td><td>2026-03-17</td><td class="num">$0.0742</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>GPT-5.5 Instant</td><td class="num">25.3%</td><td class="num">144.2</td><td>2026-05-05</td><td class="num">$0.0667</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>Qwen3.7-Plus</td><td class="num">28.1%</td><td class="num">145.1</td><td>2026-06-02</td><td class="num">$0.0463</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">25%</td><td>GPT-5.6 Luna</td><td class="num">25.3%</td><td class="num">144.2</td><td>2026-07-09</td><td class="num">$0.00147</td></tr>
+<tr class="gap"><td>FrontierMath, tiers 1-3</td><td class="num">75%</td><td>GPT-5.4 (xhigh)</td><td class="num">78.6%</td><td class="num">158.3</td><td>2026-03-05</td><td class="num">$2.15</td></tr>
+<tr><td>FrontierMath, tiers 1-3</td><td class="num">75%</td><td>GPT-5.6 Luna (max)</td><td class="num">82.1%</td><td class="num">159.6</td><td>2026-07-09</td><td class="num">$0.219</td></tr>
+<tr class="gap"><td>GPQA Diamond</td><td class="num">25%</td><td>GPT-4 Turbo (Nov 2023)</td><td class="num">28.6%</td><td class="num">128.3</td><td>2023-11-06</td><td class="num">$0.0197</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>Gemini 1.5 Pro</td><td class="num">25.6%</td><td class="num">127.0</td><td>2024-02-15</td><td class="num">$0.00194</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>WizardLM-2 8x22B</td><td class="num">25.6%</td><td class="num">127.0</td><td>2024-04-15</td><td class="num">$0.000623</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>Llama 3.1-70B</td><td class="num">25.0%</td><td class="num">126.7</td><td>2024-07-23</td><td class="num">$0.000209</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>Gemini 1.5 Flash</td><td class="num">29.7%</td><td class="num">128.7</td><td>2024-09-24</td><td class="num">$0.000145</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>Phi-4</td><td class="num">38.3%</td><td class="num">131.9</td><td>2024-12-12</td><td class="num">$0.000108</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>Mistral Small 3</td><td class="num">25.7%</td><td class="num">127.1</td><td>2025-01-25</td><td class="num">$0.000089</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">25%</td><td>gpt-oss-20b (low)</td><td class="num">33.1%</td><td class="num">130.0</td><td>2025-08-05</td><td class="num">$0.000085</td></tr>
+<tr class="gap"><td>GPQA Diamond</td><td class="num">75%</td><td>o3 (high)</td><td class="num">75.8%</td><td class="num">145.5</td><td>2025-01-31</td><td class="num">$0.299</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>Gemini 2.5 Pro (Jun 2025)</td><td class="num">80.4%</td><td class="num">147.7</td><td>2025-03-25</td><td class="num">$0.0891</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>Gemini 2.5 Pro (Jun 2025)</td><td class="num">77.8%</td><td class="num">146.4</td><td>2025-06-05</td><td class="num">$0.0129</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>DeepSeek-V3.2</td><td class="num">77.7%</td><td class="num">146.4</td><td>2025-12-01</td><td class="num">$0.00882</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>Qwen3.5 397B-A17B</td><td class="num">79.8%</td><td class="num">147.4</td><td>2026-02-13</td><td class="num">$0.0071</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>Qwen 3.5 Flash (hosted 35B-A3B)</td><td class="num">76.2%</td><td class="num">145.7</td><td>2026-02-25</td><td class="num">$0.00218</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>MiniMax-M3</td><td class="num">75.1%</td><td class="num">145.1</td><td>2026-06-01</td><td class="num">$0.00121</td></tr>
+<tr><td>GPQA Diamond</td><td class="num">75%</td><td>GPT-5.6 Luna (low)</td><td class="num">75.3%</td><td class="num">145.2</td><td>2026-07-09</td><td class="num">$0.000412</td></tr>
+<tr class="gap"><td>Mystery Game Puzzles</td><td class="num">25%</td><td>GPT-5.6 Sol</td><td class="num">26.2%</td><td class="num">155.9</td><td>2026-07-09</td><td class="num">$0.195</td></tr>
 </tbody><tfoot><tr><td colspan="7">
-Each timeline opens on the first release date any run attains its accuracy level -- 10%, 50%, or 90%, rescaled so the guessing floor is 0, which makes 50% the level at which the 2PL puts capability at the benchmark's ECI difficulty; its later rows are the models that next held that level's cost record -- accuracy at or above the level at strictly lower cost than every earlier qualifying model, at most one model per release date. Accuracy is the qualifying run's own score, which can exceed the level it is matching, and Equivalent ECI converts it to the anchored ECI capability scale, logit(a)/&alpha;<sub>b</sub> + D<sub>b</sub>. Primary benchmarks only; a benchmark contributes only the levels it has reached, so Mystery Game Puzzles appears at 10% but not 50%. Costs are per task, as in the rest of the analysis.
+Each timeline opens on the first release date any run attains its accuracy level -- 25% and 75%, rescaled so the guessing floor is 0, on which scale 50% is the level at which the 2PL puts capability at the benchmark's ECI difficulty; its later rows are the models that next held that level's cost record -- accuracy at or above the level at strictly lower cost than every earlier qualifying model, at most one model per release date. Accuracy is the qualifying run's own score, which can exceed the level it is matching, and Equivalent ECI converts it to the anchored ECI capability scale, logit(a)/&alpha;<sub>b</sub> + D<sub>b</sub>. Primary benchmarks only; a benchmark contributes only the levels it has reached. Costs are per task, as in the rest of the analysis.
 </td></tr></tfoot></table></body></html>

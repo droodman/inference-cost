@@ -1163,37 +1163,40 @@ fit_pooled_cost_bc <- function(key, d) {
 }
 
 # The pooled surface as ONE curve per date, for the figures: the fitted
-# common surface at the cheapest benchmark's copy (pooled_fe_draw below).
+# common surface under the cheapest benchmark's offset (pooled_fe_draw
+# below).
 # cost_surface() reads only the named shared coefficients, i.e. the
 # reference benchmark's surface, so the drawn offset is added here; for the
 # BC fit the la coordinate is rescaled to the units the fit was estimated in
 # (POOLED_BC_LA_SCALE).
 # The benchmark fixed effect the drawn "one pooled surface" adds to the
-# shared part: the MINIMUM over the copies (the reference level's 0
-# included), i.e. the cheapest benchmark's copy. The pooled panels' empirical
-# reference is the cross-benchmark cost RECORD -- a minimum -- so the mean
-# copy sat systematically above-in-cost/below-in-level and only grazed it;
-# the most favorable copy is the model's nearest counterpart of that record
-# (imperfect where the pooled rectangle is covered only by dearer
-# benchmarks' data, accepted for simplicity). Time derivatives are free of
-# the choice: the offsets are additive.
+# shared part. The fit is one shared surface shifted by a constant per
+# benchmark, and this picks the MINIMUM of those shifts (the reference
+# level's 0 included), i.e. the cheapest benchmark's offset. The pooled
+# panels' empirical reference is the cross-benchmark cost RECORD -- a
+# minimum -- so the mean offset sat systematically above-in-cost/below-in-
+# level and only grazed it; the most favorable offset is the model's nearest
+# counterpart of that record (imperfect where the pooled rectangle is
+# covered only by dearer benchmarks' data, accepted for simplicity). Time
+# derivatives are free of the choice: the offsets are additive.
 pooled_fe_draw <- function(fit) {
   cf <- coef(fit)
   names(cf) <- sub("^beta_", "", names(cf))
   min(c(0, unname(cf[grepl("^bench", names(cf))])))
 }
 
-# The bench-slopes pooled Box-Tidwell exposed as ONE benchmark copy's
-# coefficients, in the shared-slope layout every drawing consumer was
-# written for: c((Intercept), phia, phit, phiat), with the chosen copy's
-# fixed effect and capability slope folded in. The copy is the MOST
-# FAVORABLE one -- lowest mean fitted log cost over the stacked runs --
+# The bench-slopes pooled Box-Tidwell exposed as ONE benchmark's version of
+# the surface, in the shared-slope layout every drawing consumer was written
+# for: c((Intercept), phia, phit, phiat), with the chosen benchmark's fixed
+# effect and capability slope folded in. The one chosen is the MOST
+# FAVORABLE -- lowest mean fitted log cost over the stacked runs --
 # generalizing pooled_fe_draw's minimum fixed effect, which no longer
-# suffices once the slopes differ and the copies cross (the same
-# accepted-imperfection as there: one copy stands in for a min over
-# copies). Shared phit/phiat terms drop out of the comparison. A fit that
-# still carries a shared phia passes through with the minimum fixed effect
-# folded in.
+# suffices once the slopes differ: with per-benchmark slopes the versions
+# are no longer parallel and can cross, so no single one is lowest
+# everywhere (the same accepted-imperfection as there: one stands in for a
+# min over all). Shared phit/phiat terms drop out of the comparison. A fit
+# that still carries a shared phia passes through with the minimum fixed
+# effect folded in.
 pooled_bc_flat <- function(fit, sp) {
   cf <- coef(fit)
   names(cf) <- sub("^beta_", "", names(cf))
@@ -1260,6 +1263,80 @@ pooled_frontier_curves <- function(fit, sp, dates, n_la = 200) {
 }
 
 # Iso-capability contours off the pooled surface: the mirror of
+# Isocost contours for a COST-direction fit: accuracy against date at a fixed
+# budget. This direction models ln cost, so unlike the accuracy direction's
+# isocost_curves() -- a plain evaluation -- this one must INVERT the surface
+# for accuracy, the mirror of what iso_acc_curves() does to invert an
+# accuracy-direction surface for cost.
+#
+# The inversion is numeric rather than closed form, and deliberately so: the
+# surface is quadratic in la under the full quadratic and Box-Cox under bc, so
+# three algebraic cases would have to be carried and kept in step with
+# cost_surface(). Instead the same dense la sweep cost_frontier_curves() uses
+# is evaluated once per date and read backwards by interpolation, which is
+# exact to the grid and cannot disagree with the frontier view about the
+# surface. Only the stretch where the surface is a frontier (d lnC/d la > 0)
+# is inverted, so a target met on a downward-sloping stretch is blanked rather
+# than reported at a spurious accuracy.
+cost_isocost_curves <- function(fitset, data, tbar, levels = COST_LEVELS,
+                                n_date = 300, n_la = 400) {
+  do.call(rbind, lapply(names(fitset), function(b) {
+    srf <- cost_surface(fitset[[b]], data[data$benchmark == b, ])
+    sub <- data[data$benchmark == b, ]
+    su  <- iso_runs(sub)
+    lrng <- range(su$la)
+    crng <- range(sub$cost)
+    lv <- levels[levels >= crng[1] & levels <= crng[2]]
+    if (!length(lv)) return(NULL)
+    la <- seq(lrng[1], lrng[2], length.out = n_la)
+    dts <- seq(min(sub$releasedate), max(sub$releasedate), length.out = n_date)
+    do.call(rbind, lapply(dts, function(dt) {
+      tc <- as_t(dt) - tbar[[b]]
+      u <- srf$f(la, tc)
+      u[srf$dacc(la, tc) <= 0] <- NA_real_
+      ok <- is.finite(u)
+      if (sum(ok) < 2) return(NULL)
+      # approx() needs x strictly increasing; the frontier stretch is, but
+      # ties from a flat patch would stop it
+      uu <- u[ok]; ll <- la[ok]
+      keep <- c(TRUE, diff(uu) > 0)
+      if (sum(keep) < 2) return(NULL)
+      a <- stats::approx(uu[keep], ll[keep], xout = log(lv))$y
+      data.frame(date = dt, cost = lv, acc = plogis(a), benchmark = b,
+                 seg = 1L)
+    }))
+  }))
+}
+
+# The pooled panel's isocost contours, cost direction: the same inversion
+# against the pooled surface, with `acc` in ECI points rather than a share
+# (the pooled panel's value axis is the capability scale, so no plogis).
+pooled_isocost_curves <- function(fit, sp, levels = COST_LEVELS,
+                                  n_date = 300, n_la = 400) {
+  srf <- pooled_surface(fit, sp)
+  su  <- iso_runs(sp)
+  tbar <- (sp$t - sp$tc)[1]
+  lrng <- range(su$la)
+  crng <- range(sp$cost)
+  lv <- levels[levels >= crng[1] & levels <= crng[2]]
+  if (!length(lv)) return(NULL)
+  la <- seq(lrng[1], lrng[2], length.out = n_la)
+  dts <- seq(min(sp$releasedate), max(sp$releasedate), length.out = n_date)
+  do.call(rbind, lapply(dts, function(dt) {
+    tc <- as_t(dt) - tbar
+    u <- srf$f(la, tc)
+    u[srf$dacc(la, tc) <= 0] <- NA_real_
+    ok <- is.finite(u)
+    if (sum(ok) < 2) return(NULL)
+    uu <- u[ok]; ll <- la[ok]
+    keep <- c(TRUE, diff(uu) > 0)
+    if (sum(keep) < 2) return(NULL)
+    data.frame(date = dt, cost = lv,
+               acc = stats::approx(uu[keep], ll[keep], xout = log(lv))$y,
+               benchmark = "pooled", seg = 1L)
+  }))
+}
+
 # cost_iso_curves(), levels in ECI points, same cap-and-birth blanking
 # against the pooled staircase.
 pooled_iso_curves <- function(fit, sp, levels, n_date = 300,
