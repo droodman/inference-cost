@@ -906,5 +906,34 @@ for (spec in c("lin", "quad", "bc")) {
       else decline_cost(fset[[b]], bl, mask = FALSE)
     }), panels)
     save_heatmap(zs_full, xs, "decline", key, spec, zs_ref = zs)
+
+    if (key == "costgridols" && spec == "bc") {
+      # Figure 6 of the report: the same decline heatmap over the first four
+      # benchmarks only. heat_df() and frontier_steps() both iterate the
+      # script-level `panels`, so the subset has to be applied THERE and put
+      # back straight away -- narrowing zs/xs alone would leave them reaching
+      # for panels the data no longer carries.
+      keep_panels <- panels
+      panels <- head(intersect(names(LABELS), benches), 4)
+      # The plate's normalisation is PER PANEL -- each anchored to the range
+      # its 3-D scene colours span -- so a numeric colourbar would be wrong:
+      # the same colour denotes a different rate in each panel. What IS true
+      # in every panel is the DIRECTION, so the report figure carries a bar
+      # labelled only "lower" and "higher". That tells a reader what yellow
+      # means without implying a common scale the plate does not have, and
+      # leaves the per-panel anchoring (and the match to each 3-D scene)
+      # exactly as the PNG has it.
+      report_figure(
+        heat_plot(zs_full, xs, "decline", zs) +
+          scale_fill_gradientn(
+            colours = PALETTE, limits = c(0, 1), na.value = SURFACE,
+            name = NULL, breaks = c(0, 1), labels = c("lower", "higher"),
+            guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
+                                    barwidth = grid::unit(7, "cm"),
+                                    direction = "horizontal",
+                                    ticks.colour = SURFACE)),
+        6)
+      panels <- keep_panels
+    }
   }
 }

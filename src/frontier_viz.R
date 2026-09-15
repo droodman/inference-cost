@@ -1011,6 +1011,33 @@ isocost_plot <- function(curves, pts, title = NULL, subtitle = NULL,
     frontier_theme()
 }
 
+## ---- report figures ------------------------------------------------------------
+#
+# The plates as doc/The Price of Thought.docx carries them, written to
+# output/slides/ as "Figure N.svg" -- N being the DOCUMENT's numbering, not
+# any producing script's filename, so the two cannot drift apart. Vector, so
+# Word scales them without resampling, which is the whole reason these exist
+# separately from the PNGs.
+#
+# Two things are stripped, because the document supplies both itself: the
+# embedded title at the top and the notes block at the bottom. What is NOT
+# stripped is the legend -- it carries the date or level scale and the
+# document does not restate it.
+#
+# Where a plate has twelve panels the caller passes the four-benchmark
+# subset; regenerating at four rather than cropping the PNG is what keeps the
+# x-axis labelling intact, since a cropped top half of a shared-axis facet
+# loses the axis entirely and had to be pasted back by hand.
+report_figure <- function(p, n, height = fig_height(4), width = 10) {
+  p <- p + labs(title = NULL, subtitle = NULL, caption = NULL)
+  dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
+  f <- sprintf("Figure %d.svg", n)
+  ggsave(out_path("slides", f), p, width = width, height = height,
+         device = grDevices::svg)
+  cat("wrote slides/", f, "
+", sep = "")
+}
+
 ## ---- shared data prep ---------------------------------------------------------------
 
 # Analysis sample: build_runs() supplies the data (already deduplicated there,

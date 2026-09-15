@@ -292,6 +292,15 @@ p3 <- slide_base(slide_rows(curves), "Fitted frontier accuracy") +
   slide_steps()                                              # and the fit over both
 slide_save(p3, "paretologit_bc_fit.png")
 
+# Figure 4 of the report: the same four panels at the quartet's own size,
+# titleless and noteless, as vector.
+report_figure(
+  frontier_plot(slide_rows(curves), slide_rows(pts_frontier),
+                ranges = slide_rows(axis_ranges_p), labels = SLIDE_LABELS,
+                ylab = "Fitted frontier accuracy",
+                colour_limits = SLIDE_COLOURS) +
+    slide_steps(), 4)
+
 # (2) the isocost plate, accuracy against date. Same three stages, and the
 # same objects as the finished plate above it: the runs at (date, accuracy),
 # the record staircases A_c(t) laid over them, then the fitted contours over

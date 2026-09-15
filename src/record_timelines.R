@@ -345,5 +345,10 @@ for (i in which(!is.na(nudge_idx))) p <- p +
 
 ggsave(out_path("record_timelines.png"), p, width = 12, height = 8, dpi = 200,
        device = ragg::agg_png)
+
+# Figure 2 of the report: one plate, so nothing is subset -- only the title
+# and the notes come off. Kept at the figure's own 12 x 8 rather than the
+# quartet's shape.
+report_figure(p, 2, height = 8, width = 12)
 cat(sprintf("wrote record_timelines.png (%d traces, one graph)\n",
             nrow(unique(tl[c("bench", "level")]))))
