@@ -320,13 +320,17 @@ p <- ggplot(tl, aes(date, cost)) +
   scale_y_log10(breaks = 10^(-5:2), labels = dollar_log,
                 limits = c(NA, 10),
                 expand = expansion(mult = c(0.05, 0))) +
-  # Pinned to whole years, 2023 through 2027, with no expansion either side:
-  # the panel then begins and ends ON a labelled break, so both endpoints are
-  # named rather than floating inside an expanded margin. Yearly breaks are
-  # given explicitly -- the default picks its own and skipped the endpoints.
-  scale_x_date(limits = as.Date(c("2023-01-01", "2027-01-01")),
+  # Pinned on the RIGHT only: the panel ends on 2027 with no expansion, so
+  # that break lands exactly at the edge and is labelled. The left end is
+  # left to the data (plus the usual 5%), since forcing it back to 2023
+  # opened a margin with nothing in it. Yearly breaks are given explicitly --
+  # the default picks its own and skipped the endpoint.
+  # as.Date(c(NA, ...)), not c(NA, as.Date(...)): c() dispatches on its first
+  # argument, so a leading logical NA strips the Date class and the scale
+  # rejects the limits.
+  scale_x_date(limits = as.Date(c(NA, "2027-01-01")),
                date_breaks = "1 year", date_labels = "%Y",
-               expand = expansion(mult = c(0, 0))) +
+               expand = expansion(mult = c(0.05, 0))) +
   # No title and no notes: the document and the deck both caption this plate
   # themselves, and stripping them here means the PNG and Figure 2.svg are
   # the same picture rather than the SVG being a trimmed copy.
