@@ -310,7 +310,16 @@ p <- ggplot(tl, aes(date, cost)) +
   # no key: the trace names on the plot already say which benchmark is
   # which, and the shapes only need to separate traces where they cross
   scale_shape_manual(values = SHAPES, guide = "none") +
-  scale_y_log10(breaks = 10^(-5:2), labels = dollar_log) +
+  # The breaks already run to $100, but the panel stopped just above the
+  # dearest run (~$2), so $10 never rendered. Pinning the ceiling AT $10
+  # brings its tick and gridline in and gives the top trace some air; nothing
+  # is clipped, the costliest record being well below it.
+  # Zero expansion on top, so the panel ENDS at $10 rather than floating a
+  # log-scale 5% above it; the bottom keeps its expansion so the cheapest
+  # dots are not clipped against the axis.
+  scale_y_log10(breaks = 10^(-5:2), labels = dollar_log,
+                limits = c(NA, 10),
+                expand = expansion(mult = c(0.05, 0))) +
   scale_x_date(expand = expansion(mult = c(0.05, 0.05))) +
   # No title and no notes: the document and the deck both caption this plate
   # themselves, and stripping them here means the PNG and Figure 2.svg are
