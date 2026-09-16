@@ -646,8 +646,19 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
               inherit.aes = FALSE, colour = "black", alpha = 0.5,
               linewidth = 0.7) +
     facet_wrap(~ benchmark, ncol = 2, scales = "free") +
-    scale_fill_gradientn(colours = PALETTE, limits = c(0, 1),
-                         na.value = SURFACE, guide = "none") +
+    # Direction only, no numbers. The fill is normalised PER PANEL (each
+    # anchored to the range its own 3-D scene spans, see heat_anchor), so a
+    # numeric bar would be wrong -- the same colour denotes a different value
+    # in each panel. What holds in every panel is which end is which, and
+    # without a bar at all a reader has no way to know that yellow is the
+    # high end.
+    scale_fill_gradientn(
+      colours = PALETTE, limits = c(0, 1), na.value = SURFACE, name = NULL,
+      breaks = c(0, 1), labels = c("lower", "higher"),
+      guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
+                              barwidth = grid::unit(7, "cm"),
+                              direction = "horizontal",
+                              ticks.colour = SURFACE)) +
     labs(x = NULL, caption = heat_caption(view)) +
     frontier_theme() +
     theme(panel.grid.major = element_blank())
@@ -915,24 +926,9 @@ for (spec in c("lin", "quad", "bc")) {
       # for panels the data no longer carries.
       keep_panels <- panels
       panels <- head(intersect(names(LABELS), benches), 4)
-      # The plate's normalisation is PER PANEL -- each anchored to the range
-      # its 3-D scene colours span -- so a numeric colourbar would be wrong:
-      # the same colour denotes a different rate in each panel. What IS true
-      # in every panel is the DIRECTION, so the report figure carries a bar
-      # labelled only "lower" and "higher". That tells a reader what yellow
-      # means without implying a common scale the plate does not have, and
-      # leaves the per-panel anchoring (and the match to each 3-D scene)
-      # exactly as the PNG has it.
-      report_figure(
-        heat_plot(zs_full, xs, "decline", zs) +
-          scale_fill_gradientn(
-            colours = PALETTE, limits = c(0, 1), na.value = SURFACE,
-            name = NULL, breaks = c(0, 1), labels = c("lower", "higher"),
-            guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
-                                    barwidth = grid::unit(7, "cm"),
-                                    direction = "horizontal",
-                                    ticks.colour = SURFACE)),
-        6)
+      # the lower/higher bar comes from heat_plot() itself now, so this is
+      # the PNG's plate with nothing but title and notes removed
+      report_figure(heat_plot(zs_full, xs, "decline", zs), 6)
       panels <- keep_panels
     }
   }

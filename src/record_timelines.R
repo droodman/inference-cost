@@ -18,8 +18,7 @@
 # One table, timelines stacked, and ONE figure: every trace on a single
 # (release date, cost) plane -- log cost is comparable across benchmarks, so
 # the plate that gave each benchmark its own panel is retired -- with each
-# record holder COLOURED by the capability its own accuracy implies,
-# C = logit(a)/alpha_b + D_b, and each trace named -- "25% on GPQA Diamond"
+# trace named -- "25% on GPQA Diamond"
 # -- by a standalone label at its opening dot. Models go by the registry's
 # display names (model_display, prepare_data.R), with effort folded in where
 # it is informative. Written as HTML to output/tables/, and printed to the
@@ -201,8 +200,8 @@ cat("\nwrote record_timelines.html\n")
 # constants literally rather than the globals, which would repaint it if the
 # toggle ever moves. The blues are frontier_viz.R's BLUE ramp -- the original
 # light-theme palette, dark = high capability on a light surface.
-LABEL_SIZE <- 3.4   # these names are the point of the figure
-TRACE_LABEL_SIZE <- 4.1   # the trace names, a notch above the model labels
+LABEL_SIZE <- 3.9   # these names are the point of the figure
+TRACE_LABEL_SIZE <- 4.7   # the trace names, a notch above the model labels
 # The chrome -- ticks, axis titles, legend -- set to match the trace names,
 # so no text on the plate outsizes them. geom sizes are millimetres and
 # theme sizes are points, hence the .pt conversion.
@@ -213,6 +212,13 @@ CHROME_SIZE <- TRACE_LABEL_SIZE * .pt
 FONT <- "Cambria"
 LT <- list(ink = "#0b0b0b", second = "#52514e", muted = "#898781",
            gridline = "#e1e0d9", axis = "#c3c2b7", surface = "#ffffff")
+# ONE dot colour. The dots used to be shaded by the capability each run's own
+# accuracy implies, which asked the reader to track a third variable on a
+# plate already carrying dates, costs, two levels and four benchmarks; the
+# ECI column survives in the HTML table for anyone who wants it. A mid-dark
+# blue from frontier_viz.R's BLUE ramp, so the figure still reads as one of
+# this family.
+DOT <- BLUE[7]
 
 light_theme <- theme_minimal(base_size = 11, base_family = FONT) +
   theme(
@@ -223,8 +229,8 @@ light_theme <- theme_minimal(base_size = 11, base_family = FONT) +
     axis.line  = element_line(colour = LT$axis, linewidth = 0.3),
     axis.text  = element_text(colour = LT$ink, size = CHROME_SIZE),
     axis.title = element_text(colour = LT$ink, size = CHROME_SIZE),
-    plot.title    = element_text(colour = LT$ink, face = "bold", size = 13),
-    plot.caption  = element_text(colour = LT$muted, size = 7.5, hjust = 0),
+    plot.title    = element_text(colour = LT$ink, face = "bold", size = 15),
+    plot.caption  = element_text(colour = LT$muted, size = 9, hjust = 0),
     legend.position = "top", legend.justification = "left",
     legend.text  = element_text(colour = LT$second, size = CHROME_SIZE),
     legend.title = element_text(colour = LT$second, size = CHROME_SIZE),
@@ -278,7 +284,6 @@ main_labs <- if (any(!is.na(nudge_idx)))
 # benchmark -- the diamond goes to GPQA Diamond, naturally.
 SHAPES <- c(aime = 21, chess = 22, fm13 = 24, gpqa = 23)
 names(SHAPES) <- LABELS[names(SHAPES)]
-eci_rng <- range(tl$eci)
 
 p <- ggplot(tl, aes(date, cost)) +
   # heavier than the dots' stroke, mid-grey rather than black: the traces
@@ -286,7 +291,7 @@ p <- ggplot(tl, aes(date, cost)) +
   # experiment did exactly that)
   geom_line(aes(group = interaction(bench, level)),
             colour = LT$muted, linewidth = 0.8) +
-  geom_point(aes(fill = eci, shape = benchmark), size = 2.4,
+  geom_point(aes(shape = benchmark), fill = DOT, size = 2.4,
              colour = LT$surface, stroke = 0.3) +
   # nudge_y (in log10-dollar panel units) starts every label a step ABOVE
   # its dot, so the placements read consistently up-from-the-point; repel
@@ -307,25 +312,10 @@ p <- ggplot(tl, aes(date, cost)) +
   scale_shape_manual(values = SHAPES, guide = "none") +
   scale_y_log10(breaks = 10^(-5:2), labels = dollar_log) +
   scale_x_date(expand = expansion(mult = c(0.05, 0.05))) +
-  scale_fill_gradientn(
-    colours = BLUE, name = "Equivalent ECI score", limits = eci_rng,
-    guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
-                            barwidth = grid::unit(7, "cm"),
-                            direction = "horizontal",
-                            ticks.colour = LT$surface)) +
-  labs(title = sprintf(
-         "Cost records at %s performance, primary benchmarks", lev_txt),
-       x = NULL, y = "Cost per task (log scale)",
-       caption = paste(
-         "Each trace follows one benchmark's cost record at a fixed accuracy",
-         sprintf("level -- %s, guessing floor rescaled to 0 -- from the",
-                 lev_txt),
-         "date the level was first attained:\nmodels scoring at least the",
-         "level at lower cost than every predecessor, the trace named at its",
-         "opening dot. Each dot is coloured by the capability its run's own",
-         "accuracy implies\non the ECI scale, logit(a)/alpha + D. A run",
-         "holding several of its benchmark's levels at once is labeled once.",
-         "A benchmark contributes only the levels it has reached.")) +
+  # No title and no notes: the document and the deck both caption this plate
+  # themselves, and stripping them here means the PNG and Figure 2.svg are
+  # the same picture rather than the SVG being a trimmed copy.
+  labs(x = "Release date of AI model", y = "Cost per task (log scale)") +
   light_theme
 
 # The hand-placed trace names (TRACE_NUDGES above): ONE repel layer per label,
@@ -352,3 +342,27 @@ ggsave(out_path("record_timelines.png"), p, width = 12, height = 8, dpi = 200,
 report_figure(p, 2, height = 8, width = 12)
 cat(sprintf("wrote record_timelines.png (%d traces, one graph)\n",
             nrow(unique(tl[c("bench", "level")]))))
+
+## ---- the figure's data, as CSV ------------------------------------------------
+#
+# One row per PLOTTED dot, in the order the traces are drawn, with the text
+# the figure puts beside it. The HTML table above is the same series dressed
+# for reading ($ and % formatting, Mystery Game Puzzles included); this is
+# the series the FIGURE shows, raw, for reuse -- so it follows tl, not
+# timelines, and Mystery is absent here exactly as it is from the plate.
+#
+# Two columns the table has no reason to carry, both about the labelling:
+# label_drawn marks the row whose model name is actually rendered, since a
+# run holding two of its benchmark's levels is plotted twice and labelled
+# once; trace_label carries the standalone trace name, which appears only at
+# the trace's opening dot.
+csv <- tl[c("bench", "benchmark", "level", "model", "acc", "date", "cost")]
+names(csv)[names(csv) == "model"] <- "model_label"
+csv$label_drawn <- !duplicated(tl[c("bench", "model", "date")])
+csv$trace_label <- ifelse(!duplicated(tl[c("bench", "level")]),
+                          paste0(fmt_lev(tl$level), " on ", tl$benchmark), "")
+# beside the PNG, not with the HTML table: this is the figure's data, and
+# the two travel together
+write.csv(csv, out_path("record_timelines.csv"), row.names = FALSE)
+cat("wrote record_timelines.csv", "
+", sep = "")
