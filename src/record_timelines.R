@@ -363,6 +363,6 @@ csv$trace_label <- ifelse(!duplicated(tl[c("bench", "level")]),
                           paste0(fmt_lev(tl$level), " on ", tl$benchmark), "")
 # beside the PNG, not with the HTML table: this is the figure's data, and
 # the two travel together
-write.csv(csv, out_path("record_timelines.csv"), row.names = FALSE)
-cat("wrote record_timelines.csv", "
+write.csv(csv, out_path("slides/Figure 2.csv"), row.names = FALSE)
+cat("wrote slides/Figure 2.csv", "
 ", sep = "")
