@@ -151,8 +151,9 @@ rates$acc  <- 0.99
 # tables carry, and the annual factor it implies -- (1 - r)^4 is the year's
 # cost multiplier, so its reciprocal is the fold reduction
 rates$fold <- 1 / (1 - rates$rate / 100)^4
+# "×", the multiplication sign, not the letter x: house style for factors
 rates$lab  <- sprintf("Cost decline %.1f%%/qtr,
-%.1fx/year",
+%.1f×/year",
                       rates$rate, rates$fold)
 
 p <- ggplot(grid, aes(date, acc)) +
@@ -162,35 +163,32 @@ p <- ggplot(grid, aes(date, acc)) +
   geom_point(colour = INK_SECOND, size = 1.1, alpha = 0.9) +
   geom_text(data = rates, aes(date, acc, label = lab), hjust = 0, vjust = 1,
             colour = INK_PRIMARY, size = 4.4, lineheight = 0.95,
-            inherit.aes = FALSE) +
+            family = FONT, inherit.aes = FALSE) +
   facet_grid(ceiling ~ spacing) +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
   scale_y_continuous(limits = c(0, 1),
                      labels = scales::percent_format(accuracy = 1)) +
-  labs(x = "Model release date", y = "Accuracy",
-       title = sprintf("Four ways to lay a %d x %d grid under SOTA (%s)",
-                       N_ACC, N_DATE, LABELS[[BENCH]])) +
-  frontier_theme() +
-  # slide sizing: frontier_theme() is tuned for a full-page figure, where its
-  # 8pt ticks read fine; projected they do not. strip.text.x is CENTRED over
+  # no title: the slide and the document both caption this plate themselves
+  labs(x = "Model release date", y = "Accuracy") +
+  # slide sizing: 0.6 puts the ticks at 12 pt on the 10-inch slide, where the
+  # facet plates' 0.5 (10 pt) does not project. strip.text.x is CENTRED over
   # each column, overriding the theme's left-aligned default, which was set
   # for the benchmark-name strips of the faceted plates and puts a
   # two-condition header off to one side here.
-  theme(plot.title   = element_text(size = 17),
-        axis.text    = element_text(size = 12),
-        axis.title   = element_text(size = 13),
-        strip.text.x = element_text(size = 14, hjust = 0.5),
-        strip.text.y = element_text(size = 13))
+  frontier_theme(0.6) +
+  theme(strip.text.x = element_text(hjust = 0.5))
 
 dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
 FIG <- sprintf("grid_schemes_%s.png", BENCH)
-ggsave(out_path("slides", FIG), p,
-       width = 10, height = 5.625, dpi = 200, device = ragg::agg_png)
+save_png(out_path("slides", FIG), p, width = 10, height = 5.625)
 cat("wrote slides/", FIG, "\n", sep = "")
 
 # Figure 7 of the report: the same plate as vector, its title dropped (the
-# document captions it) but its in-panel rate labels kept.
-report_figure(p, 7, height = 5.625)
+# document captions it) but its in-panel rate labels kept. The y-axis title
+# goes too: set horizontal above the axis, as the house style has it, the
+# lone word "Accuracy" over a titleless plate reads as a heading, and the
+# column strips already say what the axis is.
+report_figure(p + labs(y = NULL), 7, height = 5.625)
 print(rates[c("ceiling", "spacing", "rate", "fold")], row.names = FALSE)
 cat(sprintf("\npublished model-free for %s: %+.2f%%\n", BENCH,
             -pareto_decline_qtr(dd)$pct_qtr))

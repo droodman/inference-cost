@@ -37,8 +37,7 @@ p <- frontier_plot(
     paste("A running maximum, so one lucky run fixes the frontier permanently;",
           "read closely-spaced late steps with that in mind.")))
 
-ggsave(out_path("pareto_frontier.png"), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-       device = ragg::agg_png)
+save_png(out_path("pareto_frontier.png"), p, width = 10, height = fig_height(length(benches)))
 cat("wrote pareto_frontier.png\n")
 
 ## ---- how much of the frontier rests on a single run? -------------------------------------
@@ -129,8 +128,7 @@ p_rec <- iso_acc_plot(
   geom_point(data = rb, aes(date, cost, colour = acc), size = 1.6,
              inherit.aes = FALSE)
 
-ggsave(out_path("isoaccuracy_records.png"), p_rec, width = 10, height = fig_height(length(benches)),
-       dpi = 200, device = ragg::agg_png)
+save_png(out_path("isoaccuracy_records.png"), p_rec, width = 10, height = fig_height(length(benches)))
 cat("wrote isoaccuracy_records.png\n")
 
 cat("\nall-time accuracy records: born dear, then commoditized\n")

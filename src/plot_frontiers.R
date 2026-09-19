@@ -109,8 +109,7 @@ frontier_fig <- function(fits, fam, fname, extra_notes, pooled = NULL) {
     ranges = if (is.null(pooled)) NULL else axis_ranges_p,
     ylab = if (fam == "S") "Fitted accuracy" else "Frontier accuracy",
     notes = c(NOTES_BASE, extra_notes, if (!is.null(pooled)) POOL_NOTE))
-  ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fname), p, width = 10, height = fig_height(length(benches)))
   cat("wrote", fname, "\n")
 }
 
@@ -191,8 +190,7 @@ isocost_fig <- function(fits, fname, extra_notes, pooled = NULL) {
     isocost_pareto_layer(
       if (is.null(pooled)) isocost_steps else isocost_steps_p,
       labels = if (is.null(pooled)) LABELS else LABELS_POOLED)
-  ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fname), p, width = 10, height = fig_height(length(benches)))
   cat("wrote", fname, "\n")
 }
 
@@ -205,8 +203,7 @@ iso_fig <- function(fits, fname, extra_notes, pooled = NULL) {
                     ranges = if (is.null(pooled)) iso_ranges else iso_ranges_p)
   if (!is.null(pooled))
     p <- p + pool_iso_layers(pooled_acc_iso_curves(pooled, pd$sa, pd$levels))
-  ggsave(out_path(fname), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fname), p, width = 10, height = fig_height(length(benches)))
   cat("wrote", fname, "\n")
 }
 

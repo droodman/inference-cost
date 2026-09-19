@@ -104,7 +104,8 @@ p <- ggplot(d, aes(releasedate, acc)) +
   geom_point(colour = INK_MUTED, size = 0.5, alpha = 0.35) +
   geom_point(data = peaks, colour = PALETTE[length(PALETTE)], size = 0.7) +
   geom_text(data = peaks, aes(label = model), angle = 90, hjust = -0.07,
-            size = LABEL_SIZE, colour = INK_SECOND, lineheight = 0.85) +
+            size = LABEL_SIZE, colour = INK_SECOND, lineheight = 0.85,
+            family = FONT) +
   facet_wrap(~panel, scales = "free_x", ncol = 2, drop = FALSE) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y",
                expand = expansion(mult = c(0.03, 0.03))) +
@@ -113,11 +114,10 @@ p <- ggplot(d, aes(releasedate, acc)) +
                      labels = scales::percent_format(accuracy = 1)) +
   labs(title = "Accuracy by model release date: every run, every benchmark",
        x = NULL, y = "Accuracy",
-       # pad_caption pads to CAPTION_LINES but never WRAPS, so a paragraph
-       # longer than the canvas runs off the right edge. Wrap each to what
-       # FIG_W inches of 7.5pt caption holds; three paragraphs at two lines
-       # each is exactly the six-line budget.
-       caption = pad_caption(unlist(lapply(c(
+       # pad_caption wraps each paragraph to the canvas (CAPTION_WRAP) and
+       # pads to CAPTION_LINES; three paragraphs at two lines each sits
+       # inside the budget.
+       caption = pad_caption(c(
          paste("Every run in the analysis. A model's release date is the same",
                "for all its runs, so each model is a VERTICAL COLUMN of dots",
                "spanning the accuracy range its effort and token-budget sweep",
@@ -129,13 +129,11 @@ p <- ggplot(d, aes(releasedate, acc)) +
                "leaving the start of the name. Open the file at full size."),
          paste("Accuracy is rescaled from each benchmark's guessing floor to 1",
                "(prepare_data.R), so 0 means no better than chance. The band",
-               "above 100% is label space, not attainable accuracy.")),
-         strwrap, width = round(FIG_W * 18))))) +
-  frontier_theme()
+               "above 100% is label space, not attainable accuracy.")))) +
+  frontier_theme(FACET_TYPE_SCALE)
 
 f <- "accuracy_scatter.png"
-ggsave(out_path(f), p, width = FIG_W, height = FIG_H, dpi = 200,
-       limitsize = FALSE, device = ragg::agg_png)
+save_png(out_path(f), p, width = FIG_W, height = FIG_H, limitsize = FALSE)
 cat("wrote", f, "\n")
 cat(sprintf("  %d runs, %d model-benchmark labels over %d panels\n",
             nrow(d), nrow(peaks), nlevels(droplevels(d$panel))))

@@ -65,9 +65,20 @@ TRACE_NUDGES <- rbind(
   nudge("25% on Chess Puzzles",           -130, 0.1),
   nudge("25% on AIME (OTIS Mock)",         -90, -.01),
   nudge("75% on AIME (OTIS Mock)",        -145, 0.0),
-  # both FrontierMath names straight above their triangles, in the open space
-  nudge("25% on FrontierMath, tiers 1-3",    0, 0.25),
-  nudge("75% on FrontierMath, tiers 1-3",    0, 0.25))
+  # GPQA-25 opens at the panel's left edge (GPT-4 Turbo): well above its
+  # dot, in the empty band around $0.15 over early 2024, with a leader down
+  # to it -- the rows nearer the dot are taken by AIME-75 and Chess-25.
+  # Hand-placed since the house face: Inter runs wider than the Cambria this
+  # plate used to be set in, and repel -- which cannot see the hand-placed
+  # labels -- ran the name into AIME-75.
+  nudge("25% on GPQA Diamond",              90, 0.85),
+  # both FrontierMath names straight above their triangles, in the open
+  # space. The en dash matches the display name (LABELS,
+  # frontier_viz.R); the match is on the rendered text, so it must agree.
+  # 0.32, not 0.25: Inter's taller line put FM-25 onto the "o3 (medium)"
+  # label under it.
+  nudge("25% on FrontierMath, tiers 1–3",    0, 0.32),
+  nudge("75% on FrontierMath, tiers 1–3",    0, 0.25))
 
 # "default" and "none" are the no-choice effort values; anything else is a
 # configuration worth naming (reasoning levels, token budgets).
@@ -195,46 +206,23 @@ cat("\nwrote record_timelines.html\n")
 # levels at once, and is labeled once. Labels name the models, horizontal,
 # placed by ggrepel.
 #
-# LIGHT MODE, whatever frontier_viz.R's DARK toggle says: this figure is
-# destined for a light context, so its chrome uses the light branch's
-# constants literally rather than the globals, which would repaint it if the
-# toggle ever moves. The blues are frontier_viz.R's BLUE ramp -- the original
-# light-theme palette, dark = high capability on a light surface.
+# The house style, from frontier_viz.R: this figure used to carry a private
+# light theme against the dark experiment, and now shares the one theme with
+# every other plate. Chrome at 0.65 of the guide's sizes puts the ticks at 13
+# pt, matching the trace names (4.7 mm = 13.4 pt), so no text on the plate
+# outsizes the names -- which are the point of the figure.
 LABEL_SIZE <- 3.9   # these names are the point of the figure
 TRACE_LABEL_SIZE <- 4.7   # the trace names, a notch above the model labels
-# The chrome -- ticks, axis titles, legend -- set to match the trace names,
-# so no text on the plate outsizes them. geom sizes are millimetres and
-# theme sizes are points, hence the .pt conversion.
-CHROME_SIZE <- TRACE_LABEL_SIZE * .pt
-# One typeface throughout. The text geoms do NOT inherit the theme's
-# base_family -- geom_text's default family is the device's, not the
-# theme's -- so every text layer below names FONT explicitly.
-FONT <- "Cambria"
-LT <- list(ink = "#0b0b0b", second = "#52514e", muted = "#898781",
-           gridline = "#e1e0d9", axis = "#c3c2b7", surface = "#ffffff")
+TIMELINE_TYPE_SCALE <- 0.65
+# The text geoms do NOT inherit the theme's base_family -- geom_text's
+# default family is the device's, not the theme's -- so every text layer
+# below names FONT (frontier_viz.R) explicitly.
 # ONE dot colour. The dots used to be shaded by the capability each run's own
 # accuracy implies, which asked the reader to track a third variable on a
 # plate already carrying dates, costs, two levels and four benchmarks; the
-# ECI column survives in the HTML table for anyone who wants it. A mid-dark
-# blue from frontier_viz.R's BLUE ramp, so the figure still reads as one of
-# this family.
-DOT <- BLUE[7]
-
-light_theme <- theme_minimal(base_size = 11, base_family = FONT) +
-  theme(
-    plot.background  = element_rect(fill = LT$surface, colour = NA),
-    panel.background = element_rect(fill = LT$surface, colour = NA),
-    panel.grid.major = element_line(colour = LT$gridline, linewidth = 0.3),
-    panel.grid.minor = element_blank(),
-    axis.line  = element_line(colour = LT$axis, linewidth = 0.3),
-    axis.text  = element_text(colour = LT$ink, size = CHROME_SIZE),
-    axis.title = element_text(colour = LT$ink, size = CHROME_SIZE),
-    plot.title    = element_text(colour = LT$ink, face = "bold", size = 15),
-    plot.caption  = element_text(colour = LT$muted, size = 9, hjust = 0),
-    legend.position = "top", legend.justification = "left",
-    legend.text  = element_text(colour = LT$second, size = CHROME_SIZE),
-    legend.title = element_text(colour = LT$second, size = CHROME_SIZE),
-    plot.margin = margin(12, 16, 10, 12))
+# ECI column survives in the HTML table for anyone who wants it. The first
+# house categorical, teal: one series, one colour.
+DOT <- CAT[["teal"]]
 
 # The FIGURE alone drops Mystery Game Puzzles; the table and the console
 # listing above still carry it. Everything downstream reads tl, so the
@@ -253,7 +241,7 @@ tl <- timelines[!timelines$bench %in% FIG_OMIT, ]
 labs <- tl[!duplicated(tl[c("bench", "model", "date")]), ]
 labs$lab  <- labs$model
 labs$sz   <- LABEL_SIZE
-labs$col  <- LT$second
+labs$col  <- INK_SECOND
 # NA segment colour draws no leader at all: a model label must sit close
 # enough to its own dot to be read off it, never tethered by a line.
 labs$seg  <- NA_character_
@@ -261,9 +249,9 @@ labs$seg  <- NA_character_
 tr <- tl[!duplicated(tl[c("bench", "level")]), ]
 tr$lab <- paste0(fmt_lev(tr$level), " on ", tr$benchmark)
 tr$sz  <- TRACE_LABEL_SIZE
-tr$col <- LT$ink
+tr$col <- INK_PRIMARY
 # the trace names DO get leaders -- they are placed well off their dots
-tr$seg <- LT$muted
+tr$seg <- INK_MUTED
 all_labs <- rbind(labs[c("bench", "date", "cost", "lab", "sz", "col", "seg")],
                   tr[c("bench", "date", "cost", "lab", "sz", "col", "seg")])
 # hand-placed rows leave the main layer BY ROW, not by label: the same
@@ -277,6 +265,12 @@ if ("bench" %in% names(TRACE_NUDGES)) {
   nudge_idx[spec] <- match(paste(TRACE_NUDGES$bench[spec], TRACE_NUDGES$lab[spec]),
                            paste(all_labs$bench, all_labs$lab))
 }
+# A nudge whose label matches nothing is a silent no-op -- the label just
+# falls back to repel -- so say so: the match is on the rendered text, and a
+# display-name change (LABELS, frontier_viz.R) can break it without a trace.
+if (any(is.na(nudge_idx)))
+  warning("TRACE_NUDGES labels not found on the plate: ",
+          paste(TRACE_NUDGES$lab[is.na(nudge_idx)], collapse = "; "))
 main_labs <- if (any(!is.na(nudge_idx)))
   all_labs[-nudge_idx[!is.na(nudge_idx)], ] else all_labs
 
@@ -287,12 +281,12 @@ names(SHAPES) <- LABELS[names(SHAPES)]
 
 p <- ggplot(tl, aes(date, cost)) +
   # heavier than the dots' stroke, mid-grey rather than black: the traces
-  # outrank the dots but must not upstage the blues or the text (a full-black
+  # outrank the dots but must not upstage the teal or the text (a full-black
   # experiment did exactly that)
   geom_line(aes(group = interaction(bench, level)),
-            colour = LT$muted, linewidth = 0.8) +
+            colour = INK_MUTED, linewidth = 0.8) +
   geom_point(aes(shape = benchmark), fill = DOT, size = 2.4,
-             colour = LT$surface, stroke = 0.3) +
+             colour = SURFACE, stroke = 0.3) +
   # nudge_y (in log10-dollar panel units) starts every label a step ABOVE
   # its dot, so the placements read consistently up-from-the-point; repel
   # still resolves collisions from there. Trace names get a LARGER lift than
@@ -335,7 +329,11 @@ p <- ggplot(tl, aes(date, cost)) +
   # themselves, and stripping them here means the PNG and Figure 2.svg are
   # the same picture rather than the SVG being a trimmed copy.
   labs(x = "Release date of AI model", y = "Cost per task (log scale)") +
-  light_theme
+  frontier_theme(TIMELINE_TYPE_SCALE) +
+  # the 2027 tick sits exactly on the panel's right edge (no expansion
+  # there, above), so half its label hangs outside the panel; the theme's
+  # slim outer margin cannot hold it and clipped it to "202"
+  theme(plot.margin = margin(PLOT_PAD, 24, PLOT_PAD, PLOT_PAD))
 
 # The hand-placed trace names (TRACE_NUDGES above): ONE repel layer per label,
 # with scalar nudges, so no vector-to-row alignment can go wrong (a single
@@ -352,8 +350,7 @@ for (i in which(!is.na(nudge_idx))) p <- p +
     segment.size = 0.25, min.segment.length = 0.3,
     box.padding = 0.3, point.padding = 0.35, max.overlaps = Inf, seed = 1)
 
-ggsave(out_path("record_timelines.png"), p, width = 12, height = 8, dpi = 200,
-       device = ragg::agg_png)
+save_png(out_path("record_timelines.png"), p, width = 12, height = 8)
 
 # Figure 2 of the report: one plate, so nothing is subset -- only the title
 # and the notes come off. Kept at the figure's own 12 x 8 rather than the

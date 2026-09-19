@@ -369,18 +369,35 @@ pz_cost_inverted <- function(fit, bl) {
 
 ## ---- assembly ----------------------------------------------------------------------
 
-SURFACE  <- "#101014"; INK <- "#f2f1ec"; MUTED <- "#8f8e88"; GRID <- "#26262c"
+# The 3-D pages are WEB figures, so they take the house style's web surface
+# (white, with the softer tick ink) rather than the static images' #F5F5F5;
+# everything else -- inks, gridlines, ramp -- is frontier_viz.R's, so the
+# pages cannot drift from the 2-D figures. Under DARK the dark experiment's
+# own surface and inks come through unchanged.
+SURFACE_3D <- if (DARK) SURFACE else GREY[["surface_web"]]
+INK   <- INK_PRIMARY
+MUTED <- if (DARK) INK_MUTED else GREY[["tick_text_web"]]
+GRID  <- GRIDLINE
+# The fitted wireframe, drawn over the empirical surface: the second house
+# categorical, pink, which holds against both ends of the teal ramp (an ink
+# mesh vanished into the ramp's dark end). Under DARK it stays ink, as before.
+MESH  <- if (DARK) INK else CAT[["pink"]]
+FONT_3D <- "Messina Sans, Inter, sans-serif"
 
-# The 2-D figures' own ramp (PALETTE, frontier_viz.R -- plasma with the
-# darkest 20% clipped off under the dark theme), rebuilt as a plotly
-# colorscale so the 3-D surfaces cannot drift from the 2-D figures, clip
-# included. viridisLite returns 8-digit hex (trailing alpha), which plotly's
-# WebGL parser does not accept -- strip to 6.
+# The 2-D figures' own ramp (PALETTE, frontier_viz.R -- the house sequential
+# colormap with its near-white first step dropped, or plasma clipped under
+# DARK), rebuilt as a plotly colorscale so the 3-D surfaces cannot drift from
+# the 2-D figures, clip included. viridisLite returns 8-digit hex (trailing
+# alpha), which plotly's WebGL parser does not accept -- strip to 6.
 COLORSCALE <- Map(function(p, col) list(p, substr(col, 1, 7)),
                   seq(0, 1, length.out = length(PALETTE)), PALETTE)
 
-ax <- function(title) list(title = title, backgroundcolor = SURFACE,
-                           gridcolor = GRID, color = MUTED, showbackground = TRUE)
+# zeroline off: on the ln-cost axes zero is $1, and plotly would draw it as
+# a heavier line than the other gridlines, singling out a level that means
+# nothing here.
+ax <- function(title) list(title = title, backgroundcolor = SURFACE_3D,
+                           gridcolor = GRID, color = MUTED, showbackground = TRUE,
+                           zeroline = FALSE)
 
 # A cost axis: internally ln cost, labelled in DOLLARS at decadal intervals,
 # matching the 2-D figures' scale_*_log10(breaks = 10^(-5:1), dollar_log).
@@ -410,10 +427,11 @@ ax_prob <- function(rng) {
 CAMERA <- list(eye = list(x = -1.2, y = -1.2, z = 0.7))
 
 # One page: four scenes (2 x 2 benchmark quadrants), each with the empirical
-# surface (filled, plasma ramp) and the fitted one as a SEE-THROUGH WIREFRAME:
-# hidesurface drops the fill entirely and the x/y contour lines draw the mesh,
-# so the fitted shape is legible without occluding the data surface behind it.
-# Ink-colored, not black -- black segments would vanish on the dark backdrop.
+# surface (filled, the shared ramp) and the fitted one as a SEE-THROUGH
+# WIREFRAME: hidesurface drops the fill entirely and the x/y contour lines
+# draw the mesh, so the fitted shape is legible without occluding the data
+# surface behind it. MESH-coloured (see above), so it separates from the
+# ramp at both ends.
 # The "decline" view has no empirical counterpart (pass zs_emp = NULL): the
 # fitted rate surface is drawn filled, over (accuracy, year).
 page <- function(zs_emp, zs_fit, xs, view) {
@@ -431,7 +449,8 @@ page <- function(zs_emp, zs_fit, xs, view) {
          y = c((n_rows - r) / n_rows, (n_rows - r + 1) / n_rows))
   })
   p <- plot_ly(height = 420 * n_rows + 30)
-  lay <- list(paper_bgcolor = SURFACE, font = list(color = INK),
+  lay <- list(paper_bgcolor = SURFACE_3D,
+              font = list(color = INK, family = FONT_3D),
               showlegend = FALSE, margin = list(l = 0, r = 0, t = 22, b = 0))
   ann <- list()
   for (i in seq_along(panels)) {
@@ -447,7 +466,7 @@ page <- function(zs_emp, zs_fit, xs, view) {
                        scene = sc, colorscale = COLORSCALE, showscale = FALSE,
                        name = "empirical")
       xr <- range(xs[[b]]); yr <- range(bl$year)
-      mesh <- function(rng, n = 14) list(show = TRUE, color = INK,
+      mesh <- function(rng, n = 14) list(show = TRUE, color = MESH,
                                          width = 2, start = rng[1],
                                          end = rng[2], size = diff(rng) / n)
       p <- add_surface(p, x = xs[[b]], y = bl$year, z = zs_fit[[b]],
@@ -478,7 +497,8 @@ page <- function(zs_emp, zs_fit, xs, view) {
     ann[[i]] <- list(text = LABELS_POOLED[[b]], x = doms[[i]]$x[1] + 0.01,
                      y = doms[[i]]$y[2] - 0.01, xanchor = "left",
                      yanchor = "top", xref = "paper", yref = "paper",
-                     showarrow = FALSE, font = list(color = INK, size = 14))
+                     showarrow = FALSE,
+                     font = list(color = INK, size = 14, family = FONT_3D))
   }
   lay$annotations <- ann
   do.call(layout, c(list(p), lay))
@@ -618,15 +638,15 @@ COST_LAB <- dollar_log(10^(-5:1))
 # a reader has no way to tell them from a fitted contour -- nor to know that
 # the surface outside them is extrapolating rather than describing. Named for
 # the vertical variable, which differs by view: cost in the frontier view,
-# accuracy in the other two. Line breaks are manual, sized for the 10-inch
-# canvas at the theme's 7.5pt caption.
+# accuracy in the other two. Each note is one line here; pad_caption wraps
+# them to the canvas.
 heat_caption <- function(view) {
   frontier <- view == "frontier"
   extremes <- if (frontier) "cheapest and dearest run"
               else "lowest- and highest-scoring run"
   vert     <- if (frontier) "cost" else "accuracy"
   paste0(
-    "Fill runs dark to bright over each panel's own range -- the range of ",
+    "Fill runs light to dark over each panel's own range -- the range of ",
     "that panel's colored surface on its 3-D page, the same per-panel ",
     "normalization, so equal color means equal value between a panel and ",
     "its 3-D scene; values beyond that range saturate at the endpoints.\n",
@@ -643,14 +663,20 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
   p <- ggplot(hd, aes(year, x, fill = z)) +
     geom_raster(na.rm = TRUE) +
     geom_path(data = frontier_steps(view, labs_b), aes(year, x, group = side),
-              inherit.aes = FALSE, colour = "black", alpha = 0.5,
+              inherit.aes = FALSE, colour = INK_PRIMARY, alpha = 0.5,
               linewidth = 0.7) +
     facet_wrap(~ benchmark, ncol = 2, scales = "free") +
+    # whole years only: the panels' free x scales otherwise pick half-years
+    # (2024.5) where a benchmark's history is short
+    scale_x_continuous(breaks = function(l) {
+      b <- seq(ceiling(l[1]), floor(l[2]))
+      if (length(b)) b else scales::extended_breaks()(l)
+    }) +
     # Direction only, no numbers. The fill is normalised PER PANEL (each
     # anchored to the range its own 3-D scene spans, see heat_anchor), so a
     # numeric bar would be wrong -- the same colour denotes a different value
     # in each panel. What holds in every panel is which end is which, and
-    # without a bar at all a reader has no way to know that yellow is the
+    # without a bar at all a reader has no way to know that dark is the
     # high end.
     scale_fill_gradientn(
       colours = PALETTE, limits = c(0, 1), na.value = SURFACE, name = NULL,
@@ -659,8 +685,11 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
                               barwidth = grid::unit(7, "cm"),
                               direction = "horizontal",
                               ticks.colour = SURFACE)) +
-    labs(x = NULL, caption = heat_caption(view)) +
-    frontier_theme() +
+    # through pad_caption like every other plate: it wraps the three long
+    # notes to the canvas (they ran off the right edge unwrapped) and pads
+    # the block to the shared height
+    labs(x = NULL, caption = pad_caption(heat_caption(view))) +
+    frontier_theme(FACET_TYPE_SCALE) +
     theme(panel.grid.major = element_blank())
   if (view == "frontier") {
     p + scale_y_continuous(name = "Cost per task (log scale)",
@@ -671,7 +700,7 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
     # range and leave it unlabelled, so breaks and labels both branch on the
     # panel's own limits
     p + scale_y_continuous(
-      name = "Accuracy / ECI score",
+      name = "Accuracy",
       breaks = function(l) if (l[2] > 1.5) scales::extended_breaks()(l)
                else seq(0, 1, 0.25),
       labels = function(v) ifelse(v > 1.5, sprintf("%g", v),
@@ -681,9 +710,7 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
 
 save_heatmap <- function(zs, xs, view, key, spec, zs_ref = NULL) {
   fh <- sprintf("heatmap_%s_%s_%s.png", key, spec, view)
-  ggsave(out_path(fh), heat_plot(zs, xs, view, zs_ref), width = 10,
-         height = fig_height(length(panels)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fh), heat_plot(zs, xs, view, zs_ref), width = 10, height = fig_height(length(panels)))
   cat("wrote", fh, "\n")
 }
 

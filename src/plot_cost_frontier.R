@@ -221,8 +221,7 @@ for (key in names(MODELS)) {
       pareto_step_layer(if (is.null(pf)) steps else rbind(steps, pool_steps),
                         labels = lbs)
     f <- sprintf("%s_%s.png", key, tt)
-    ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-           device = ragg::agg_png)
+    save_png(out_path(f), p, width = 10, height = fig_height(length(benches)))
     cat("wrote", f, "\n")
 
     # iso-accuracy view: contours straight off the fitted surface
@@ -256,8 +255,7 @@ for (key in names(MODELS)) {
                           steps = pool_iso_steps)
     }
     fi <- sprintf("isoaccuracy_%s_%s.png", key, tt)
-    ggsave(out_path(fi), p_iso, width = 10, height = fig_height(length(benches)), dpi = 200,
-           device = ragg::agg_png)
+    save_png(out_path(fi), p_iso, width = 10, height = fig_height(length(benches)))
     cat("wrote", fi, "\n")
 
     # and the isocost plate, this direction's surface inverted for accuracy
@@ -272,8 +270,7 @@ for (key in names(MODELS)) {
       isocost_pareto_layer(if (is.null(pf)) isocost_steps else isocost_steps_p,
                            labels = lbs)
     fk <- sprintf("isocost_%s_%s.png", key, tt)
-    ggsave(out_path(fk), p_ic, width = 10, height = fig_height(length(benches)), dpi = 200,
-           device = ragg::agg_png)
+    save_png(out_path(fk), p_ic, width = 10, height = fig_height(length(benches)))
     cat("wrote", fk, "\n")
 
     if (key == CONSTRUCT$key && tt == CONSTRUCT$tt) {
@@ -284,8 +281,7 @@ for (key in names(MODELS)) {
       dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
       ssave <- function(pp, suffix) {
         fn <- sprintf("isoaccuracy_%s_%s_%s.png", key, tt, suffix)
-        ggsave(out_path("slides", fn), pp, width = 10, height = 5.625,
-               dpi = 200, device = ragg::agg_png)
+        save_png(out_path("slides", fn), pp, width = 10, height = 5.625)
         cat("wrote slides/", fn, "\n", sep = "")
       }
       sbase <- function(cv)

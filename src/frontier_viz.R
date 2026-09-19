@@ -11,21 +11,74 @@ src_source("prepare_data.R")   # build_runs(): the single source of analysis dat
 
 ## ---- theme + palette ------------------------------------------------------------
 #
-# EXPERIMENT (round 2): dark surface with plasma. One flag switches the whole
-# look, because palette and chrome cannot be chosen separately: which END of a
-# palette is legible depends on the background. On the light surface viridis had
-# to be REVERSED (its yellow end vanished into white, so dark took the high
-# values); on black the failure mode is mirrored -- the dark end vanishes -- so
-# the palette runs UNREVERSED and the high values glow instead. Plasma over
-# inferno/magma because its low end (deep blue-purple) is still separable from
-# the background, so early curves recede without disappearing outright.
-#
-# DARK <- FALSE restores the light viridis experiment exactly; PALETTE <- BLUE
-# under DARK <- FALSE restores the original blues.
-DARK <- TRUE
+# One flag switches the whole look, because palette and chrome cannot be
+# chosen separately: which END of a palette is legible depends on the
+# background. The LIGHT branch is Epoch AI's house style and is what every
+# figure in the repo now ships in. The DARK branch is the round-2 experiment
+# (black surface, plasma), kept so the two can still be compared.
+DARK <- FALSE
 
-BLUE <- c("#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6",
-          "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b")
+## Epoch AI house style ---------------------------------------------------------
+#
+# The constants below ARE the style guide, transcribed: every figure reads its
+# colours, type and geometry from here and nowhere else, so a change to the
+# guide is a change to one block.
+
+# Typeface. Messina Sans is the house face; Inter is the sanctioned free
+# stand-in, and is what this machine has. The VARIABLE "Inter" family is the
+# one name both rendering devices resolve -- ragg (the PNGs, through
+# systemfonts) and the Cairo svg device (the report SVGs, through Windows'
+# own font lookup, which knows neither Inter's static optical-size families
+# nor anything systemfonts registers). Falls back to the device sans face.
+house_font <- function() {
+  fams <- systemfonts::system_fonts()$family
+  hit <- c("Messina Sans", "Inter")[c("Messina Sans", "Inter") %in% fams]
+  if (length(hit)) hit[1] else "sans"
+}
+FONT <- house_font()
+
+# The guide's 600 weight. ggplot2's element_text knows plain/bold/italic
+# only, so semibold is registered as a family of its own (systemfonts), which
+# ragg then honours. The variable Inter exposes only its Regular instance to
+# systemfonts, so the semibold is drawn from Inter's static "24pt" optical
+# family -- the same design, cut for text between 18 and 28 px, which is
+# exactly the guide's size range. Cairo cannot see this registration:
+# report_figure() substitutes bold for it in the SVGs.
+FONT_SEMIBOLD <- paste(FONT, "Semibold")
+if (!FONT_SEMIBOLD %in% systemfonts::registry_fonts()$family) {
+  static <- if (FONT == "Inter" &&
+                "Inter 24pt" %in% systemfonts::system_fonts()$family)
+    "Inter 24pt" else FONT
+  systemfonts::register_variant(FONT_SEMIBOLD, static, weight = "semibold")
+}
+
+# Type sizes, in px on the guide's 600 x 750 static canvas. The static export
+# (save_static) renders that canvas at 1 pt = 1 px, so these are also the
+# point sizes the theme uses at scale 1. (The guide's -0.52 px title tracking
+# has no ggplot2 equivalent and is not applied.)
+TYPE <- c(title = 26, subtitle = 20, axis_title = 20, tick = 20, footer = 18)
+
+# Categorical colours, in the guide's order; stop after seven -- an eighth
+# series folds into "other" (INACTIVE) rather than getting a new hue.
+CAT <- c(teal = "#00A5A6", pink = "#E03D90", orange = "#FC6538",
+         purple = "#6A3ECB", blue = "#0058DC", yellow = "#EA8D00",
+         green = "#279E27")
+
+# Sequential colormap, light to dark; also the 3-D surfaces' colorscale.
+SEQ <- c("#E6FEF3", "#ABFAE3", "#70EFD1", "#34D2B9", "#00A5A6",
+         "#02767C", "#034752", "#102930")
+
+# There is NO house diverging palette. If one is unavoidable this is the
+# sanctioned stand-in -- and any figure using it must be flagged for design
+# review. Nothing in the repo uses it today.
+DIVERGING <- c("#00A5A6", "#EEEEEE", "#E03D90")
+
+# Greys. Two surfaces: static images sit on #F5F5F5, web figures on white
+# with the softer tick ink (save_web applies the web pair).
+GREY <- c(gridline = "#E3E4E4", tick_mark = "#AAB1B1", tick_text = "#212A2A",
+          tick_text_web = "#536565", title = "#090C0C", subtitle = "#536565",
+          footer = "#8B9999", inactive = "#CDD0D0", zero_line = "#6E8181",
+          surface = "#F5F5F5", surface_web = "#FFFFFF")
 
 if (DARK) {
   # unreversed (bright = late/high), with the first 40% clipped off: plasma's
@@ -41,23 +94,27 @@ if (DARK) {
   GRIDLINE    <- "#26262c"
   AXIS        <- "#44444c"
   SURFACE     <- "#101014"
+  INACTIVE    <- "#44444c"
+  ZERO_LINE   <- "#8f8e88"
+  AXIS_INK    <- "#ffffff"   # the frame you navigate by: brightest thing after the data
+  GRID_LWD    <- 0.3         # mm
 } else {
-  PALETTE     <- rev(viridisLite::viridis(10))  # reversed: dark = late/high
-  INK_PRIMARY <- "#0b0b0b"
-  INK_SECOND  <- "#52514e"
-  INK_MUTED   <- "#898781"
-  GRIDLINE    <- "#e1e0d9"
-  AXIS        <- "#c3c2b7"
-  SURFACE     <- "#fcfcfb"
+  # The sequential ramp with its first step dropped: #E6FEF3 sits at 1.03:1
+  # against the #F5F5F5 surface, so a curve drawn in it -- the earliest date,
+  # the lowest level -- would vanish. The same clip the dark branch applies to
+  # plasma, for the same reason. Light = early/low, dark = late/high.
+  PALETTE     <- SEQ[-1]
+  INK_PRIMARY <- GREY[["title"]]
+  INK_SECOND  <- GREY[["subtitle"]]
+  INK_MUTED   <- GREY[["footer"]]
+  GRIDLINE    <- GREY[["gridline"]]
+  AXIS        <- GREY[["tick_mark"]]   # tick marks only: spines are not drawn
+  SURFACE     <- GREY[["surface"]]
+  INACTIVE    <- GREY[["inactive"]]
+  ZERO_LINE   <- GREY[["zero_line"]]
+  AXIS_INK    <- GREY[["tick_text"]]
+  GRID_LWD    <- 1.5 / .pt   # the guide's 1.5 px, in mm at 1 pt = 1 px
 }
-
-# Axis and tick ink, deliberately the brightest thing on the panel after the
-# data: pure white in the dark theme, where INK_MUTED left the scales reading
-# as background furniture rather than as the frame you navigate the plot by.
-# Not a literal "white" in the theme itself -- that would vanish on the light
-# surface if DARK is turned off -- so it follows the toggle like every other
-# colour here.
-AXIS_INK <- if (DARK) "#ffffff" else INK_PRIMARY
 
 # Display names, in the panels' order: the PRIMARY benchmarks first
 # (PRIMARY_BENCHES, prepare_data.R), the rest alphabetical -- matching
@@ -67,7 +124,7 @@ AXIS_INK <- if (DARK) "#ffffff" else INK_PRIMARY
 LABELS <- c(
   aime                     = "AIME (OTIS Mock)",
   chess                    = "Chess Puzzles",
-  fm13                     = "FrontierMath, tiers 1-3",
+  fm13                     = "FrontierMath, tiers 1–3",
   gpqa                     = "GPQA Diamond",
   mystery                  = "Mystery Game Puzzles",
   fm_2025_02_private       = "FrontierMath 2025-02",
@@ -286,14 +343,24 @@ frontier_curves <- function(fitset, data, dates_by_bench, tbar, n_cost = 200) {
 # the same number of lines instead, so the drawing area is identical everywhere
 # and only the notes themselves change.
 #
-# Six is the current maximum (the envelope figure, which must explain the solid
-# curve, the staircase, monotonicity and the fixed grid). Adding a seventh
-# note anywhere means raising this, and the warning below says so rather than
-# letting one figure quietly grow its caption and shrink its panels.
-CAPTION_LINES <- 6
+# Eight, since the house footer (18 px, drawn at 9 pt on the facet plates)
+# runs a fifth larger than the 7.5 pt caption the plates carried before, so
+# notes that used to fit one line now wrap to two. Was six -- the envelope
+# figure's count of notes, which must explain the solid curve, the staircase,
+# monotonicity and the fixed grid. Exceeding this anywhere means raising it,
+# and the warning below says so rather than letting one figure quietly grow
+# its caption and shrink its panels.
+CAPTION_LINES <- 8
+
+# Notes are wrapped to the 10-inch canvas: at 9 pt Inter, about 150
+# characters fill the panel width inside the margins. A note that ran off the
+# right edge was simply cut, with nothing to say so.
+CAPTION_WRAP <- 150
 
 pad_caption <- function(notes) {
   lines <- unlist(strsplit(as.character(notes), "\n", fixed = TRUE))
+  lines <- unlist(lapply(lines, function(l)
+    if (nchar(l) > CAPTION_WRAP) strwrap(l, width = CAPTION_WRAP) else l))
   if (length(lines) > CAPTION_LINES) {
     warning(sprintf(paste("caption has %d lines but CAPTION_LINES is %d;",
                           "this figure's panels will be shorter than the rest"),
@@ -371,34 +438,168 @@ frontier_plot <- function(curves, pts, title = NULL, subtitle = NULL, ylab,
     labs(title = title, subtitle = subtitle,
          x = "Cost per task (log scale)", y = ylab,
          caption = pad_caption(c(base_notes, notes))) +
-    frontier_theme()
+    frontier_theme(FACET_TYPE_SCALE)
 }
 
-# Shared chrome, so every figure in the repo reads as one family.
-frontier_theme <- function() {
-  theme_minimal(base_size = 11, base_family = "sans") +
+# Shared chrome, so every figure in the repo reads as one family. The house
+# style, element by element: no spines and no border; gridlines on both axes;
+# tick marks in their own grey; title top-left, semibold, with the subtitle
+# directly under it; axis titles semibold; footer row (the caption) for notes
+# and sources; legend top or right, never bottom, with square swatches.
+#
+# `scale` multiplies every type size and line weight. The guide's
+# sizes are for ONE chart on a 600 x 750 canvas; the repo's plates are 2-wide
+# facet grids on a 10-inch canvas, where 20 pt ticks cannot fit seven dollar
+# breaks in a 4-inch panel. Those plates pass FACET_TYPE_SCALE, which keeps
+# the guide's proportions between elements (title : tick : footer =
+# 26 : 20 : 18) at a size the panels can carry. Single-plate figures pass
+# a scale of their own; save_static() expects the default 1.
+#
+# The y-axis title is set HORIZONTAL here but only placed by finish_plot(),
+# which lifts it out of the left margin to sit above the axis, as the guide
+# asks; every save path below runs finish_plot(), so the theme alone never
+# produces a finished figure -- that is deliberate, see finish_plot.
+frontier_theme <- function(scale = 1) {
+  s <- function(px) px * scale
+  theme_minimal(base_size = s(TYPE[["tick"]]), base_family = FONT) +
     theme(
       plot.background  = element_rect(fill = SURFACE, colour = NA),
       panel.background = element_rect(fill = SURFACE, colour = NA),
-      panel.grid.major = element_line(colour = GRIDLINE, linewidth = 0.3),
+      panel.border     = element_blank(),
+      panel.grid.major = element_line(colour = GRIDLINE,
+                                      linewidth = GRID_LWD * scale),
       panel.grid.minor = element_blank(),
-      axis.line  = element_line(colour = AXIS, linewidth = 0.3),
-      axis.text  = element_text(colour = AXIS_INK, size = 8),
-      axis.title = element_text(colour = AXIS_INK, size = 9),
-      strip.text = element_text(colour = INK_PRIMARY, face = "bold", size = 10,
-                                hjust = 0),
-      plot.title    = element_text(colour = INK_PRIMARY, face = "bold", size = 13),
-      plot.subtitle = element_text(colour = INK_SECOND, size = 9.5),
-      plot.caption  = element_text(colour = INK_MUTED, size = 7.5, hjust = 0),
+      axis.line  = element_blank(),
+      axis.ticks = element_line(colour = AXIS, linewidth = GRID_LWD * scale),
+      axis.ticks.length = grid::unit(s(5), "pt"),
+      axis.text  = element_text(colour = AXIS_INK, size = s(TYPE[["tick"]])),
+      axis.title = element_text(family = FONT_SEMIBOLD, colour = AXIS_INK,
+                                size = s(TYPE[["axis_title"]])),
+      axis.title.x = element_text(margin = margin(t = s(8))),
+      axis.title.y = element_text(angle = 0, hjust = 0, vjust = 1),
+      strip.text = element_text(family = FONT_SEMIBOLD, colour = AXIS_INK,
+                                size = s(TYPE[["axis_title"]]), hjust = 0,
+                                margin = margin(b = s(5))),
+      plot.title = element_text(family = FONT_SEMIBOLD, colour = INK_PRIMARY,
+                                size = s(TYPE[["title"]]), hjust = 0,
+                                margin = margin(b = s(6))),
+      plot.title.position = "plot",
+      plot.subtitle = element_text(colour = INK_SECOND,
+                                   size = s(TYPE[["subtitle"]]),
+                                   margin = margin(b = s(12))),
+      plot.caption = element_text(colour = INK_MUTED, size = s(TYPE[["footer"]]),
+                                  hjust = 0, margin = margin(t = s(12))),
+      plot.caption.position = "plot",
       legend.position = "top", legend.justification = "left",
-      legend.text = element_text(colour = INK_SECOND, size = 8),
-      # legend.title matched to legend.text rather than left to
-      # theme_minimal's default, which is near-black -- invisible against the
-      # dark surface. Only record_timelines.R titles a legend today (every
-      # other scale passes name = NULL), but the default was wrong for any
-      # figure that ever does.
-      legend.title = element_text(colour = INK_SECOND, size = 8),
-      plot.margin = margin(12, 16, 10, 12))
+      legend.key       = element_rect(fill = NA, colour = NA),
+      legend.key.size  = grid::unit(s(12), "pt"),   # square swatches
+      legend.text  = element_text(colour = INK_SECOND, size = s(TYPE[["footer"]])),
+      legend.title = element_text(colour = INK_SECOND, size = s(TYPE[["footer"]])),
+      plot.margin = margin(PLOT_PAD, PLOT_PAD, PLOT_PAD, PLOT_PAD))
+}
+
+# The outer margin, in pt: about 0.25 cm. Not scaled with the type -- a
+# centimetre of empty border around a 10-inch plate is space the panels
+# should have -- and not the guide's 48 px, which is the STATIC export's
+# padding and is applied there (save_static), where it belongs.
+PLOT_PAD <- 7
+
+# The scale the 2-wide facet plates draw their chrome at (see frontier_theme).
+# 0.5 puts ticks at 10 pt and titles at 13 pt on the 10-inch canvas -- within
+# a point of what those plates carried before the house style.
+FACET_TYPE_SCALE <- 0.5
+
+# The web variant of the surface: white, with the guide's softer tick ink.
+# Added on top of a themed plot by save_web().
+web_surface <- function() {
+  theme(plot.background  = element_rect(fill = GREY[["surface_web"]], colour = NA),
+        panel.background = element_rect(fill = GREY[["surface_web"]], colour = NA),
+        axis.text = element_text(colour = GREY[["tick_text_web"]]))
+}
+
+## ---- finishing and export ------------------------------------------------------------
+#
+# The guide wants the y-axis title as plain horizontal text ABOVE the axis.
+# ggplot2 can rotate the title (frontier_theme sets angle = 0) but only ever
+# places it beside the panel, where a horizontal title opens a margin as wide
+# as its text. So the finished figure is a gtable, not a ggplot: the built
+# plot's y-title grob is lifted out of its column and re-laid in a new row
+# directly above the panel block -- left-aligned with the tick labels, under
+# the legend and subtitle -- and the vacated column collapses to nothing.
+# Plots with no y title (labs(y = NULL)) pass through untouched.
+#
+# Because a gtable cannot take further layers, this runs at SAVE time, inside
+# save_png/save_static/save_web/report_figure, never in the plot builders --
+# and INSIDE the output device (see finished() below): building the gtable
+# with no device open makes R open its default one, leaving an Rplots.pdf in
+# the working directory and measuring every string against the PDF device's
+# font tables, which do not know Inter.
+finish_plot <- function(p) {
+  if (!inherits(p, "ggplot")) return(p)
+  g <- ggplotGrob(p)
+  i <- which(g$layout$name == "ylab-l")
+  if (!length(i) || inherits(g$grobs[[i]], "zeroGrob")) return(g)
+  ylab <- g$grobs[[i]]
+  lay <- g$layout
+  block <- lay[grepl("^(panel|strip-t|axis-t)", lay$name), ]
+  top   <- min(block$t)
+  left  <- min(lay$l[grepl("^axis-l", lay$name)], block$l)
+  right <- max(block$r)
+  # The row is sized from the title's font size, not grobHeight(ylab): a
+  # y-axis titleGrob reports a null height (ggplot2 lays it out by width
+  # alone), which would give a zero row and print the title over the top
+  # tick label. 1.6 lines holds the text (vjust = 1, so it sits at the top)
+  # plus a gap of about 0.6 line -- more than the half tick label that pokes
+  # above the panel edge.
+  txt <- ylab$children[[1]]
+  fs  <- txt$gp$fontsize
+  if (is.null(fs)) fs <- calc_element("axis.title.y", theme_get() + p$theme)$size
+  g$grobs[[i]] <- zeroGrob()
+  g$widths[lay$l[i]] <- grid::unit(0, "pt")
+  g <- gtable::gtable_add_rows(g, grid::unit(1.6 * fs, "pt"), pos = top - 1)
+  gtable::gtable_add_grob(g, ylab, t = top, l = left, r = right,
+                          name = "ylab-t", clip = "off")
+}
+
+# A plot wrapped for ggsave so that finish_plot() runs when ggsave DRAWS it
+# -- after it has opened the output device -- rather than when the call is
+# assembled. ggsave draws whatever it is given with grid.draw, so a one-line
+# S3 method is all the deferral takes. Registered with grid's namespace
+# explicitly: run_all.R sources the output scripts into private
+# environments, and a method that merely sat in one of those would not be
+# found from inside ggplot2.
+finished <- function(p) structure(list(plot = p), class = "finished_plot")
+grid.draw.finished_plot <- function(x, recording = TRUE) {
+  grid::grid.draw(finish_plot(x$plot), recording = recording)
+}
+registerS3method("grid.draw", "finished_plot", grid.draw.finished_plot,
+                 envir = asNamespace("grid"))
+
+# Every PNG in the repo goes out through here: the plot is finished
+# (finish_plot) and drawn by ragg at the canvas the caller chooses. Inches
+# and dpi, as before, because each plate's canvas was sized for where it is
+# used (the viewer, a 16:9 slide, the Word column). `bg` is passed because
+# ggsave reads the surface off a ggplot object only, and the wrapper is not
+# one; the plot's own background rect paints over it anyway.
+save_png <- function(file, p, width, height, dpi = 200, ...) {
+  ggsave(file, finished(p), width = width, height = height, dpi = dpi,
+         device = ragg::agg_png, bg = SURFACE, ...)
+}
+
+# The guide's two export geometries. STATIC: a 600 x 750 canvas with 48 px
+# padding (imposed here over the theme's PLOT_PAD), rendered at 1.7x to 1024 x
+# 1280 px; dpi 72 x 1.7 makes 1 pt of type exactly 1 canvas px, so TYPE
+# renders literally. WEB: 800 px wide at 3x; the height is the caller's, the
+# guide fixing only the width. Both expect a plot themed at scale 1.
+save_static <- function(file, p) {
+  p <- p + theme(plot.margin = margin(48, 48, 48, 48))
+  ggsave(file, finished(p), width = 1024, height = 1280, units = "px",
+         dpi = 72 * 1.7, device = ragg::agg_png, bg = SURFACE)
+}
+save_web <- function(file, p, height_px = 600) {
+  ggsave(file, finished(p + web_surface()), width = 800 * 3,
+         height = height_px * 3, units = "px", dpi = 72 * 3,
+         device = ragg::agg_png, bg = GREY[["surface_web"]])
 }
 
 ## ---- the empirical Pareto staircase, as an overlay ---------------------------------
@@ -574,7 +775,7 @@ pooled_iso_layers <- function(pool_iso, crng, labels = LABELS_POOLED,
       geom_text(data = shade(lab),
                 aes(date, cost, label = sprintf("%g", acc)),
                 colour = INK_SECOND, size = 2.6, hjust = 1, vjust = -0.6,
-                inherit.aes = FALSE)))
+                family = FONT, inherit.aes = FALSE)))
 }
 
 ## ---- iso-accuracy cost contours ------------------------------------------------
@@ -857,7 +1058,7 @@ iso_acc_plot <- function(curves, pts, title = NULL, subtitle = NULL,
     labs(title = title, subtitle = subtitle,
          x = "Model release date", y = "Cost per task (log scale)",
          caption = pad_caption(notes)) +
-    frontier_theme()
+    frontier_theme(FACET_TYPE_SCALE)
 }
 
 ## ---- isocost contours: accuracy against date at a fixed budget ---------------------
@@ -1008,7 +1209,7 @@ isocost_plot <- function(curves, pts, title = NULL, subtitle = NULL,
     labs(title = title, subtitle = subtitle,
          x = "Model release date", y = "Fitted accuracy",
          caption = pad_caption(notes)) +
-    frontier_theme()
+    frontier_theme(FACET_TYPE_SCALE)
 }
 
 ## ---- report figures ------------------------------------------------------------
@@ -1028,12 +1229,20 @@ isocost_plot <- function(curves, pts, title = NULL, subtitle = NULL,
 # subset; regenerating at four rather than cropping the PNG is what keeps the
 # x-axis labelling intact, since a cropped top half of a shared-axis facet
 # loses the axis entirely and had to be pasted back by hand.
+#
+# Cairo, which draws these, resolves the house family but not the semibold
+# variant systemfonts registers for ragg (see FONT_SEMIBOLD), and would fall
+# back to Arial for it. The three semibold elements are therefore reset to
+# the base family in BOLD for the SVGs -- the nearest weight Cairo can reach.
 report_figure <- function(p, n, height = fig_height(4), width = 10) {
-  p <- p + labs(title = NULL, subtitle = NULL, caption = NULL)
+  p <- p + labs(title = NULL, subtitle = NULL, caption = NULL) +
+    theme(axis.title = element_text(family = FONT, face = "bold"),
+          strip.text = element_text(family = FONT, face = "bold"),
+          plot.title = element_text(family = FONT, face = "bold"))
   dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
   f <- sprintf("Figure %d.svg", n)
-  ggsave(out_path("slides", f), p, width = width, height = height,
-         device = grDevices::svg)
+  ggsave(out_path("slides", f), finished(p), width = width, height = height,
+         device = grDevices::svg, bg = SURFACE)
   cat("wrote slides/", f, "
 ", sep = "")
 }

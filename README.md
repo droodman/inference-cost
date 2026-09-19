@@ -34,7 +34,7 @@ Driver:
 Libraries (sourced, never run directly):
 * `paths.R` — path resolution and `src_source()`, so scripts work from the repo root or `src/`.
 * `prepare_data.R` — builds the analysis dataset from the source CSVs.
-* `frontier_viz.R` — shared figure machinery; also loads the runs and defines the time coordinate.
+* `frontier_viz.R` — shared figure machinery: the Epoch AI house style (palette, type, theme, export helpers; `DARK <- TRUE` restores the dark experiment); also loads the runs and defines the time coordinate.
 * `fit_specs.R` — the parametric specification grid: inefficiency (A/B/S) × controls (lin/quad/bc).
 * `fractional_frontier.R` — stochastic frontier with a fractional-logit response and half-normal or truncated-normal inefficiency.
 * `panel_frontier.R` — the same, with inefficiency as a group-level (model × effort) effect.

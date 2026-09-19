@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cost Record Timelines</title>
     <style>
-      /* Same palette as frontier_plot_viewer.html: #101014 is SURFACE in
-         frontier_viz.R (dark experiment), the colour the PNG itself is
-         painted on, so the plate sits on the page with no visible seam. If
-         DARK is turned off there, restore --bg #fcfcfb, --text #1d1d1d,
-         --muted #5e5e5e here. */
+      /* Same palette as frontier_plot_viewer.html: #F5F5F5 is SURFACE in
+         frontier_viz.R (the Epoch AI house style's static surface), the
+         colour the PNG itself is painted on, so the plate sits on the page
+         with no visible seam. If DARK is turned on there, use --bg #101014,
+         --text #f2f1ec, --muted #8f8e88 here. */
       :root {
-        --bg: #101014;
-        --text: #f2f1ec;
-        --muted: #8f8e88;
+        --bg: #F5F5F5;
+        --text: #212A2A;
+        --muted: #536565;
       }
 
       * { box-sizing: border-box; }
@@ -50,9 +50,9 @@
       }
 
       button {
-        background: #1b1b21;
+        background: #FFFFFF;
         color: var(--text);
-        border: 1px solid #35353d;
+        border: 1px solid #CDD0D0;
         border-radius: 4px;
         padding: 4px 12px;
         font: inherit;
@@ -60,8 +60,8 @@
       }
 
       button[aria-pressed="true"] {
-        border-color: #6f6f7a;
-        background: #2a2a33;
+        border-color: #6E8181;
+        background: #E3E4E4;
       }
 
       img { display: block; border: 0; }
@@ -69,7 +69,7 @@
       img.full { width: auto; max-width: none; }
 
       .missing {
-        color: #ff8f85;
+        color: #E03D90;
         font-size: 0.9em;
       }
     </style>

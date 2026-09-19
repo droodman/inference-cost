@@ -183,13 +183,12 @@ for (tt in names(TIME_FORMS)) {
   p <- frontier_plot(
     curves, pts_frontier, ranges = axis_ranges_p,
     labels = LABELS_POOLED, free_value = TRUE,
-    ylab = "Fitted frontier accuracy",
+    ylab = "Accuracy",
     notes = c(NOTES_FRONTIER, POOL_NOTE)) +
     pareto_step_layer(rbind(steps, pd$steps), labels = LABELS_POOLED)
 
   f <- sprintf("paretologit_%s.png", tt)
-  ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(f), p, width = 10, height = fig_height(length(benches)))
   cat("wrote", f, "\n")
 
   iso <- iso_acc_curves(fits, d, tbar, levels = LEVELS, cost_cap = iso_steps)
@@ -201,8 +200,7 @@ for (tt in names(TIME_FORMS)) {
                                           cost_cap = pd$iso_steps))
 
   fi <- sprintf("isoaccuracy_paretologit_%s.png", tt)
-  ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fi), pi, width = 10, height = fig_height(length(benches)))
   cat("wrote", fi, "\n")
 
   pk <- isocost_plot(
@@ -212,8 +210,7 @@ for (tt in names(TIME_FORMS)) {
     free_value = TRUE, notes = c(NOTES_ISOCOST, POOL_ISOCOST_NOTE)) +
     isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
   fk <- sprintf("isocost_paretologit_%s.png", tt)
-  ggsave(out_path(fk), pk, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fk), pk, width = 10, height = fig_height(length(benches)))
   cat("wrote", fk, "\n")
 }
 
@@ -235,11 +232,10 @@ curves <- rbind(frontier_curves(fits_bc, d, dates, tbar),
 p <- frontier_plot(
   curves, pts_frontier, ranges = axis_ranges_p,
   labels = LABELS_POOLED, free_value = TRUE,
-  ylab = "Fitted frontier accuracy",
+  ylab = "Accuracy",
   notes = c(NOTES_FRONTIER, NOTES_BC, POOL_NOTE)) +
   pareto_step_layer(rbind(steps, pd$steps), labels = LABELS_POOLED)
-ggsave(out_path("paretologit_bc.png"), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-       device = ragg::agg_png)
+save_png(out_path("paretologit_bc.png"), p, width = 10, height = fig_height(length(benches)))
 cat("wrote paretologit_bc.png\n")
 
 ## ---- construction slides ------------------------------------------------------------
@@ -278,8 +274,7 @@ slide_steps <- function() pareto_step_layer(slide_rows(steps), labels = SLIDE_LA
 # the paper uses
 dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
 slide_save <- function(p, fname) {
-  ggsave(out_path("slides", fname), p, width = SLIDE_W, height = SLIDE_H,
-         dpi = 200, device = ragg::agg_png)
+  save_png(out_path("slides", fname), p, width = SLIDE_W, height = SLIDE_H)
   cat("wrote slides/", fname, "\n", sep = "")
 }
 
@@ -288,7 +283,7 @@ p1 <- slide_base(curves[0, ], "Accuracy")                    # the runs
 slide_save(p1, "paretologit_bc_dots.png")
 p2 <- p1 + slide_steps()                                     # the empirical frontier
 slide_save(p2, "paretologit_bc_steps.png")
-p3 <- slide_base(slide_rows(curves), "Fitted frontier accuracy") +
+p3 <- slide_base(slide_rows(curves), "Accuracy") +
   slide_steps()                                              # and the fit over both
 slide_save(p3, "paretologit_bc_fit.png")
 
@@ -297,7 +292,7 @@ slide_save(p3, "paretologit_bc_fit.png")
 report_figure(
   frontier_plot(slide_rows(curves), slide_rows(pts_frontier),
                 ranges = slide_rows(axis_ranges_p), labels = SLIDE_LABELS,
-                ylab = "Fitted frontier accuracy",
+                ylab = "Accuracy",
                 colour_limits = SLIDE_COLOURS) +
     slide_steps(), 4)
 
@@ -330,8 +325,7 @@ pi <- iso_acc_plot(
   iso_pareto_layer(iso_steps, labels = LABELS_POOLED) +
   pool_iso_layers(pooled_acc_iso_curves(pf_bc, pd$sa, pd$levels,
                                         cost_cap = pd$iso_steps))
-ggsave(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = fig_height(length(benches)),
-       dpi = 200, device = ragg::agg_png)
+save_png(out_path("isoaccuracy_paretologit_bc.png"), pi, width = 10, height = fig_height(length(benches)))
 cat("wrote isoaccuracy_paretologit_bc.png\n")
 
 pk <- isocost_plot(
@@ -340,8 +334,7 @@ pk <- isocost_plot(
   pts_isocost, ranges = isocost_ranges_p, labels = LABELS_POOLED,
   free_value = TRUE, notes = c(NOTES_ISOCOST, NOTES_BC, POOL_ISOCOST_NOTE)) +
   isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
-ggsave(out_path("isocost_paretologit_bc.png"), pk, width = 10,
-       height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
+save_png(out_path("isocost_paretologit_bc.png"), pk, width = 10, height = fig_height(length(benches)))
 cat("wrote isocost_paretologit_bc.png\n")
 
 ## ---- what does moving from the cloud to the frontier change? ------------------------

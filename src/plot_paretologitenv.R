@@ -124,13 +124,12 @@ for (tt in names(TIME_FORMS)) {
   p <- frontier_plot(
     curves, pts_frontier, ranges = axis_ranges_p,
     labels = LABELS_POOLED, free_value = TRUE,
-    ylab = "Fitted frontier accuracy",
+    ylab = "Accuracy",
     notes = c(NOTES_FRONTIER, POOL_NOTE)) +
     pareto_step_layer(rbind(steps, pd$steps), labels = LABELS_POOLED)
 
   f <- sprintf("paretologitenv_%s.png", tt)
-  ggsave(out_path(f), p, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(f), p, width = 10, height = fig_height(length(benches)))
   cat("wrote", f, "\n")
 
   iso <- iso_acc_curves(fits, d, tbar, levels = LEVELS, cost_cap = iso_steps)
@@ -142,8 +141,7 @@ for (tt in names(TIME_FORMS)) {
                                           cost_cap = pd$iso_steps))
 
   fi <- sprintf("isoaccuracy_paretologitenv_%s.png", tt)
-  ggsave(out_path(fi), pi, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fi), pi, width = 10, height = fig_height(length(benches)))
   cat("wrote", fi, "\n")
 
   pk <- isocost_plot(
@@ -153,8 +151,7 @@ for (tt in names(TIME_FORMS)) {
     free_value = TRUE, notes = c(NOTES_ISOCOST, POOL_ISOCOST_NOTE)) +
     isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
   fk <- sprintf("isocost_paretologitenv_%s.png", tt)
-  ggsave(out_path(fk), pk, width = 10, height = fig_height(length(benches)), dpi = 200,
-         device = ragg::agg_png)
+  save_png(out_path(fk), pk, width = 10, height = fig_height(length(benches)))
   cat("wrote", fk, "\n")
 }
 
@@ -177,11 +174,10 @@ curves <- rbind(frontier_curves(fits_bc, d, dates, tbar),
 p <- frontier_plot(
   curves, pts_frontier, ranges = axis_ranges_p,
   labels = LABELS_POOLED, free_value = TRUE,
-  ylab = "Fitted frontier accuracy",
+  ylab = "Accuracy",
   notes = c(NOTES_FRONTIER, NOTES_BC, POOL_NOTE)) +
   pareto_step_layer(rbind(steps, pd$steps), labels = LABELS_POOLED)
-ggsave(out_path("paretologitenv_bc.png"), p, width = 10,
-       height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
+save_png(out_path("paretologitenv_bc.png"), p, width = 10, height = fig_height(length(benches)))
 cat("wrote paretologitenv_bc.png\n")
 
 iso <- iso_acc_curves(fits_bc, d, tbar, levels = LEVELS, cost_cap = iso_steps)
@@ -191,8 +187,7 @@ pi <- iso_acc_plot(
   iso_pareto_layer(iso_steps, labels = LABELS_POOLED) +
   pool_iso_layers(pooled_acc_iso_curves(pf_bc, pd$sa, pd$levels,
                                         cost_cap = pd$iso_steps))
-ggsave(out_path("isoaccuracy_paretologitenv_bc.png"), pi, width = 10,
-       height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
+save_png(out_path("isoaccuracy_paretologitenv_bc.png"), pi, width = 10, height = fig_height(length(benches)))
 cat("wrote isoaccuracy_paretologitenv_bc.png\n")
 
 pk <- isocost_plot(
@@ -201,8 +196,7 @@ pk <- isocost_plot(
   pts_isocost, ranges = isocost_ranges_p, labels = LABELS_POOLED,
   free_value = TRUE, notes = c(NOTES_ISOCOST, NOTES_BC, POOL_ISOCOST_NOTE)) +
   isocost_pareto_layer(isocost_steps_p, labels = LABELS_POOLED)
-ggsave(out_path("isocost_paretologitenv_bc.png"), pk, width = 10,
-       height = fig_height(length(benches)), dpi = 200, device = ragg::agg_png)
+save_png(out_path("isocost_paretologitenv_bc.png"), pk, width = 10, height = fig_height(length(benches)))
 cat("wrote isocost_paretologitenv_bc.png\n")
 
 ## ---- which constraint is doing the work --------------------------------------------

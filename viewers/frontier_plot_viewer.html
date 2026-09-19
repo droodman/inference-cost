@@ -5,16 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inference Cost Plot Viewer</title>
     <style>
-      /* One background for the whole page: #101014 is SURFACE in
-         frontier_viz.R (dark experiment), the colour the PNGs themselves are
-         painted on, so the plots sit on the page with no visible seam and no
-         framing chrome. If DARK is turned off there, restore --bg #fcfcfb,
-         --text #1d1d1d, --muted #5e5e5e, --missing #a22020 here. */
+      /* One background for the whole page: #F5F5F5 is SURFACE in
+         frontier_viz.R (the Epoch AI house style's static surface), the
+         colour the PNGs themselves are painted on, so the plots sit on the
+         page with no visible seam and no framing chrome. Text and muted ink
+         are the guide's tick-text greys; "missing" is the house pink. If DARK
+         is turned on there, use --bg #101014, --text #f2f1ec, --muted #8f8e88,
+         --missing #ff8f85 here. */
       :root {
-        --bg: #101014;
-        --text: #f2f1ec;
-        --muted: #8f8e88;
-        --missing: #ff8f85;
+        --bg: #F5F5F5;
+        --text: #212A2A;
+        --muted: #536565;
+        --missing: #E03D90;
       }
 
       * { box-sizing: border-box; }
