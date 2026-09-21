@@ -370,7 +370,7 @@ pz_cost_inverted <- function(fit, bl) {
 ## ---- assembly ----------------------------------------------------------------------
 
 # The 3-D pages are WEB figures, so they take the house style's web surface
-# (white, with the softer tick ink) rather than the static images' #F5F5F5;
+# (white, with the softer tick ink) rather than the static images' surface;
 # everything else -- inks, gridlines, ramp -- is frontier_viz.R's, so the
 # pages cannot drift from the 2-D figures. Under DARK the dark experiment's
 # own surface and inks come through unchanged.
@@ -545,10 +545,11 @@ stable_plotly_ids <- function(w, stem) {
 # for the frontier view, the record R for the iso view, the masked decline
 # surface for the decline view, via zs_ref). plotly normalizes every scene's
 # colors to that scene's own values, so this is what makes a heatmap panel
-# and its 3-D scene agree color-for-color; a single shared scale let one
-# extreme benchmark compress everyone else into a corner of the ramp. The
-# bracket in each strip label carries the panel's mapping (dark -> bright),
-# and values outside it saturate at the endpoints.
+# and its 3-D scene agree value-for-value (the heatmaps run the ramp the
+# OTHER way, dark = low, so the correspondence is of position on the ramp,
+# not of colour); a single shared scale let one extreme benchmark compress
+# everyone else into a corner of the ramp. Values outside the range saturate
+# at the endpoints.
 heat_anchor <- function(view, b, zs_ref = NULL) {
   bl <- bundles[[b]]
   r <- switch(view,
@@ -646,10 +647,11 @@ heat_caption <- function(view) {
               else "lowest- and highest-scoring run"
   vert     <- if (frontier) "cost" else "accuracy"
   paste0(
-    "Fill runs light to dark over each panel's own range -- the range of ",
+    "Fill runs dark to light over each panel's own range -- the range of ",
     "that panel's colored surface on its 3-D page, the same per-panel ",
-    "normalization, so equal color means equal value between a panel and ",
-    "its 3-D scene; values beyond that range saturate at the endpoints.\n",
+    "normalization with the ramp reversed, so a panel and its 3-D scene ",
+    "share a range but not a colour; values beyond that range saturate at ",
+    "the endpoints.\n",
     "The two 50%-black staircases are NOT fitted: they trace the ", extremes,
     " observed up to each date, each a running extreme that steps out at a ",
     "new record and holds until the next.\n",
@@ -676,10 +678,13 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
     # anchored to the range its own 3-D scene spans, see heat_anchor), so a
     # numeric bar would be wrong -- the same colour denotes a different value
     # in each panel. What holds in every panel is which end is which, and
-    # without a bar at all a reader has no way to know that dark is the
-    # high end.
+    # without a bar at all a reader has no way to know that light is the
+    # high end. The ramp is REVERSED here (dark = low, light = high), the
+    # opposite of the 3-D pages and the line figures, by request
+    # (2026-09-20): on these filled panels the dark end reads as the
+    # background and the light end as the signal.
     scale_fill_gradientn(
-      colours = PALETTE, limits = c(0, 1), na.value = SURFACE, name = NULL,
+      colours = rev(PALETTE), limits = c(0, 1), na.value = SURFACE, name = NULL,
       breaks = c(0, 1), labels = c("lower", "higher"),
       guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
                               barwidth = grid::unit(7, "cm"),

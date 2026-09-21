@@ -73,12 +73,14 @@ SEQ <- c("#E6FEF3", "#ABFAE3", "#70EFD1", "#34D2B9", "#00A5A6",
 # review. Nothing in the repo uses it today.
 DIVERGING <- c("#00A5A6", "#EEEEEE", "#E03D90")
 
-# Greys. Two surfaces: static images sit on #F5F5F5, web figures on white
-# with the softer tick ink (save_web applies the web pair).
+# Greys. Two surfaces, both pure white: the guide paints static images on
+# #F5F5F5, but that off-white was overruled for this project (2026-09-20),
+# so static and web differ only in tick ink -- the web pair's softer grey is
+# applied by save_web.
 GREY <- c(gridline = "#E3E4E4", tick_mark = "#AAB1B1", tick_text = "#212A2A",
           tick_text_web = "#536565", title = "#090C0C", subtitle = "#536565",
           footer = "#8B9999", inactive = "#CDD0D0", zero_line = "#6E8181",
-          surface = "#F5F5F5", surface_web = "#FFFFFF")
+          surface = "#FFFFFF", surface_web = "#FFFFFF")
 
 if (DARK) {
   # unreversed (bright = late/high), with the first 40% clipped off: plasma's
@@ -99,8 +101,8 @@ if (DARK) {
   AXIS_INK    <- "#ffffff"   # the frame you navigate by: brightest thing after the data
   GRID_LWD    <- 0.3         # mm
 } else {
-  # The sequential ramp with its first step dropped: #E6FEF3 sits at 1.03:1
-  # against the #F5F5F5 surface, so a curve drawn in it -- the earliest date,
+  # The sequential ramp with its first step dropped: #E6FEF3 is all but
+  # invisible on the white surface, so a curve drawn in it -- the earliest date,
   # the lowest level -- would vanish. The same clip the dark branch applies to
   # plasma, for the same reason. Light = early/low, dark = late/high.
   PALETTE     <- SEQ[-1]
@@ -582,8 +584,22 @@ registerS3method("grid.draw", "finished_plot", grid.draw.finished_plot,
 # ggsave reads the surface off a ggplot object only, and the wrapper is not
 # one; the plot's own background rect paints over it anyway.
 save_png <- function(file, p, width, height, dpi = 200, ...) {
+  t0 <- Sys.time()
   ggsave(file, finished(p), width = width, height = height, dpi = dpi,
          device = ragg::agg_png, bg = SURFACE, ...)
+  check_written(file, t0)
+}
+
+# A file open in a viewer (Windows holds a share lock) has twice let a
+# save "succeed" -- no error from the device, "wrote" printed by the
+# script -- while the file on disk kept its old contents. The scripts'
+# own message cannot be trusted, so every save checks the file's
+# modification time moved, and stops if it did not.
+check_written <- function(file, t0) {
+  if (!file.exists(file) || file.mtime(file) < t0 - 1)
+    stop("save did not replace ", file,
+         " -- is it open in another program?", call. = FALSE)
+  invisible(file)
 }
 
 # The guide's two export geometries. STATIC: a 600 x 750 canvas with 48 px
@@ -592,14 +608,18 @@ save_png <- function(file, p, width, height, dpi = 200, ...) {
 # renders literally. WEB: 800 px wide at 3x; the height is the caller's, the
 # guide fixing only the width. Both expect a plot themed at scale 1.
 save_static <- function(file, p) {
+  t0 <- Sys.time()
   p <- p + theme(plot.margin = margin(48, 48, 48, 48))
   ggsave(file, finished(p), width = 1024, height = 1280, units = "px",
          dpi = 72 * 1.7, device = ragg::agg_png, bg = SURFACE)
+  check_written(file, t0)
 }
 save_web <- function(file, p, height_px = 600) {
+  t0 <- Sys.time()
   ggsave(file, finished(p + web_surface()), width = 800 * 3,
          height = height_px * 3, units = "px", dpi = 72 * 3,
          device = ragg::agg_png, bg = GREY[["surface_web"]])
+  check_written(file, t0)
 }
 
 ## ---- the empirical Pareto staircase, as an overlay ---------------------------------
@@ -1241,8 +1261,10 @@ report_figure <- function(p, n, height = fig_height(4), width = 10) {
           plot.title = element_text(family = FONT, face = "bold"))
   dir.create(out_path("slides"), showWarnings = FALSE, recursive = TRUE)
   f <- sprintf("Figure %d.svg", n)
+  t0 <- Sys.time()
   ggsave(out_path("slides", f), finished(p), width = width, height = height,
          device = grDevices::svg, bg = SURFACE)
+  check_written(out_path("slides", f), t0)
   cat("wrote slides/", f, "
 ", sep = "")
 }
