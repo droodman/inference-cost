@@ -386,11 +386,15 @@ FONT_3D <- "Messina Sans, Inter, sans-serif"
 
 # The 2-D figures' own ramp (PALETTE, frontier_viz.R -- the house sequential
 # colormap with its near-white first step dropped, or plasma clipped under
-# DARK), rebuilt as a plotly colorscale so the 3-D surfaces cannot drift from
-# the 2-D figures, clip included. viridisLite returns 8-digit hex (trailing
-# alpha), which plotly's WebGL parser does not accept -- strip to 6.
+# DARK), rebuilt as a plotly colorscale, clip included. REVERSED, like the
+# heatmap twins below (dark = low, light = high) and unlike the line figures:
+# on a filled surface the dark end reads as background and the light end as
+# signal, and a heatmap panel and its 3-D scene must agree colour-for-colour.
+# viridisLite returns 8-digit hex (trailing alpha), which plotly's WebGL
+# parser does not accept -- strip to 6.
+SURFACE_RAMP <- rev(PALETTE)
 COLORSCALE <- Map(function(p, col) list(p, substr(col, 1, 7)),
-                  seq(0, 1, length.out = length(PALETTE)), PALETTE)
+                  seq(0, 1, length.out = length(SURFACE_RAMP)), SURFACE_RAMP)
 
 # zeroline off: on the ln-cost axes zero is $1, and plotly would draw it as
 # a heavier line than the other gridlines, singling out a level that means
@@ -523,7 +527,7 @@ stable_plotly_ids <- function(w, stem) {
 #
 # Every 3-D page gets a HEATMAP twin, heatmap_<key>_<spec>_<view>.png: the
 # FITTED surface seen from directly above, faceted per benchmark like the
-# other 2-D figures. The fill is the 3-D page's z on the same plasma ramp;
+# other 2-D figures. The fill is the 3-D page's z on the same ramp;
 # for the overlay views that means the fitted surface alone (the 3-D page's
 # wireframe, filled in), the empirical staircase being already available in
 # the 2-D figure sets.
@@ -545,11 +549,9 @@ stable_plotly_ids <- function(w, stem) {
 # for the frontier view, the record R for the iso view, the masked decline
 # surface for the decline view, via zs_ref). plotly normalizes every scene's
 # colors to that scene's own values, so this is what makes a heatmap panel
-# and its 3-D scene agree value-for-value (the heatmaps run the ramp the
-# OTHER way, dark = low, so the correspondence is of position on the ramp,
-# not of colour); a single shared scale let one extreme benchmark compress
-# everyone else into a corner of the ramp. Values outside the range saturate
-# at the endpoints.
+# and its 3-D scene agree color-for-color; a single shared scale let one
+# extreme benchmark compress everyone else into a corner of the ramp. Values
+# outside the range saturate at the endpoints.
 heat_anchor <- function(view, b, zs_ref = NULL) {
   bl <- bundles[[b]]
   r <- switch(view,
@@ -649,9 +651,8 @@ heat_caption <- function(view) {
   paste0(
     "Fill runs dark to light over each panel's own range -- the range of ",
     "that panel's colored surface on its 3-D page, the same per-panel ",
-    "normalization with the ramp reversed, so a panel and its 3-D scene ",
-    "share a range but not a colour; values beyond that range saturate at ",
-    "the endpoints.\n",
+    "normalization, so equal color means equal value between a panel and ",
+    "its 3-D scene; values beyond that range saturate at the endpoints.\n",
     "The two 50%-black staircases are NOT fitted: they trace the ", extremes,
     " observed up to each date, each a running extreme that steps out at a ",
     "new record and holds until the next.\n",
@@ -679,12 +680,12 @@ heat_plot <- function(zs, xs, view, zs_ref = NULL) {
     # numeric bar would be wrong -- the same colour denotes a different value
     # in each panel. What holds in every panel is which end is which, and
     # without a bar at all a reader has no way to know that light is the
-    # high end. The ramp is REVERSED here (dark = low, light = high), the
-    # opposite of the 3-D pages and the line figures, by request
-    # (2026-09-20): on these filled panels the dark end reads as the
-    # background and the light end as the signal.
+    # high end. The ramp is REVERSED here (dark = low, light = high), as on
+    # the 3-D pages (SURFACE_RAMP) and unlike the line figures: on these
+    # filled panels the dark end reads as the background and the light end
+    # as the signal.
     scale_fill_gradientn(
-      colours = rev(PALETTE), limits = c(0, 1), na.value = SURFACE, name = NULL,
+      colours = SURFACE_RAMP, limits = c(0, 1), na.value = SURFACE, name = NULL,
       breaks = c(0, 1), labels = c("lower", "higher"),
       guide = guide_colourbar(barheight = grid::unit(0.35, "cm"),
                               barwidth = grid::unit(7, "cm"),
